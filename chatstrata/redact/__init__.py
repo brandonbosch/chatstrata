@@ -1,13 +1,20 @@
-"""PII redaction (stub for v0).
-
-Full implementation is a separate work item. The protocol is defined here so
-contributors can start implementing engines (Presidio is the planned default)
-without waiting for the rest of the system.
+"""PII redaction.
 
 Install the optional `redact` extras to get the runtime dependencies:
     uv pip install "chatstrata[redact]"
 """
 
-from chatstrata.redact.base import RedactionEngine, RedactionMode, RedactionResult
+from chatstrata.redact.base import Entity, RedactionEngine, RedactionMode, RedactionResult
 
-__all__ = ["RedactionEngine", "RedactionMode", "RedactionResult"]
+__all__ = ["Entity", "RedactionEngine", "RedactionMode", "RedactionResult"]
+
+
+def get_engine(**kwargs) -> RedactionEngine:
+    """Factory function to get the default (Presidio) engine.
+
+    Raises ImportError if [redact] extras are not installed.
+    """
+    from chatstrata.redact.presidio_engine import PresidioEngine
+
+    return PresidioEngine(**kwargs)
+
