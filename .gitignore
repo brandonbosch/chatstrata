@@ -56,3 +56,7 @@ local_test_data/
 
 # Notebook checkpoints
 .ipynb_checkpoints/
+
+# Zensical docs
+docs-site/site/
+.zensical-venv/
