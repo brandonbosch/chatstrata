@@ -1,0 +1,10 @@
+name: claude_code
+display_name: Claude Code
+version: "0.1.0"
+schema_version: 1
+description: |
+  Ingests Claude Code session transcripts from ~/.claude/projects/.
+  Each session is a JSONL file with one event per line (user message,
+  assistant message, tool_use, tool_result, thinking, summary).
+data_source: local_filesystem
+default_path: ~/.claude/projects
