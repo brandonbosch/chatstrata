@@ -1,0 +1,10 @@
+name: codex_cli
+display_name: Codex CLI
+version: "0.1.0"
+schema_version: 1
+description: |
+  Ingests OpenAI Codex CLI session transcripts from ~/.codex/sessions/.
+  Each session is a JSONL rollout file with events following the OpenAI
+  Responses API shape, wrapped in {timestamp, type, payload} envelopes.
+data_source: local_filesystem
+default_path: ~/.codex/sessions
