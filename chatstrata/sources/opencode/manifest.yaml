@@ -1,0 +1,10 @@
+name: opencode
+display_name: OpenCode
+version: "0.1.0"
+schema_version: 1
+description: |
+  Ingests OpenCode session transcripts from ~/.local/share/opencode/opencode.db.
+  Sessions are stored in a SQLite database with session, message, and part tables.
+  Message content follows a typed part system with text, reasoning, tool, and patch types.
+data_source: sqlite_database
+default_path: ~/.local/share/opencode/opencode.db
