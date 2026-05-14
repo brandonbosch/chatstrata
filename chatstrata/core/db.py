@@ -41,6 +41,7 @@ def connect(
     if auto_migrate:
         apply_migrations(conn)
     _load_fts_extension(conn)
+    _load_vss_extension(conn)
     return conn
 
 
@@ -50,6 +51,17 @@ def _load_fts_extension(conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("LOAD fts")
     except (duckdb.IOException, duckdb.CatalogException):
         pass
+
+
+def _load_vss_extension(conn: duckdb.DuckDBPyConnection) -> None:
+    """Load the VSS extension for vector similarity search if available."""
+    try:
+        conn.execute("LOAD vss")
+    except (duckdb.IOException, duckdb.CatalogException):
+        try:
+            conn.execute("INSTALL vss; LOAD vss;")
+        except Exception:
+            pass
 
 
 def rebuild_fts_index(conn: duckdb.DuckDBPyConnection) -> None:

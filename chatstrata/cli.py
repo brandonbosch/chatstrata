@@ -10,7 +10,6 @@ import click
 
 from chatstrata import __version__
 from chatstrata.analysis.cli import analyze
-from chatstrata.redact.cli import redact
 from chatstrata.core.db import (
     apply_migrations,
     connect,
@@ -19,9 +18,11 @@ from chatstrata.core.db import (
     resolve_db_path,
 )
 from chatstrata.core.ingest import ensure_source, get_stored_mtime, ingest_conversation
-from chatstrata.core.models import ConversationHandle
 from chatstrata.core.migrations import LATEST_VERSION
+from chatstrata.core.models import ConversationHandle
 from chatstrata.core.search import search_messages, snippet
+from chatstrata.embed.cli import embed
+from chatstrata.redact.cli import redact
 from chatstrata.sources import load_adapters
 
 
@@ -176,6 +177,9 @@ def query(sql: str, db: str | None, as_json: bool) -> None:
 @click.option("--until", "until_", default=None, help="Only include messages before this date (YYYY-MM-DD).")
 @click.option("--limit", type=int, default=20, help="Maximum number of results (default: 20).")
 @click.option("--json", "as_json", is_flag=True, help="Output results as JSON.")
+@click.option("--semantic", is_flag=True, help="Use semantic similarity search (requires embeddings).")
+@click.option("--hybrid", is_flag=True, help="Combine keyword + semantic search via reciprocal rank fusion.")
+@click.option("--model", "embed_model", default="all-MiniLM-L6-v2", help="Embedding model for --semantic/--hybrid.")
 def search(
     query: str,
     db: str | None,
@@ -184,10 +188,17 @@ def search(
     until_: str | None,
     limit: int,
     as_json: bool,
+    semantic: bool,
+    hybrid: bool,
+    embed_model: str,
 ) -> None:
-    """Search conversations by keyword.
+    """Search conversations by keyword (default) or semantic similarity.
 
-    Example: chatstrata search "auth module"
+    \b
+    Examples:
+        chatstrata search "auth module"
+        chatstrata search --semantic "grandma video"
+        chatstrata search --hybrid "refactor login"
     """
     from datetime import datetime, timezone
 
@@ -200,11 +211,38 @@ def search(
 
     conn = connect(resolve_db_path(db))
     try:
-        results = search_messages(
-            conn, query, limit=limit, source=source, since=since_dt, until=until_dt,
-        )
+        if semantic or hybrid:
+            from chatstrata.embed import get_provider
+            from chatstrata.embed.search import (
+                hybrid_search,
+            )
+            from chatstrata.embed.search import (
+                semantic_search as sem_search,
+            )
+
+            provider = get_provider(embed_model)
+            query_vector = provider.embed_query(query)
+
+            if hybrid:
+                results = hybrid_search(
+                    conn, query, query_vector, provider.name,
+                    limit=limit, source=source, since=since_dt, until=until_dt,
+                )
+            else:
+                results = sem_search(
+                    conn, query_vector, provider.name,
+                    limit=limit, source=source, since=since_dt, until=until_dt,
+                )
+        else:
+            results = search_messages(
+                conn, query, limit=limit, source=source, since=since_dt, until=until_dt,
+            )
+
         if not results:
-            click.echo("No results. If you recently ingested data, run `chatstrata reindex` first.")
+            if semantic or hybrid:
+                click.echo("No results. Run `chatstrata embed` first to generate embeddings.")
+            else:
+                click.echo("No results. If you recently ingested data, run `chatstrata reindex` first.")
             return
 
         if as_json:
@@ -224,6 +262,8 @@ def search(
             click.echo(json.dumps(out, default=str, indent=2))
             return
 
+        mode_label = "hybrid" if hybrid else ("semantic" if semantic else "keyword")
+        click.echo(f"  ({mode_label} search, {len(results)} results)\n")
         for i, r in enumerate(results):
             if i > 0:
                 click.echo()
@@ -384,6 +424,7 @@ def migrate(db: str | None, status_only: bool) -> None:
 
 
 cli.add_command(analyze)
+cli.add_command(embed)
 cli.add_command(redact)
 
 if __name__ == "__main__":
