@@ -24,6 +24,11 @@ def get_default_db_path() -> Path:
     return data_dir / "chatstrata.duckdb"
 
 
+def resolve_db_path(db: str | None) -> Path:
+    """Resolve a --db CLI override to a concrete Path, falling back to the default."""
+    return Path(db).expanduser() if db else get_default_db_path()
+
+
 def connect(
     db_path: Path | str | None = None,
     *,

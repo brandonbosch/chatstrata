@@ -4,20 +4,22 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 
 import click
 
 from chatstrata import __version__
-from chatstrata.core.db import apply_migrations, connect, get_default_db_path, get_schema_version, rebuild_fts_index
+from chatstrata.analysis.cli import analyze
+from chatstrata.core.db import (
+    apply_migrations,
+    connect,
+    get_schema_version,
+    rebuild_fts_index,
+    resolve_db_path,
+)
 from chatstrata.core.ingest import ensure_source, ingest_conversation
 from chatstrata.core.migrations import LATEST_VERSION
 from chatstrata.core.search import search_messages, snippet
 from chatstrata.sources import load_adapters
-
-
-def _resolve_db(db: str | None) -> Path:
-    return Path(db).expanduser() if db else get_default_db_path()
 
 
 @click.group()
@@ -73,7 +75,7 @@ def ingest(source_name: str, path: str | None, db: str | None, limit: int | None
             click.echo(f"  ... and {len(handles) - 20} more")
         return
 
-    db_path = _resolve_db(db)
+    db_path = resolve_db_path(db)
     conn = connect(db_path)
     try:
         ensure_source(
@@ -112,7 +114,7 @@ def query(sql: str, db: str | None, as_json: bool) -> None:
 
     Example: chatstrata query "SELECT role, COUNT(*) FROM messages GROUP BY role"
     """
-    conn = connect(_resolve_db(db))
+    conn = connect(resolve_db_path(db))
     try:
         result = conn.execute(sql)
         cols = [d[0] for d in result.description] if result.description else []
@@ -160,7 +162,7 @@ def search(
     if until_:
         until_dt = datetime.strptime(until_, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-    conn = connect(_resolve_db(db))
+    conn = connect(resolve_db_path(db))
     try:
         results = search_messages(
             conn, query, limit=limit, source=source, since=since_dt, until=until_dt,
@@ -205,7 +207,7 @@ def reindex(db: str | None) -> None:
 
     Run this after ingesting new data to update search results.
     """
-    conn = connect(_resolve_db(db))
+    conn = connect(resolve_db_path(db))
     try:
         version = get_schema_version(conn)
         if version < 2:
@@ -226,9 +228,9 @@ def reindex(db: str | None) -> None:
 @click.option("--db", "db", default=None)
 def stats(db: str | None) -> None:
     """Show a summary of what's in the database."""
-    conn = connect(_resolve_db(db))
+    conn = connect(resolve_db_path(db))
     try:
-        click.echo(f"Database: {_resolve_db(db)}")
+        click.echo(f"Database: {resolve_db_path(db)}")
         click.echo()
 
         sources = conn.execute(
@@ -271,7 +273,7 @@ def stats(db: str | None) -> None:
 @click.option("--db", "db", default=None)
 def doctor(db: str | None) -> None:
     """Run basic sanity checks on the database."""
-    conn = connect(_resolve_db(db))
+    conn = connect(resolve_db_path(db))
     issues = 0
     try:
         # Empty sources
@@ -321,7 +323,7 @@ def doctor(db: str | None) -> None:
 @click.option("--status", "status_only", is_flag=True, help="Show migration status without applying.")
 def migrate(db: str | None, status_only: bool) -> None:
     """Apply pending schema migrations (or show status with --status)."""
-    db_path = _resolve_db(db)
+    db_path = resolve_db_path(db)
     conn = connect(db_path, auto_migrate=False)
     try:
         current = get_schema_version(conn)
@@ -344,6 +346,8 @@ def migrate(db: str | None, status_only: bool) -> None:
     finally:
         conn.close()
 
+
+cli.add_command(analyze)
 
 if __name__ == "__main__":
     cli()
