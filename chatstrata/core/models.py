@@ -16,8 +16,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = 1
-
 
 class Role(str, Enum):
     USER = "user"

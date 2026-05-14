@@ -1,0 +1,113 @@
+[
+  {
+    "uuid": "conv-001",
+    "name": "Understanding Python decorators",
+    "created_at": "2026-02-10T14:00:00.000000+00:00",
+    "updated_at": "2026-02-10T14:05:30.000000+00:00",
+    "chat_messages": [
+      {
+        "uuid": "msg-001",
+        "text": "Can you explain how Python decorators work?",
+        "content": [],
+        "sender": "human",
+        "created_at": "2026-02-10T14:00:00.000000+00:00",
+        "attachments": []
+      },
+      {
+        "uuid": "msg-002",
+        "text": "Python decorators are functions that modify the behavior of other functions. They use the @syntax and are a form of metaprogramming.",
+        "content": [
+          {
+            "type": "text",
+            "text": "Python decorators are functions that modify the behavior of other functions. They use the @syntax and are a form of metaprogramming."
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-02-10T14:00:15.000000+00:00",
+        "attachments": []
+      }
+    ]
+  },
+  {
+    "uuid": "conv-002",
+    "name": "Debugging a REST API",
+    "created_at": "2026-02-11T09:30:00.000000+00:00",
+    "updated_at": "2026-02-11T09:45:00.000000+00:00",
+    "chat_messages": [
+      {
+        "uuid": "msg-003",
+        "text": "My FastAPI endpoint returns 422 for valid input. Here is the handler.",
+        "content": [
+          {
+            "type": "text",
+            "text": "My FastAPI endpoint returns 422 for valid input. Here is the handler."
+          }
+        ],
+        "sender": "human",
+        "created_at": "2026-02-11T09:30:00.000000+00:00",
+        "attachments": []
+      },
+      {
+        "uuid": "msg-004",
+        "text": "The 422 error usually means Pydantic validation failed. Let me check your model definition.",
+        "content": [
+          {
+            "type": "text",
+            "text": "The 422 error usually means Pydantic validation failed. Let me check your model definition."
+          },
+          {
+            "type": "text",
+            "text": "Try adding `Optional` to the `description` field since it can be null."
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-02-11T09:31:00.000000+00:00",
+        "attachments": []
+      },
+      {
+        "uuid": "msg-005",
+        "text": "That fixed it, thanks!",
+        "content": [],
+        "sender": "human",
+        "created_at": "2026-02-11T09:45:00.000000+00:00",
+        "attachments": []
+      }
+    ]
+  },
+  {
+    "uuid": "conv-003",
+    "name": null,
+    "created_at": "2026-02-12T16:00:00Z",
+    "updated_at": "2026-02-12T16:10:00Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-006",
+        "text": "Can you review this configuration file I uploaded?",
+        "content": [],
+        "sender": "human",
+        "created_at": "2026-02-12T16:00:00Z",
+        "attachments": [
+          {
+            "file_name": "config.yaml",
+            "file_size": 2048,
+            "file_type": "application/x-yaml",
+            "extracted_content": "server:\n  port: 8080\n  host: 0.0.0.0\ndatabase:\n  url: postgres://localhost/mydb"
+          }
+        ]
+      },
+      {
+        "uuid": "msg-007",
+        "text": "The configuration looks good overall. I notice the database URL uses localhost which will not work in a container environment. Consider using an environment variable instead.",
+        "content": [
+          {
+            "type": "text",
+            "text": "The configuration looks good overall. I notice the database URL uses localhost which will not work in a container environment. Consider using an environment variable instead."
+          }
+        ],
+        "sender": "assistant",
+        "created_at": "2026-02-12T16:01:30Z",
+        "attachments": []
+      }
+    ]
+  }
+]

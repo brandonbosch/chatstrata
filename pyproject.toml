@@ -25,6 +25,7 @@ dependencies = [
     "click>=8.1.0",
     "pydantic>=2.0",
     "platformdirs>=4.0",
+    "pytz>=2024.1",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +45,7 @@ chatstrata = "chatstrata.cli:cli"
 
 [project.entry-points."chatstrata.sources"]
 claude_code = "chatstrata.sources.claude_code.adapter:ClaudeCodeAdapter"
+claude_export = "chatstrata.sources.claude_export.adapter:ClaudeExportAdapter"
 
 [build-system]
 requires = ["hatchling"]

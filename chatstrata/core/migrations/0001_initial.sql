@@ -16,9 +16,6 @@ CREATE TABLE IF NOT EXISTS meta (
     value VARCHAR NOT NULL
 );
 
--- Insert schema version (idempotent)
-INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '1');
-
 CREATE TABLE IF NOT EXISTS sources (
     id VARCHAR PRIMARY KEY,           -- e.g. "claude_code", "chatgpt_export"
     name VARCHAR NOT NULL,            -- display name

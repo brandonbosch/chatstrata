@@ -1,0 +1,10 @@
+name: claude_export
+display_name: Claude Export
+version: "0.1.0"
+schema_version: 1
+description: |
+  Ingests conversations from the official Anthropic data export
+  (Settings → Account → Export data on claude.ai).
+  Reads conversations.json from the unzipped export directory.
+data_source: export_archive
+default_path: null

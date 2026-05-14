@@ -66,11 +66,11 @@ def ensure_source(
     conn.execute(
         """
         INSERT INTO sources (id, name, adapter_version, config, last_ingested)
-        VALUES (?, ?, ?, ?, current_timestamp)
+        VALUES (?, ?, ?, ?, now())
         ON CONFLICT (id) DO UPDATE SET
             adapter_version = excluded.adapter_version,
             config = excluded.config,
-            last_ingested = current_timestamp
+            last_ingested = now()
         """,
         [source_id, name, adapter_version, _json(config)],
     )

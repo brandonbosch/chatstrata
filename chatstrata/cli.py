@@ -9,8 +9,10 @@ from pathlib import Path
 import click
 
 from chatstrata import __version__
-from chatstrata.core.db import connect, get_default_db_path
+from chatstrata.core.db import apply_migrations, connect, get_default_db_path, get_schema_version, rebuild_fts_index
 from chatstrata.core.ingest import ensure_source, ingest_conversation
+from chatstrata.core.migrations import LATEST_VERSION
+from chatstrata.core.search import search_messages, snippet
 from chatstrata.sources import load_adapters
 
 
@@ -129,6 +131,98 @@ def query(sql: str, db: str | None, as_json: bool) -> None:
 
 
 @cli.command()
+@click.argument("query", required=True)
+@click.option("--db", "db", default=None, help="Override the database path.")
+@click.option("--source", "source", default=None, help="Filter to a specific source (e.g. claude_code).")
+@click.option("--since", "since", default=None, help="Only include messages after this date (YYYY-MM-DD).")
+@click.option("--until", "until_", default=None, help="Only include messages before this date (YYYY-MM-DD).")
+@click.option("--limit", type=int, default=20, help="Maximum number of results (default: 20).")
+@click.option("--json", "as_json", is_flag=True, help="Output results as JSON.")
+def search(
+    query: str,
+    db: str | None,
+    source: str | None,
+    since: str | None,
+    until_: str | None,
+    limit: int,
+    as_json: bool,
+) -> None:
+    """Search conversations by keyword.
+
+    Example: chatstrata search "auth module"
+    """
+    from datetime import datetime, timezone
+
+    since_dt = None
+    until_dt = None
+    if since:
+        since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    if until_:
+        until_dt = datetime.strptime(until_, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    conn = connect(_resolve_db(db))
+    try:
+        results = search_messages(
+            conn, query, limit=limit, source=source, since=since_dt, until=until_dt,
+        )
+        if not results:
+            click.echo("No results. If you recently ingested data, run `chatstrata reindex` first.")
+            return
+
+        if as_json:
+            out = [
+                {
+                    "score": r.score,
+                    "conversation_id": r.conversation_id,
+                    "title": r.conversation_title,
+                    "source": r.source_id,
+                    "project": r.project,
+                    "role": r.message_role,
+                    "created_at": str(r.message_created_at) if r.message_created_at else None,
+                    "snippet": snippet(r.text, query),
+                }
+                for r in results
+            ]
+            click.echo(json.dumps(out, default=str, indent=2))
+            return
+
+        for i, r in enumerate(results):
+            if i > 0:
+                click.echo()
+            title = r.conversation_title or "(untitled)"
+            ts = str(r.message_created_at)[:19] if r.message_created_at else "?"
+            click.echo(f"  [{r.source_id}] {title}")
+            click.echo(f"  {r.message_role} @ {ts}  (score: {r.score:.2f})")
+            click.echo(f"  {snippet(r.text, query)}")
+    finally:
+        conn.close()
+
+
+@cli.command()
+@click.option("--db", "db", default=None, help="Override the database path.")
+def reindex(db: str | None) -> None:
+    """Rebuild the full-text search index.
+
+    Run this after ingesting new data to update search results.
+    """
+    conn = connect(_resolve_db(db))
+    try:
+        version = get_schema_version(conn)
+        if version < 2:
+            click.echo("FTS not available. Run `chatstrata migrate` first.", err=True)
+            sys.exit(1)
+
+        n_blocks = conn.execute(
+            "SELECT COUNT(*) FROM content_blocks WHERE text IS NOT NULL"
+        ).fetchone()[0]
+        click.echo(f"Rebuilding search index over {n_blocks} content blocks...")
+        rebuild_fts_index(conn)
+        click.echo("Done. Search index is up to date.")
+    finally:
+        conn.close()
+
+
+@cli.command()
 @click.option("--db", "db", default=None)
 def stats(db: str | None) -> None:
     """Show a summary of what's in the database."""
@@ -218,6 +312,35 @@ def doctor(db: str | None) -> None:
             click.echo("✓ All checks passed.")
         else:
             click.echo(f"\n{issues} issue(s) found.")
+    finally:
+        conn.close()
+
+
+@cli.command()
+@click.option("--db", "db", default=None, help="Override the database path.")
+@click.option("--status", "status_only", is_flag=True, help="Show migration status without applying.")
+def migrate(db: str | None, status_only: bool) -> None:
+    """Apply pending schema migrations (or show status with --status)."""
+    db_path = _resolve_db(db)
+    conn = connect(db_path, auto_migrate=False)
+    try:
+        current = get_schema_version(conn)
+        if status_only:
+            pending = LATEST_VERSION - current
+            if pending > 0:
+                click.echo(f"Schema version: {current}, latest: {LATEST_VERSION}, "
+                           f"{pending} migration(s) pending")
+            else:
+                click.echo(f"Schema is up to date (version {current}).")
+            return
+
+        applied = apply_migrations(conn)
+        if not applied:
+            click.echo(f"Already at latest version ({current}).")
+        else:
+            for m in applied:
+                click.echo(f"Applied migration {m.version:04d}: {m.description}")
+            click.echo(f"\nSchema upgraded to version {applied[-1].version}.")
     finally:
         conn.close()
 
