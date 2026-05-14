@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 import click
 
 from chatstrata import __version__
 from chatstrata.analysis.cli import analyze
+from chatstrata.redact.cli import redact
 from chatstrata.core.db import (
     apply_migrations,
     connect,
@@ -16,7 +18,8 @@ from chatstrata.core.db import (
     rebuild_fts_index,
     resolve_db_path,
 )
-from chatstrata.core.ingest import ensure_source, ingest_conversation
+from chatstrata.core.ingest import ensure_source, get_stored_mtime, ingest_conversation
+from chatstrata.core.models import ConversationHandle
 from chatstrata.core.migrations import LATEST_VERSION
 from chatstrata.core.search import search_messages, snippet
 from chatstrata.sources import load_adapters
@@ -39,13 +42,23 @@ def list_sources() -> None:
         click.echo(f"  {name:20} {adapter.display_name}  (v{adapter.version})")
 
 
+def _get_file_mtime(handle: ConversationHandle) -> float | None:
+    if handle.path is None:
+        return None
+    try:
+        return os.path.getmtime(handle.path)
+    except OSError:
+        return None
+
+
 @cli.command()
 @click.argument("source_name", required=True)
 @click.option("--path", "path", default=None, help="Override the default path for this source.")
 @click.option("--db", "db", default=None, help="Override the database path.")
 @click.option("--limit", type=int, default=None, help="Ingest at most N conversations.")
 @click.option("--dry-run", is_flag=True, help="Discover only; do not write to the database.")
-def ingest(source_name: str, path: str | None, db: str | None, limit: int | None, dry_run: bool) -> None:
+@click.option("--incremental", is_flag=True, help="Skip conversations whose source file has not changed since last ingest.")
+def ingest(source_name: str, path: str | None, db: str | None, limit: int | None, dry_run: bool, incremental: bool) -> None:
     """Ingest conversations from a source.
 
     Example: chatstrata ingest claude_code
@@ -86,20 +99,43 @@ def ingest(source_name: str, path: str | None, db: str | None, limit: int | None
         )
 
         successes = 0
+        skipped = 0
         failures = 0
+        no_path_warned = False
+
         with click.progressbar(handles, label=f"Ingesting from {source_name}") as bar:
             for handle in bar:
                 try:
+                    file_mtime = _get_file_mtime(handle)
+
+                    if incremental:
+                        if file_mtime is None and not no_path_warned:
+                            click.echo(
+                                f"\n  Warning: source '{source_name}' has handles without file paths; "
+                                "incremental mode cannot skip these.",
+                                err=True,
+                            )
+                            no_path_warned = True
+
+                        if file_mtime is not None:
+                            stored = get_stored_mtime(conn, adapter.name, handle.source_native_id)
+                            if stored is not None and stored == file_mtime:
+                                skipped += 1
+                                continue
+
                     conv = adapter.parse(handle)
                     if not conv.messages:
                         continue
-                    ingest_conversation(conn, adapter.name, conv)
+                    ingest_conversation(
+                        conn, adapter.name, conv,
+                        source_file_mtime=file_mtime,
+                    )
                     successes += 1
                 except Exception as e:  # noqa: BLE001
                     failures += 1
                     click.echo(f"\n  ! failed to parse {handle.source_native_id}: {e}", err=True)
 
-        click.echo(f"\nDone. Ingested: {successes}  Failed: {failures}")
+        click.echo(f"\nDone. Ingested: {successes}  Skipped: {skipped}  Failed: {failures}")
         click.echo(f"Database: {db_path}")
     finally:
         conn.close()
@@ -348,6 +384,7 @@ def migrate(db: str | None, status_only: bool) -> None:
 
 
 cli.add_command(analyze)
+cli.add_command(redact)
 
 if __name__ == "__main__":
     cli()

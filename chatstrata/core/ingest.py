@@ -76,10 +76,27 @@ def ensure_source(
     )
 
 
+def get_stored_mtime(
+    conn: "duckdb.DuckDBPyConnection",
+    source_id: str,
+    source_native_id: str,
+) -> float | None:
+    """Return the stored source_file_mtime for a conversation, or None if not found."""
+    row = conn.execute(
+        "SELECT source_file_mtime FROM conversations WHERE source_id = ? AND source_native_id = ?",
+        [source_id, source_native_id],
+    ).fetchone()
+    if row is None:
+        return None
+    return row[0]
+
+
 def ingest_conversation(
     conn: "duckdb.DuckDBPyConnection",
     source_id: str,
     conv: ParsedConversation,
+    *,
+    source_file_mtime: float | None = None,
 ) -> str:
     """Persist a single ParsedConversation. Returns the chatstrata conversation id.
 
@@ -119,7 +136,8 @@ def ingest_conversation(
                 message_count = ?,
                 content_hash = ?,
                 raw_path = ?,
-                metadata = ?
+                metadata = ?,
+                source_file_mtime = ?
             WHERE id = ?
             """,
             [
@@ -131,6 +149,7 @@ def ingest_conversation(
                 content_hash,
                 conv.raw_path,
                 _json(conv.metadata),
+                source_file_mtime,
                 conv_id,
             ],
         )
@@ -141,8 +160,8 @@ def ingest_conversation(
             INSERT INTO conversations (
                 id, source_id, source_native_id, title, project,
                 started_at, ended_at, message_count, content_hash,
-                raw_path, metadata
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                raw_path, metadata, source_file_mtime
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 conv_id,
@@ -156,6 +175,7 @@ def ingest_conversation(
                 content_hash,
                 conv.raw_path,
                 _json(conv.metadata),
+                source_file_mtime,
             ],
         )
 
