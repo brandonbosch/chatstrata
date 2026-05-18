@@ -38,6 +38,9 @@ redact = [
     "presidio-anonymizer>=2.2",
     "spacy>=3.7",
 ]
+mcp = [
+    "mcp[cli]>=1.12.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -46,6 +49,7 @@ dev = [
 
 [project.scripts]
 chatstrata = "chatstrata.cli:cli"
+chatstrata-mcp = "chatstrata.mcp.server:main"
 
 [project.entry-points."chatstrata.sources"]
 claude_code = "chatstrata.sources.claude_code.adapter:ClaudeCodeAdapter"
@@ -71,3 +75,8 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "chatstrata"]
 python_files = ["test_*.py"]
+
+[tool.uv.workspace]
+members = [
+    "docs-site",
+]

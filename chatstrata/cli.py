@@ -423,6 +423,41 @@ def migrate(db: str | None, status_only: bool) -> None:
         conn.close()
 
 
+@cli.command()
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "streamable-http", "sse"]),
+    default="stdio",
+    help="MCP transport protocol (default: stdio).",
+)
+@click.option("--host", default="127.0.0.1", help="Host for HTTP transports.")
+@click.option("--port", type=int, default=8462, help="Port for HTTP transports.")
+def serve(transport: str, host: str, port: int) -> None:
+    """Start the ChatStrata MCP server.
+
+    \b
+    Examples:
+        chatstrata serve                                    # stdio for Claude Code
+        chatstrata serve --transport streamable-http        # HTTP for remote access
+        chatstrata serve --transport streamable-http --host 0.0.0.0  # Tailscale
+    """
+    try:
+        from chatstrata.mcp.server import mcp as mcp_server
+    except ImportError:
+        click.echo(
+            "MCP dependencies not installed. Run: uv pip install chatstrata[mcp]",
+            err=True,
+        )
+        sys.exit(1)
+
+    if transport == "stdio":
+        mcp_server.run(transport="stdio")
+    elif transport == "streamable-http":
+        mcp_server.run(transport="streamable-http", host=host, port=port)
+    elif transport == "sse":
+        mcp_server.run(transport="sse", host=host, port=port)
+
+
 cli.add_command(analyze)
 cli.add_command(embed)
 cli.add_command(redact)
