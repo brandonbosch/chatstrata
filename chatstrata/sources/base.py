@@ -8,8 +8,9 @@ their own without modifying chatstrata's code.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from importlib.metadata import entry_points
-from typing import Iterable, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from chatstrata.core.models import ConversationHandle, ParsedConversation
 

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
+from importlib.util import find_spec
+
 import pytest
 
-try:
-    from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
-
-    HAS_PRESIDIO = True
-except ImportError:
-    HAS_PRESIDIO = False
+HAS_PRESIDIO = find_spec("presidio_analyzer") is not None
 
 pytestmark = pytest.mark.skipif(not HAS_PRESIDIO, reason="presidio not installed")
 

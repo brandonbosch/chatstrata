@@ -54,9 +54,9 @@ credit cards). chatstrata adds:
 ## Contributing
 
 The redaction work is broken down in
-[GitHub issues](https://github.com/YOUR_USERNAME/chatstrata/issues?q=label%3Aredaction)
-(once the repo is published). Good first contributions:
+[GitHub issues](https://github.com/brandonbosch/chatstrata/issues?q=label%3Aredaction).
+Good first contributions:
 
-- Implement the Presidio engine
 - Add a recognizer for a specific token type
-- Build the interactive review CLI flow
+- Improve entity confidence scoring
+- Add sanitized fixtures for missed sensitive-data patterns

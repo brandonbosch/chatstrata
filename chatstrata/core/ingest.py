@@ -56,7 +56,7 @@ def _json(value) -> str | None:
 
 
 def ensure_source(
-    conn: "duckdb.DuckDBPyConnection",
+    conn: duckdb.DuckDBPyConnection,
     source_id: str,
     name: str,
     adapter_version: str | None = None,
@@ -77,7 +77,7 @@ def ensure_source(
 
 
 def get_stored_mtime(
-    conn: "duckdb.DuckDBPyConnection",
+    conn: duckdb.DuckDBPyConnection,
     source_id: str,
     source_native_id: str,
 ) -> float | None:
@@ -92,7 +92,7 @@ def get_stored_mtime(
 
 
 def ingest_conversation(
-    conn: "duckdb.DuckDBPyConnection",
+    conn: duckdb.DuckDBPyConnection,
     source_id: str,
     conv: ParsedConversation,
     *,

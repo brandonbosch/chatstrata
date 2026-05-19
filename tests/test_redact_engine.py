@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from chatstrata.redact.base import Entity, RedactionEngine, RedactionMode, RedactionResult
+
 try:
     from chatstrata.redact.presidio_engine import PresidioEngine
 
@@ -12,8 +14,6 @@ except ImportError:
     HAS_PRESIDIO = False
 
 pytestmark = pytest.mark.skipif(not HAS_PRESIDIO, reason="presidio not installed")
-
-from chatstrata.redact.base import Entity, RedactionEngine, RedactionMode, RedactionResult
 
 
 @pytest.fixture(scope="module")

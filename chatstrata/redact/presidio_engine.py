@@ -12,7 +12,6 @@ from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
 from chatstrata.redact.base import Entity, RedactionMode, RedactionResult
 from chatstrata.redact.recognizers import get_all_recognizers
 
-
 DEFAULT_DENY_ENTITY_TYPES = frozenset({
     "DATE_TIME",
     "ORGANIZATION",
@@ -20,6 +19,20 @@ DEFAULT_DENY_ENTITY_TYPES = frozenset({
     "LOCATION",
     "NRP",
 })
+
+
+def _disable_tldextract_cache() -> None:
+    """Keep Presidio email detection from writing a home-dir cache or fetching PSL data."""
+    try:
+        import tldextract.tldextract as tldextract_impl
+    except ImportError:
+        return
+
+    tldextract_impl.TLD_EXTRACTOR = tldextract_impl.TLDExtract(
+        cache_dir=None,
+        suffix_list_urls=(),
+        fallback_to_snapshot=True,
+    )
 
 
 class PresidioEngine:
@@ -38,6 +51,8 @@ class PresidioEngine:
         self._hash_salt = hash_salt or secrets.token_hex(32)
         self._languages = languages or ["en"]
         self._deny_entity_types = deny_entity_types or frozenset()
+
+        _disable_tldextract_cache()
 
         registry = RecognizerRegistry()
         registry.load_predefined_recognizers()

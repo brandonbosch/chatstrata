@@ -28,16 +28,17 @@ Concretely, with chatstrata you can:
 
 ## Status
 
-**Early alpha.** v0 supports Claude Code only. The architecture is built so that
-adding more sources (claude.ai exports, ChatGPT exports, Hermes, Cursor, etc.) is
-the work of one adapter — see [docs/adapter-guide.md](docs/adapter-guide.md).
+**Early alpha.** v0 includes adapters for Claude Code, claude.ai exports, Codex
+CLI, and OpenCode. The architecture is built so that adding more sources
+(ChatGPT exports, Cursor, etc.) is the work of one adapter — see
+[docs/adapter-guide.md](docs/adapter-guide.md).
 
 ## Quickstart
 
 Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/chatstrata.git
+git clone https://github.com/brandonbosch/chatstrata.git
 cd chatstrata
 uv venv
 uv pip install -e ".[dev]"

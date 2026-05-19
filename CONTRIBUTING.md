@@ -30,7 +30,7 @@ that it works.
 ## Development setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/chatstrata.git
+git clone https://github.com/brandonbosch/chatstrata.git
 cd chatstrata
 uv venv
 uv pip install -e ".[dev,redact]"

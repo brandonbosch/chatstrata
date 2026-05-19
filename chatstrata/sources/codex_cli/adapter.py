@@ -34,9 +34,10 @@ Event shapes are based on inspection of real Codex CLI 0.118.0 rollout files.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from chatstrata.core.models import (
     BlockType,

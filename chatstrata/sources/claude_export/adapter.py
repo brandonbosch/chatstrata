@@ -16,9 +16,10 @@ blocks), sender (human/assistant), created_at, and attachments.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from chatstrata.core.models import (
     BlockType,
