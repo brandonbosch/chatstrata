@@ -109,15 +109,17 @@ def redact_query(sql: str, mode: str, db: str | None, as_json: bool, allow_entit
     """
     _require_presidio()
     from chatstrata.core.db import connect, resolve_db_path
+    from chatstrata.mcp.safety import execute_safe
 
     engine = _get_engine(allow_entities)
     redaction_mode = RedactionMode(mode)
 
     conn = connect(resolve_db_path(db))
     try:
-        result = conn.execute(sql)
-        cols = [d[0] for d in result.description] if result.description else []
-        rows = result.fetchall()
+        try:
+            cols, rows, _truncated = execute_safe(conn, sql)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
     finally:
         conn.close()
 
@@ -185,6 +187,7 @@ def redact_interactive(db: str | None, mode: str, sql: str | None, allow_entitie
     """
     _require_presidio()
     from chatstrata.core.db import connect, resolve_db_path
+    from chatstrata.mcp.safety import execute_safe
 
     engine = _get_engine(allow_entities)
     redaction_mode = RedactionMode(mode)
@@ -194,9 +197,10 @@ def redact_interactive(db: str | None, mode: str, sql: str | None, allow_entitie
 
     conn = connect(resolve_db_path(db))
     try:
-        result = conn.execute(sql)
-        cols = [d[0] for d in result.description] if result.description else []
-        rows = result.fetchall()
+        try:
+            cols, rows, _truncated = execute_safe(conn, sql)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
     finally:
         conn.close()
 

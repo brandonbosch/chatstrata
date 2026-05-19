@@ -1,8 +1,9 @@
 """Tests for the schema migration framework."""
 
+import duckdb
 import pytest
 
-from chatstrata.core.db import apply_migrations, connect, get_schema_version
+from chatstrata.core.db import _load_vss_extension, apply_migrations, connect, get_schema_version
 from chatstrata.core.migrations import LATEST_VERSION
 
 
@@ -71,3 +72,30 @@ def test_migration_0003_adds_mtime_column(raw_conn):
 
 def test_auto_migrate_on_connect(db):
     assert get_schema_version(db) == LATEST_VERSION
+
+
+class FakeVssConnection:
+    def __init__(self):
+        self.statements = []
+
+    def execute(self, sql):
+        self.statements.append(sql)
+        raise duckdb.CatalogException("extension not found")
+
+
+def test_vss_install_is_opt_in(monkeypatch):
+    monkeypatch.delenv("CHATSTRATA_INSTALL_DUCKDB_VSS", raising=False)
+    conn = FakeVssConnection()
+
+    _load_vss_extension(conn)
+
+    assert conn.statements == ["LOAD vss"]
+
+
+def test_vss_install_runs_when_enabled(monkeypatch):
+    monkeypatch.setenv("CHATSTRATA_INSTALL_DUCKDB_VSS", "1")
+    conn = FakeVssConnection()
+
+    _load_vss_extension(conn)
+
+    assert conn.statements == ["LOAD vss", "INSTALL vss; LOAD vss;"]

@@ -5,7 +5,6 @@
 -- when content_blocks changes; run `chatstrata reindex` after ingesting
 -- new data to rebuild it.
 
-INSTALL fts;
 LOAD fts;
 
 PRAGMA create_fts_index(

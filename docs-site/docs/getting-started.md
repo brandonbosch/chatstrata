@@ -9,30 +9,49 @@ This guide gets you from zero to querying your conversation archive in under fiv
 
 ## Prerequisites
 
-- Python 3.10 or later
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- Python 3.10 or later.
+- [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/).
+- No separate DuckDB install. The embedded DuckDB Python package is installed
+  with chatstrata.
 
 ## Install
 
 ```bash
-git clone https://github.com/brandonbosch/chatstrata.git
-cd chatstrata
-uv venv
-uv pip install -e ".[dev]"
+uv tool install chatstrata
+# or: pipx install chatstrata
 ```
 
 For optional features, install the relevant extras:
 
 ```bash
 # Semantic search via sentence-transformers
-uv pip install -e ".[embeddings]"
+uv tool install "chatstrata[embeddings]"
 
 # PII redaction via Presidio
-uv pip install -e ".[redact]"
+uv tool install "chatstrata[redact]"
 
 # Everything
-uv pip install -e ".[dev,embeddings,redact]"
+uv tool install "chatstrata[embeddings,redact,mcp]"
 ```
+
+For local development from a clone, use:
+
+```bash
+git clone https://github.com/brandonbosch/chatstrata.git
+cd chatstrata
+uv venv
+uv pip install -e ".[dev,redact,embeddings]"
+```
+
+## Initialize your archive
+
+```bash
+chatstrata init
+```
+
+This creates the local DuckDB file, applies schema migrations, and shows which
+conversation sources are detectable on your machine. The database is just a
+single local file; there is no server to run.
 
 ## Check installed sources
 
@@ -163,6 +182,9 @@ Override with the `CHATSTRATA_DB` environment variable or the `--db` flag on any
 export CHATSTRATA_DB=~/my-archive.duckdb
 chatstrata stats
 ```
+
+Run `chatstrata paths` at any time to see the database path, data directory, and
+optional config path for your machine.
 
 ## Next steps
 

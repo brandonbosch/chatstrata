@@ -1,7 +1,11 @@
-# Redaction (planned)
+# Redaction
 
-The redaction layer is **stubbed in v0** — the protocol is defined but no engine
-ships yet. This document captures the plan.
+The redaction layer is an optional, local-only safety tool for reviewing text or
+query results before sharing them. Install it with `chatstrata[redact]`.
+
+Redaction is best-effort. It catches common personal-data and developer-secret
+patterns, but it is not a guarantee of anonymization. Review output before
+publishing it.
 
 ## Why this exists
 
@@ -10,36 +14,35 @@ file paths revealing your username, internal hostnames, git remotes, and the
 contents of any `.env` file you've ever shown the assistant. Standard PII
 libraries don't catch most of this.
 
-When the redaction layer ships, it'll let you:
-- `chatstrata redact --interactive` to walk through detected entities with confirm/skip
-- `chatstrata export --redact` to dump query results with PII masked
-- Reverse redactions via a local mapping file (PII stays on your machine; the redacted output is shareable)
+The CLI supports:
+
+- `chatstrata redact text` to redact a string.
+- `chatstrata redact query` to redact SQL query results.
+- `chatstrata redact interactive` to review detected entities with confirm/skip.
+- Reversible redactions through the returned local mapping.
 
 ## Engine: Microsoft Presidio
 
-We're targeting Presidio as the default engine. Reasoning in
-[ADR 0004 (TODO)](./adr/). Briefly:
+Presidio is the default engine:
+
 - Battle-tested and Microsoft-maintained
 - Custom recognizers are first-class
 - Reversible redaction via mapping
 
-DataFog, GLiNER, and OpenPipe's pii-redaction are tracked as alternative
-engines. The `RedactionEngine` protocol exists so users can swap.
+The `RedactionEngine` protocol exists so alternative engines can be added later.
 
-## Custom recognizers we plan to ship
+## Custom recognizers
 
 Generic PII libraries handle standard entities (names, emails, phones, SSNs,
 credit cards). chatstrata adds:
 
 - **API keys**: Anthropic (`sk-ant-...`), OpenAI (`sk-...`), GitHub (`ghp_...`,
-  `gho_...`, etc.), AWS (access key ID + secret), GCP service account JSON,
-  Stripe, Slack tokens
+  `gho_...`, etc.), AWS access key IDs, GCP service account markers, Stripe,
+  Slack tokens
 - **File paths revealing username**: `/Users/*/`, `/home/*/`, `C:\Users\*\`
-- **Internal URLs and hostnames**: `*.internal`, `*.local`, RFC1918 IPs
-- **Git remotes** with embedded usernames
 - **Database connection strings** (postgres://, mysql://, mongodb://)
 - **JWT tokens**
-- **SSH keys** (when pasted into a conversation)
+- **Bearer tokens**
 
 ## Modes
 

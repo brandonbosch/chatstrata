@@ -35,16 +35,18 @@ CLI, and OpenCode. The architecture is built so that adding more sources
 
 ## Quickstart
 
-Requires Python 3.10+ and [uv](https://github.com/astral-sh/uv).
+Requires Python 3.10+. DuckDB is installed as a Python dependency; you do not
+need to install a separate DuckDB server or CLI.
 
 ```bash
-git clone https://github.com/brandonbosch/chatstrata.git
-cd chatstrata
-uv venv
-uv pip install -e ".[dev]"
+uv tool install chatstrata
+# or: pipx install chatstrata
+
+# Create the local DuckDB archive and show detected sources
+chatstrata init
 
 # Ingest your Claude Code transcripts
-chatstrata ingest claude_code
+chatstrata ingest claude_code --incremental
 
 # See what's there
 chatstrata stats
@@ -55,7 +57,8 @@ chatstrata query "SELECT model, COUNT(*) FROM messages GROUP BY model"
 
 The default database lives at a platform-appropriate user data directory
 (e.g. `~/.local/share/chatstrata/chatstrata.duckdb` on Linux). Override with
-`CHATSTRATA_DB` or `--db`.
+`CHATSTRATA_DB` or `--db`. Run `chatstrata paths` to see the exact paths for
+your machine.
 
 ## Data model
 
@@ -82,10 +85,12 @@ that register via entry points.
 ## Privacy
 
 Your data stays on your machine. chatstrata makes no network calls during
-ingestion or querying.
+ingestion or querying. Semantic search can optionally use DuckDB's VSS
+extension; chatstrata only installs that extension when
+`CHATSTRATA_INSTALL_DUCKDB_VSS=1` is set.
 
 If you want to share queries or notebooks publicly, an optional redaction layer
-(`uv pip install "chatstrata[redact]"`) wraps Microsoft Presidio with
+(`uv tool install "chatstrata[redact]"`) wraps Microsoft Presidio with
 chatstrata-specific recognizers for API keys, file paths, and other things that
 commonly appear in LLM transcripts. See [docs/redaction.md](docs/redaction.md).
 

@@ -13,6 +13,8 @@ from chatstrata.analysis.cli import analyze
 from chatstrata.core.db import (
     apply_migrations,
     connect,
+    get_default_config_path,
+    get_default_data_dir,
     get_schema_version,
     rebuild_fts_index,
     resolve_db_path,
@@ -22,6 +24,7 @@ from chatstrata.core.migrations import LATEST_VERSION
 from chatstrata.core.models import ConversationHandle
 from chatstrata.core.search import search_messages, snippet
 from chatstrata.embed.cli import embed
+from chatstrata.mcp.safety import execute_safe
 from chatstrata.redact.cli import redact
 from chatstrata.sources import load_adapters
 
@@ -41,6 +44,58 @@ def list_sources() -> None:
         return
     for name, adapter in sorted(adapters.items()):
         click.echo(f"  {name:20} {adapter.display_name}  (v{adapter.version})")
+
+
+@cli.command("paths")
+@click.option("--db", "db", default=None, help="Show paths for this database override.")
+def paths(db: str | None) -> None:
+    """Show where chatstrata stores local files."""
+    db_path = resolve_db_path(db)
+    click.echo(f"Database: {db_path}")
+    click.echo(f"Data dir:  {get_default_data_dir()}")
+    click.echo(f"Config:    {get_default_config_path()}  (optional)")
+    click.echo()
+    click.echo("Override the database with CHATSTRATA_DB or per-command --db.")
+
+
+@cli.command("init")
+@click.option("--db", "db", default=None, help="Create or migrate this database path.")
+@click.option("--no-discover", is_flag=True, help="Skip source discovery checks.")
+def init(db: str | None, no_discover: bool) -> None:
+    """Create the local database and show first-run next steps."""
+    db_path = resolve_db_path(db)
+    existed = db_path.exists()
+    conn = connect(db_path)
+    try:
+        version = get_schema_version(conn)
+    finally:
+        conn.close()
+
+    action = "Using existing database" if existed else "Created database"
+    click.echo(f"{action}:")
+    click.echo(f"  {db_path}")
+    click.echo()
+    click.echo(f"Schema: version {version}, latest {LATEST_VERSION}")
+
+    if not no_discover:
+        click.echo()
+        click.echo("Detected sources:")
+        adapters = load_adapters()
+        if not adapters:
+            click.echo("  none")
+        for name, adapter in sorted(adapters.items()):
+            try:
+                count = len(list(adapter.discover()))
+                status = f"{count} conversation{'s' if count != 1 else ''} found"
+            except Exception as exc:  # noqa: BLE001
+                status = f"not available ({exc})"
+            click.echo(f"  {name:20} {status}")
+
+    click.echo()
+    click.echo("Next:")
+    click.echo("  chatstrata sources")
+    click.echo("  chatstrata ingest <source> --incremental")
+    click.echo("  chatstrata stats")
 
 
 def _get_file_mtime(handle: ConversationHandle) -> float | None:
@@ -153,9 +208,10 @@ def query(sql: str, db: str | None, as_json: bool) -> None:
     """
     conn = connect(resolve_db_path(db))
     try:
-        result = conn.execute(sql)
-        cols = [d[0] for d in result.description] if result.description else []
-        rows = result.fetchall()
+        try:
+            cols, rows, truncated = execute_safe(conn, sql)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
         if as_json:
             out = [dict(zip(cols, row, strict=False)) for row in rows]
             click.echo(json.dumps(out, default=str, indent=2))
@@ -165,6 +221,8 @@ def query(sql: str, db: str | None, as_json: bool) -> None:
                 click.echo("\t".join("-" * max(3, len(c)) for c in cols))
             for row in rows:
                 click.echo("\t".join(str(v) if v is not None else "" for v in row))
+            if truncated:
+                click.echo("\nResults truncated. Refine the query or add LIMIT.")
     finally:
         conn.close()
 

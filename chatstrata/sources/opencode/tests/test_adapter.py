@@ -1,13 +1,13 @@
 """Tests for OpenCodeAdapter against fixture data."""
 
+import json
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from chatstrata.core.models import BlockType, ConversationHandle, Role
 from chatstrata.sources.opencode.adapter import OpenCodeAdapter
-
-FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
@@ -16,10 +16,239 @@ def adapter() -> OpenCodeAdapter:
 
 
 @pytest.fixture
-def sample_handle() -> ConversationHandle:
+def sample_db(tmp_path) -> Path:
+    db_path = tmp_path / "opencode.db"
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE project (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL
+        );
+
+        CREATE TABLE session (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            parent_id TEXT,
+            slug TEXT NOT NULL,
+            directory TEXT NOT NULL,
+            title TEXT NOT NULL,
+            version TEXT NOT NULL,
+            share_url TEXT,
+            summary_additions INTEGER,
+            summary_deletions INTEGER,
+            summary_files INTEGER,
+            summary_diffs TEXT,
+            revert TEXT,
+            permission TEXT,
+            time_created INTEGER NOT NULL,
+            time_updated INTEGER NOT NULL,
+            time_compacting INTEGER,
+            time_archived INTEGER,
+            workspace_id TEXT
+        );
+
+        CREATE TABLE message (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            time_created INTEGER NOT NULL,
+            time_updated INTEGER NOT NULL,
+            data TEXT NOT NULL
+        );
+
+        CREATE TABLE part (
+            id TEXT PRIMARY KEY,
+            message_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            time_created INTEGER NOT NULL,
+            time_updated INTEGER NOT NULL,
+            data TEXT NOT NULL
+        );
+        """
+    )
+    conn.execute("INSERT INTO project (id, name) VALUES (?, ?)", ["proj_001", "myapp"])
+    conn.execute(
+        """
+        INSERT INTO session (
+            id, project_id, slug, directory, title, version,
+            time_created, time_updated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "ses_test001",
+            "proj_001",
+            "add-error-handling",
+            "/home/user/projects/myapp",
+            "Add error handling to database module",
+            "1.0.0",
+            1700000000000,
+            1700001000000,
+        ],
+    )
+
+    messages = [
+        (
+            "msg_user001",
+            1700000000000,
+            1700000000000,
+            {
+                "role": "user",
+                "time": {"created": 1700000000000},
+                "summary": {"diffs": []},
+                "agent": "build",
+                "model": {"providerID": "llamacpp", "modelID": "qwen-distill"},
+            },
+        ),
+        (
+            "msg_asst001",
+            1700000010000,
+            1700000060000,
+            {
+                "role": "assistant",
+                "time": {"created": 1700000010000, "completed": 1700000060000},
+                "parentID": "msg_user001",
+                "modelID": "qwen-distill",
+                "providerID": "llamacpp",
+                "mode": "build",
+                "agent": "build",
+                "path": {"cwd": "/home/user/projects/myapp", "root": "/"},
+                "cost": 0,
+                "tokens": {
+                    "total": 5000,
+                    "input": 4500,
+                    "output": 500,
+                    "reasoning": 0,
+                    "cache": {"read": 0, "write": 0},
+                },
+                "finish": "tool-calls",
+            },
+        ),
+    ]
+    for message_id, created, updated, data in messages:
+        conn.execute(
+            "INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)",
+            [message_id, "ses_test001", created, updated, json.dumps(data)],
+        )
+
+    parts = [
+        (
+            "prt_user001",
+            "msg_user001",
+            1700000000000,
+            1700000000000,
+            {"type": "text", "text": "Add error handling to the database connection module"},
+        ),
+        (
+            "prt_step001",
+            "msg_asst001",
+            1700000010000,
+            1700000010000,
+            {"type": "step-start"},
+        ),
+        (
+            "prt_reason001",
+            "msg_asst001",
+            1700000011000,
+            1700000015000,
+            {
+                "type": "reasoning",
+                "text": "I need to add try-except blocks around the database connection calls.",
+                "time": {"start": 1700000011000, "end": 1700000015000},
+            },
+        ),
+        (
+            "prt_text001",
+            "msg_asst001",
+            1700000015000,
+            1700000015000,
+            {
+                "type": "text",
+                "text": "I'll add error handling to the database connection module.",
+                "time": {"start": 1700000015000, "end": 1700000015000},
+            },
+        ),
+        (
+            "prt_tool001",
+            "msg_asst001",
+            1700000020000,
+            1700000025000,
+            {
+                "type": "tool",
+                "callID": "call_abc123",
+                "tool": "bash",
+                "state": {
+                    "status": "completed",
+                    "input": {"command": "cat db.py", "description": "Read database module"},
+                    "output": 'import sqlite3\n\ndef connect():\n    return sqlite3.connect("app.db")',
+                    "title": "Read database module",
+                    "metadata": {
+                        "output": 'import sqlite3\n\ndef connect():\n    return sqlite3.connect("app.db")',
+                        "exit": 0,
+                        "description": "Read database module",
+                        "truncated": False,
+                    },
+                    "time": {"start": 1700000020000, "end": 1700000025000},
+                },
+            },
+        ),
+        (
+            "prt_text002",
+            "msg_asst001",
+            1700000030000,
+            1700000030000,
+            {
+                "type": "text",
+                "text": "I've reviewed the module. Adding try-except blocks now.",
+                "time": {"start": 1700000030000, "end": 1700000030000},
+            },
+        ),
+        (
+            "prt_stepfin001",
+            "msg_asst001",
+            1700000035000,
+            1700000035000,
+            {
+                "type": "step-finish",
+                "reason": "tool-calls",
+                "snapshot": "abc123",
+                "cost": 0,
+                "tokens": {
+                    "total": 5000,
+                    "input": 4500,
+                    "output": 500,
+                    "reasoning": 0,
+                    "cache": {"read": 0, "write": 0},
+                },
+            },
+        ),
+        (
+            "prt_patch001",
+            "msg_asst001",
+            1700000040000,
+            1700000040000,
+            {
+                "type": "patch",
+                "hash": "deadbeef1234567890",
+                "files": ["/home/user/projects/myapp/db.py"],
+            },
+        ),
+    ]
+    for part_id, message_id, created, updated, data in parts:
+        conn.execute(
+            "INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?, ?)",
+            [part_id, message_id, "ses_test001", created, updated, json.dumps(data)],
+        )
+
+    conn.commit()
+    conn.close()
+    return db_path
+
+
+@pytest.fixture
+def sample_handle(sample_db) -> ConversationHandle:
     return ConversationHandle(
         source_native_id="ses_test001",
-        path=FIXTURES / "opencode.db",
+        path=sample_db,
         metadata={
             "title": "Add error handling to database module",
             "directory": "/home/user/projects/myapp",
@@ -144,8 +373,8 @@ def test_parse_captures_agent_mode(adapter, sample_handle):
     assert asst_msg.metadata.get("mode") == "build"
 
 
-def test_discover_returns_handles(adapter):
-    handles = list(adapter.discover({"path": str(FIXTURES / "opencode.db")}))
+def test_discover_returns_handles(adapter, sample_db):
+    handles = list(adapter.discover({"path": str(sample_db)}))
     assert len(handles) == 1
     assert handles[0].source_native_id == "ses_test001"
     assert handles[0].metadata["title"] == "Add error handling to database module"

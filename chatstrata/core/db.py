@@ -6,9 +6,19 @@ import os
 from pathlib import Path
 
 import duckdb
-from platformdirs import user_data_dir
+from platformdirs import user_config_dir, user_data_dir
 
 from chatstrata.core.migrations import MIGRATIONS, Migration
+
+
+def get_default_data_dir() -> Path:
+    """Return the default directory for chatstrata data files."""
+    return Path(user_data_dir("chatstrata", appauthor=False))
+
+
+def get_default_config_path() -> Path:
+    """Return the default path for future user configuration."""
+    return Path(user_config_dir("chatstrata", appauthor=False)) / "config.toml"
 
 
 def get_default_db_path() -> Path:
@@ -19,7 +29,7 @@ def get_default_db_path() -> Path:
     env = os.environ.get("CHATSTRATA_DB")
     if env:
         return Path(env).expanduser().resolve()
-    data_dir = Path(user_data_dir("chatstrata", appauthor=False))
+    data_dir = get_default_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir / "chatstrata.duckdb"
 
@@ -58,6 +68,8 @@ def _load_vss_extension(conn: duckdb.DuckDBPyConnection) -> None:
     try:
         conn.execute("LOAD vss")
     except (duckdb.IOException, duckdb.CatalogException):
+        if os.environ.get("CHATSTRATA_INSTALL_DUCKDB_VSS") != "1":
+            return
         try:
             conn.execute("INSTALL vss; LOAD vss;")
         except Exception:

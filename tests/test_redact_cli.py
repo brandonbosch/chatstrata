@@ -177,6 +177,14 @@ class TestRedactQuery:
         assert result.exit_code == 0
         assert "No results" in result.output
 
+    def test_mutating_query_rejected(self, runner, populated_db):
+        result = runner.invoke(
+            cli,
+            ["redact", "query", "DROP TABLE conversations", "--db", str(populated_db)],
+        )
+        assert result.exit_code != 0
+        assert "DROP queries are not allowed" in result.output
+
 
 @pytest.mark.skipif(not HAS_PRESIDIO, reason="presidio not installed")
 class TestRedactInteractive:
@@ -225,3 +233,18 @@ class TestRedactInteractive:
         )
         assert result.exit_code == 0
         assert "No results" in result.output
+
+    def test_mutating_sql_rejected(self, runner, populated_db):
+        result = runner.invoke(
+            cli,
+            [
+                "redact",
+                "interactive",
+                "--db",
+                str(populated_db),
+                "--sql",
+                "DROP TABLE conversations",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "DROP queries are not allowed" in result.output
