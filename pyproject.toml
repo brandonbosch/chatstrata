@@ -111,8 +111,3 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "chatstrata"]
 python_files = ["test_*.py"]
-
-[tool.uv.workspace]
-members = [
-    "docs-site",
-]
