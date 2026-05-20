@@ -1,5 +1,9 @@
 # chatstrata
 
+<p align="center">
+  <img src="docs/images/chatstrata.png" alt="chatstrata" width="360">
+</p>
+
 A personal, queryable archive of your AI conversations across providers.
 
 Every conversation you've had with Claude, ChatGPT, or any other LLM is a record of

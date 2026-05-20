@@ -5,6 +5,8 @@ description: A personal, queryable archive of your AI conversations across provi
 
 # chatstrata
 
+![chatstrata](images/chatstrata.png){ width="360" }
+
 Every conversation you have with an LLM is a record of how you think, what you're working on, and how that's changed over time. Most of that record is scattered across browser exports, hidden JSONL files, and SaaS dashboards you don't fully control.
 
 chatstrata pulls it into one place, normalizes it into a [source-agnostic schema](schema.md), and lets you actually query and analyze it. DuckDB is the query engine — analytical by design, so the queries that matter run fast.
