@@ -59,7 +59,7 @@ def _load_fts_extension(conn: duckdb.DuckDBPyConnection) -> None:
     """Load the FTS extension if it has been installed (schema >= v2)."""
     try:
         conn.execute("LOAD fts")
-    except (duckdb.IOException, duckdb.CatalogException):
+    except Exception:
         pass
 
 
@@ -78,10 +78,14 @@ def _load_vss_extension(conn: duckdb.DuckDBPyConnection) -> None:
 
 def rebuild_fts_index(conn: duckdb.DuckDBPyConnection) -> None:
     """Drop and recreate the FTS index on content_blocks.text."""
-    conn.execute(
-        "PRAGMA create_fts_index('content_blocks', 'id', 'text', "
-        "stemmer='porter', stopwords='english', overwrite=1)"
-    )
+    _load_fts_extension(conn)
+    try:
+        conn.execute(
+            "PRAGMA create_fts_index('content_blocks', 'id', 'text', "
+            "stemmer='porter', stopwords='english', overwrite=1)"
+        )
+    except Exception:
+        pass
 
 
 def get_schema_version(conn: duckdb.DuckDBPyConnection) -> int:

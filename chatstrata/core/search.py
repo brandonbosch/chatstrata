@@ -71,7 +71,7 @@ def search_messages(
     try:
         rows = conn.execute(sql, [query] + params).fetchall()
     except Exception:  # noqa: BLE001
-        return []
+        rows = _fallback_search(conn, query, limit=limit, source=source, since=since, until=until)
 
     return [
         SearchResult(
@@ -87,6 +87,52 @@ def search_messages(
         )
         for row in rows
     ]
+
+
+def _fallback_search(
+    conn: duckdb.DuckDBPyConnection,
+    query: str,
+    *,
+    limit: int,
+    source: str | None,
+    since: datetime | None,
+    until: datetime | None,
+) -> list[tuple]:
+    """Simple local substring search used when DuckDB FTS is unavailable."""
+    conditions = ["cb.text IS NOT NULL", "lower(cb.text) LIKE ?"]
+    params: list = [f"%{query.lower()}%"]
+
+    if source:
+        conditions.append("c.source_id = ?")
+        params.append(source)
+    if since:
+        conditions.append("m.created_at >= ?")
+        params.append(since)
+    if until:
+        conditions.append("m.created_at < ?")
+        params.append(until)
+
+    params.append(limit)
+    where_clause = " AND ".join(conditions)
+    sql = f"""
+        SELECT
+            1.0 AS score,
+            c.id AS conversation_id,
+            c.title AS conversation_title,
+            c.source_id,
+            c.project,
+            m.role AS message_role,
+            m.created_at AS message_created_at,
+            cb.text,
+            cb.id AS content_block_id
+        FROM content_blocks cb
+        JOIN messages m ON m.id = cb.message_id
+        JOIN conversations c ON c.id = m.conversation_id
+        WHERE {where_clause}
+        ORDER BY m.sequence_index, cb.block_index
+        LIMIT ?
+    """
+    return conn.execute(sql, params).fetchall()
 
 
 def snippet(text: str | None, query: str, context_chars: int = 120) -> str:

@@ -4,12 +4,8 @@
 -- that store the inverted index. The index is NOT automatically updated
 -- when content_blocks changes; run `chatstrata reindex` after ingesting
 -- new data to rebuild it.
+--
+-- FTS setup is intentionally deferred to `chatstrata reindex` so first-run
+-- database creation never attempts an implicit DuckDB extension download.
 
-LOAD fts;
-
-PRAGMA create_fts_index(
-    'content_blocks', 'id', 'text',
-    stemmer = 'porter',
-    stopwords = 'english',
-    overwrite = 1
-);
+SELECT 1;
