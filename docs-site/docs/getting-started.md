@@ -30,6 +30,9 @@ uv tool install "chatstrata[embeddings]"
 # PII redaction via Presidio
 uv tool install "chatstrata[redact]"
 
+# MCP server for Claude Code, Claude Desktop, and other MCP clients
+uv tool install "chatstrata[mcp]"
+
 # Everything
 uv tool install "chatstrata[embeddings,redact,mcp]"
 ```
@@ -42,6 +45,29 @@ cd chatstrata
 uv venv
 uv pip install -e ".[dev,redact,embeddings]"
 ```
+
+## Use from an MCP client
+
+Install with the MCP extra:
+
+```bash
+uv tool install "chatstrata[mcp]"
+```
+
+Then create and ingest your archive as usual. For Claude Code, generate the
+setup command:
+
+```bash
+chatstrata mcp config claude-code
+```
+
+For Claude Desktop, generate the JSON config:
+
+```bash
+chatstrata mcp config claude-desktop
+```
+
+See [MCP Server](mcp.md) for the full setup flow.
 
 ## Initialize your archive
 
@@ -190,6 +216,7 @@ optional config path for your machine.
 
 - [The Canonical Schema](schema.md) — understand the tables and design principles
 - [Querying and Analysis](querying.md) — DuckDB query patterns, search modes, analyze commands
+- [MCP Server](mcp.md) — connect chatstrata to Claude Code, Claude Desktop, or another MCP client
 - [Writing a Source Adapter](adapters.md) — contribute support for a new provider
 - [Privacy and Redaction](privacy.md) — detect and remove sensitive data before sharing
 - [CLI Reference](cli.md) — every command with flags and examples

@@ -34,7 +34,7 @@ The `RedactionEngine` protocol is defined separately from the Presidio implement
 The default `PresidioEngine` loads all of Presidio's predefined recognizers **plus** chatstrata's custom ones, resolves overlapping entity spans by preferring longer matches with higher confidence, and applies replacements right-to-left to preserve character offsets.
 
 !!! warning
-    Install the redact extras: `uv pip install "chatstrata[redact]"`
+    Install the redact extras: `uv tool install "chatstrata[redact]"`
 
 ## Custom recognizers
 

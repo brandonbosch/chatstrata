@@ -5,7 +5,7 @@ description: Every chatstrata command, with flags and examples.
 
 # CLI Reference
 
-`chatstrata` is a Click-based CLI with commands organized into five groups: core database operations, search, analysis, embeddings, and redaction. Every command that touches the database accepts a `--db` flag to override the default path. The default database location is determined by `platformdirs` (e.g., `~/.local/share/chatstrata/chatstrata.duckdb` on Linux) and can also be set via the `CHATSTRATA_DB` environment variable.
+`chatstrata` is a Click-based CLI with commands organized into core database operations, search, analysis, embeddings, redaction, and MCP setup. Every command that touches the database accepts a `--db` flag to override the default path. The default database location is determined by `platformdirs` (e.g., `~/.local/share/chatstrata/chatstrata.duckdb` on Linux) and can also be set via the `CHATSTRATA_DB` environment variable.
 
 Most commands that produce tabular output support a `--json` flag for machine-readable output.
 
@@ -244,13 +244,46 @@ Show per-project conversation counts. Particularly useful for Claude Code sessio
 chatstrata analyze projects --json
 ```
 
+## MCP
+
+### mcp config
+
+Print setup snippets for MCP clients. This command does not edit client config
+files; it gives you the command or JSON to paste into the target client.
+
+Requires the `[mcp]` extra when the client actually starts the server:
+`uv tool install "chatstrata[mcp]"`.
+
+| Argument / Flag | Description |
+|------|-------------|
+| `claude-code` | Print a `claude mcp add` command |
+| `claude-desktop` | Print a Claude Desktop `mcpServers` JSON block |
+| `--runner uvx` | Launch with `uvx --from "chatstrata[mcp]" chatstrata-mcp` (default) |
+| `--runner installed` | Launch `chatstrata-mcp` from PATH |
+| `--db PATH` | Set `CHATSTRATA_DB` for the MCP server |
+| `--scope local\|project\|user` | Claude Code MCP scope (default: `user`) |
+
+```bash
+# Claude Code setup command
+chatstrata mcp config claude-code
+
+# Claude Desktop JSON
+chatstrata mcp config claude-desktop
+
+# Pin the server to a specific database
+chatstrata mcp config claude-desktop --db /absolute/path/to/chatstrata.duckdb
+
+# Use an already-installed chatstrata-mcp executable
+chatstrata mcp config claude-code --runner installed
+```
+
 ## Embeddings
 
 ### embed
 
 Generate vector embeddings for messages and store them in the `message_embeddings` table. This is a prerequisite for `search --semantic` and `search --hybrid`. Messages already embedded with the same model are skipped automatically.
 
-Requires the `[embeddings]` extras: `uv pip install "chatstrata[embeddings]"`.
+Requires the `[embeddings]` extras: `uv tool install "chatstrata[embeddings]"`.
 
 | Flag | Description |
 |------|-------------|
@@ -274,7 +307,7 @@ chatstrata embed --model all-MiniLM-L6-v2 --batch-size 128 --since 2025-01-01
 
 ## Redaction
 
-The `redact` subcommand group detects and redacts PII using a Presidio-backed engine. Requires the `[redact]` extras: `uv pip install "chatstrata[redact]"`.
+The `redact` subcommand group detects and redacts PII using a Presidio-backed engine. Requires the `[redact]` extras: `uv tool install "chatstrata[redact]"`.
 
 All redact subcommands accept a `--mode` flag with these options:
 

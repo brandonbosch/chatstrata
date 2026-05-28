@@ -59,4 +59,11 @@ local_test_data/
 
 # Zensical docs
 docs-site/site/
+docs-site/.cache/
+docs-site/.venv/
+docs-site/docs_site.egg-info/
+docs-site/main.py
 .zensical-venv/
+
+# uv lockfiles are optional for this library repo
+uv.lock

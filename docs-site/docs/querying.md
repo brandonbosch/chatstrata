@@ -155,7 +155,7 @@ chatstrata embed --model all-MiniLM-L6-v2 --min-tokens 30 --batch-size 128
 The `embed` command requires the optional `[embeddings]` extras:
 
 ```bash
-uv pip install "chatstrata[embeddings]"
+uv tool install "chatstrata[embeddings]"
 ```
 
 The default provider uses `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions, ~23M parameters). The embedding architecture is pluggable -- any class implementing the `EmbeddingProvider` protocol (with `embed_texts` and `embed_query` methods) can serve as a provider.

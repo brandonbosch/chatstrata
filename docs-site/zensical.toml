@@ -52,6 +52,7 @@ nav = [
     "ingestion.md",
     "sources.md",
     "querying.md",
+    "mcp.md",
     "adapters.md",
     "privacy.md",
     "migrations.md",

@@ -44,11 +44,10 @@ Find abandoned threads. See which models you've used most. Audit every tool call
 ## Quick start
 
 ```bash
-git clone https://github.com/brandonbosch/chatstrata.git
-cd chatstrata
-uv venv && uv pip install -e ".[dev]"
+uv tool install chatstrata
 
-chatstrata ingest claude_code
+chatstrata init
+chatstrata ingest claude_code --incremental
 chatstrata stats
 chatstrata query "SELECT role, COUNT(*) FROM messages GROUP BY role"
 ```
@@ -81,6 +80,7 @@ Adapters can live in this repo or be published as standalone pip packages. Growi
 | [The Canonical Schema](schema.md) | Tables, design principles, source-agnosticism |
 | [Ingestion Pipeline](ingestion.md) | Discover, parse, normalize, persist |
 | [Querying and Analysis](querying.md) | SQL, full-text search, semantic search, analyze commands |
+| [MCP Server](mcp.md) | Query your archive from Claude Code, Claude Desktop, and other MCP clients |
 | [Built-in Source Adapters](sources.md) | Claude Code, claude.ai export, Codex CLI, OpenCode |
 | [Writing a Source Adapter](adapters.md) | The contribution path for new sources |
 | [Privacy and Redaction](privacy.md) | PII detection, Presidio engine, custom recognizers |
