@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from click.testing import CliRunner
 
 from chatstrata.cli import cli
@@ -75,3 +77,33 @@ def test_query_allows_select(tmp_path):
 
     assert result.exit_code == 0
     assert "conversations" in result.output
+
+
+def test_mcp_config_claude_code_defaults_to_uvx():
+    runner = CliRunner()
+
+    result = runner.invoke(cli, ["mcp", "config", "claude-code"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == (
+        "claude mcp add --transport stdio --scope user chatstrata -- "
+        "uvx --from 'chatstrata[mcp]' chatstrata-mcp"
+    )
+
+
+def test_mcp_config_claude_desktop_json_with_db(tmp_path):
+    db_path = tmp_path / "archive.duckdb"
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli,
+        ["mcp", "config", "claude-desktop", "--runner", "installed", "--db", str(db_path)],
+    )
+
+    assert result.exit_code == 0
+    config = json.loads(result.output)
+    server = config["mcpServers"]["chatstrata"]
+    assert server["type"] == "stdio"
+    assert server["command"] == "chatstrata-mcp"
+    assert server["args"] == []
+    assert server["env"]["CHATSTRATA_DB"] == str(db_path)

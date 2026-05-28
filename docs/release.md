@@ -48,6 +48,15 @@ chatstrata paths
 chatstrata sources
 ```
 
+Smoke test the MCP extra and generated client snippets:
+
+```bash
+uv tool install --force --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "chatstrata[mcp]"
+chatstrata mcp config claude-code
+chatstrata mcp config claude-desktop
+chatstrata-mcp --help
+```
+
 If that works, publish to PyPI:
 
 ```bash
@@ -64,5 +73,7 @@ git push origin v0.1.0
 ## After release
 
 - Confirm `uv tool install chatstrata` works from PyPI.
+- Confirm `uv tool install "chatstrata[mcp]"` installs `chatstrata-mcp`.
 - Confirm `chatstrata init`, `chatstrata paths`, and `chatstrata sources` work.
+- Confirm `chatstrata mcp config claude-code` prints a working Claude Code setup command.
 - Create a GitHub release from the tag using `CHANGELOG.md` notes.

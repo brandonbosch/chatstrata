@@ -16,38 +16,65 @@ Full-text search (BM25) is a native DuckDB SQL function, so it works through the
 ## Install
 
 ```bash
+uv tool install "chatstrata[mcp]"
+# or: pipx install "chatstrata[mcp]"
+```
+
+For local development from a clone:
+
+```bash
 uv pip install -e ".[mcp]"
 ```
 
 ## Claude Code
 
-Add to `.mcp.json` at your project root (or `~/.claude/.mcp.json` for global):
+Use Claude Code's MCP command to add chatstrata as a user-scoped stdio server:
+
+```bash
+claude mcp add --transport stdio --scope user chatstrata -- uvx --from "chatstrata[mcp]" chatstrata-mcp
+```
+
+Or generate the command:
+
+```bash
+chatstrata mcp config claude-code
+```
+
+If you installed the tool directly and know `chatstrata-mcp` is on your PATH:
+
+```bash
+chatstrata mcp config claude-code --runner installed
+```
+
+Start a new session after adding the config. Approve the server when prompted.
+
+For a project-scoped `.mcp.json`, use:
 
 ```json
 {
   "mcpServers": {
     "chatstrata": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "chatstrata[mcp]", "chatstrata-mcp"]
+    }
+  }
+}
+```
+
+If `chatstrata-mcp` is on your PATH, this also works:
+
+```json
+{
+  "mcpServers": {
+    "chatstrata": {
+      "type": "stdio",
       "command": "chatstrata-mcp",
       "args": []
     }
   }
 }
 ```
-
-If `chatstrata-mcp` isn't on your PATH, use the full path to the binary:
-
-```json
-{
-  "mcpServers": {
-    "chatstrata": {
-      "command": "/path/to/your/venv/bin/chatstrata-mcp",
-      "args": []
-    }
-  }
-}
-```
-
-Start a new session after adding the config. Approve the server when prompted.
 
 ## Claude Desktop
 
@@ -57,14 +84,38 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 {
   "mcpServers": {
     "chatstrata": {
-      "command": "/path/to/your/venv/bin/chatstrata-mcp",
-      "args": []
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "chatstrata[mcp]", "chatstrata-mcp"]
     }
   }
 }
 ```
 
+Generate the same JSON with:
+
+```bash
+chatstrata mcp config claude-desktop
+```
+
 Restart Claude Desktop after saving.
+
+## Database selection
+
+By default, the MCP server reads the same platform-specific database path used
+by the `chatstrata` CLI. Check it with:
+
+```bash
+chatstrata paths
+```
+
+To point an MCP client at a specific archive, set `CHATSTRATA_DB` in the server
+environment. The config helper can include it:
+
+```bash
+chatstrata mcp config claude-desktop --db /absolute/path/to/chatstrata.duckdb
+chatstrata mcp config claude-code --db /absolute/path/to/chatstrata.duckdb
+```
 
 ## Remote Access (Tailscale / Mobile)
 

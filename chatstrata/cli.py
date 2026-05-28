@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 
 import click
@@ -56,6 +57,65 @@ def paths(db: str | None) -> None:
     click.echo(f"Config:    {get_default_config_path()}  (optional)")
     click.echo()
     click.echo("Override the database with CHATSTRATA_DB or per-command --db.")
+
+
+def _mcp_stdio_spec(runner: str) -> dict:
+    if runner == "uvx":
+        return {
+            "type": "stdio",
+            "command": "uvx",
+            "args": ["--from", "chatstrata[mcp]", "chatstrata-mcp"],
+        }
+    return {
+        "type": "stdio",
+        "command": "chatstrata-mcp",
+        "args": [],
+    }
+
+
+@cli.group("mcp")
+def mcp_cli() -> None:
+    """Generate MCP client setup snippets."""
+
+
+@mcp_cli.command("config")
+@click.argument("client", type=click.Choice(["claude-code", "claude-desktop"]))
+@click.option(
+    "--runner",
+    type=click.Choice(["uvx", "installed"]),
+    default="uvx",
+    show_default=True,
+    help="How the MCP server should be launched.",
+)
+@click.option("--db", "db", default=None, help="Set CHATSTRATA_DB for the MCP server.")
+@click.option(
+    "--scope",
+    type=click.Choice(["local", "project", "user"]),
+    default="user",
+    show_default=True,
+    help="Claude Code MCP scope.",
+)
+def mcp_config(client: str, runner: str, db: str | None, scope: str) -> None:
+    """Print setup for an MCP client.
+
+    Examples:
+        chatstrata mcp config claude-code
+        chatstrata mcp config claude-desktop --runner installed
+    """
+    spec = _mcp_stdio_spec(runner)
+    if db:
+        spec["env"] = {"CHATSTRATA_DB": str(resolve_db_path(db))}
+
+    if client == "claude-desktop":
+        click.echo(json.dumps({"mcpServers": {"chatstrata": spec}}, indent=2))
+        return
+
+    command = ["claude", "mcp", "add", "--transport", "stdio", "--scope", scope]
+    if db:
+        command.extend(["--env", f"CHATSTRATA_DB={resolve_db_path(db)}"])
+    command.extend(["chatstrata", "--", spec["command"]])
+    command.extend(spec["args"])
+    click.echo(shlex.join(command))
 
 
 @cli.command("init")
