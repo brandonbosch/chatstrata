@@ -64,6 +64,65 @@ The default database lives at a platform-appropriate user data directory
 `CHATSTRATA_DB` or `--db`. Run `chatstrata paths` to see the exact paths for
 your machine.
 
+## MCP server (for testers)
+
+chatstrata ships an [MCP](https://modelcontextprotocol.io) server that exposes
+your archive to MCP-aware clients (Claude Desktop, etc.) through a single
+read-only `query` tool plus a `chatstrata://schema` resource. The client can
+then write and run SQL against your conversations directly.
+
+> **Note:** chatstrata is in early development and isn't published to PyPI yet,
+> so install from a clone of this repo in a virtualenv.
+
+### 1. Install with the `mcp` extra
+
+```bash
+git clone https://github.com/brandonbosch/chatstrata.git
+cd chatstrata
+uv venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+uv pip install -e ".[mcp]"
+```
+
+### 2. Create and populate the archive
+
+The MCP server reads an existing database; make sure you've ingested something
+first:
+
+```bash
+chatstrata init
+chatstrata ingest claude_code --incremental
+chatstrata paths               # note the database path for the next step
+```
+
+### 3. Point your MCP client at the server
+
+The installed `chatstrata-mcp` executable speaks MCP over stdio. For Claude
+Desktop, add an entry to its `mcpServers` config (Settings → Developer → Edit
+Config), using the absolute path to the `chatstrata-mcp` script inside your
+virtualenv and the database path from `chatstrata paths`:
+
+```json
+{
+  "mcpServers": {
+    "chatstrata": {
+      "command": "/absolute/path/to/chatstrata/.venv/bin/chatstrata-mcp",
+      "env": {
+        "CHATSTRATA_DB": "/absolute/path/to/chatstrata.duckdb"
+      }
+    }
+  }
+}
+```
+
+On Windows the command path is typically
+`...\chatstrata\.venv\Scripts\chatstrata-mcp.exe`. If `CHATSTRATA_DB` is
+omitted, the server falls back to the default platform path.
+
+Restart the client. The `chatstrata` server should appear with a `query` tool
+available; ask it something like "what topics have I discussed most this month?"
+and it will query your archive.
+
 ## Data model
 
 chatstrata normalizes every conversation into the same shape regardless of source:
