@@ -114,7 +114,7 @@ def ingest_conversation(
     if existing:
         conv_id = existing[0]
         # Clear out previous content for clean replacement.
-        # Order matters: content_blocks -> messages, due to FK.
+        # Order matters: child tables -> messages, due to FK.
         conn.execute(
             """
             DELETE FROM content_blocks
@@ -123,6 +123,7 @@ def ingest_conversation(
             [conv_id],
         )
         conn.execute("DELETE FROM attachments WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)", [conv_id])
+        conn.execute("DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)", [conv_id])
         conn.execute("DELETE FROM messages WHERE conversation_id = ?", [conv_id])
         conn.execute("DELETE FROM raw_events WHERE source_id = ? AND source_native_conversation_id = ?",
                      [source_id, conv.source_native_id])

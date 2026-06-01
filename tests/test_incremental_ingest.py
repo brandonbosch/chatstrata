@@ -79,6 +79,41 @@ class TestMtimeStorage:
         ingest_conversation(db, adapter.name, conv, source_file_mtime=2000.0)
         assert get_stored_mtime(db, adapter.name, "sample_session") == 2000.0
 
+    def test_reingest_removes_stale_embeddings_before_replacing_messages(self, db):
+        adapter = ClaudeCodeAdapter()
+        handle = ConversationHandle(
+            source_native_id="sample_session",
+            path=FIXTURES / "sample_session.jsonl",
+            metadata={"project": "/Users/example/myproj"},
+        )
+        ensure_source(db, adapter.name, adapter.display_name, adapter.version)
+        conv = adapter.parse(handle)
+
+        ingest_conversation(db, adapter.name, conv, source_file_mtime=1000.0)
+        message_id = db.execute(
+            """
+            SELECT id FROM messages
+            WHERE conversation_id = (
+                SELECT id FROM conversations
+                WHERE source_id = ? AND source_native_id = ?
+            )
+            LIMIT 1
+            """,
+            [adapter.name, "sample_session"],
+        ).fetchone()[0]
+        db.execute(
+            "INSERT INTO message_embeddings (message_id, model, vector) VALUES (?, ?, ?)",
+            [message_id, "test-model", [0.1, 0.2]],
+        )
+
+        ingest_conversation(db, adapter.name, conv, source_file_mtime=2000.0)
+
+        stale_embedding_count = db.execute(
+            "SELECT COUNT(*) FROM message_embeddings WHERE message_id = ?",
+            [message_id],
+        ).fetchone()[0]
+        assert stale_embedding_count == 0
+
     def test_get_stored_mtime_returns_none_for_missing(self, db):
         assert get_stored_mtime(db, "nonexistent", "nonexistent") is None
 
