@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-06-01
 
 - Add `chatstrata ingest --auto` to detect default local sources, ingest all available conversations, choose full vs incremental ingest per source, and generate missing embeddings.
 - Add `--no-embed`, `--model`, `--min-tokens`, and `--batch-size` controls for auto ingest.
