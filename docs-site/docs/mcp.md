@@ -19,17 +19,19 @@ and blocks multi-statement queries.
 ## Install
 
 ```bash
-uv tool install "chatstrata[mcp]"
-# or: pipx install "chatstrata[mcp]"
+uv tool install "chatstrata[embeddings,mcp]"
+# or: pipx install "chatstrata[embeddings,mcp]"
 ```
 
 Create and populate the archive before connecting an MCP client:
 
 ```bash
 chatstrata init
-chatstrata ingest claude_code --incremental
+chatstrata ingest --auto
 chatstrata paths
 ```
+
+If you installed only `chatstrata[mcp]`, run `chatstrata ingest --auto --no-embed` or install the embeddings extra before auto ingest.
 
 ## Claude Code
 

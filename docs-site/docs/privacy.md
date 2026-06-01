@@ -7,7 +7,7 @@ description: Detecting and removing sensitive data from LLM transcripts.
 
 LLM transcripts are unusually rich in sensitive data. A single Claude Code session might contain your Anthropic API key, file paths that reveal your OS username, database connection strings from `.env` files, JWT tokens from debugging auth flows, and internal hostnames from `curl` commands you ran. Standard PII libraries handle names, emails, and phone numbers -- but they miss all of this developer-specific data.
 
-chatstrata's redaction layer exists for the moment you want to **share** something from your archive. Your data stays local at all times -- chatstrata makes no network calls during ingestion, querying, or redaction. The redaction engine scans text for sensitive entities and replaces them according to one of five modes, with an optional reversal mapping so you can undo the redaction later.
+chatstrata's redaction layer exists for the moment you want to **share** something from your archive. Your transcript content stays local: standard ingestion, querying, and redaction do not send it to a hosted service. Semantic search uses local embeddings; the first embedding run may download the configured sentence-transformers model if it is not already cached. The redaction engine scans text for sensitive entities and replaces them according to one of five modes, with an optional reversal mapping so you can undo the redaction later.
 
 ## The redaction engine
 

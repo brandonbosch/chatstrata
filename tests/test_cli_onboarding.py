@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from click.testing import CliRunner
 
 from chatstrata.cli import cli
 from chatstrata.core.db import connect, get_schema_version
 from chatstrata.core.migrations import LATEST_VERSION
+from chatstrata.core.models import (
+    BlockType,
+    ContentBlock,
+    ConversationHandle,
+    ParsedConversation,
+    ParsedMessage,
+    Role,
+)
 
 
 def test_init_creates_database(tmp_path):
@@ -107,3 +116,69 @@ def test_mcp_config_claude_desktop_json_with_db(tmp_path):
     assert server["command"] == "chatstrata-mcp"
     assert server["args"] == []
     assert server["env"]["CHATSTRATA_DB"] == str(db_path)
+
+
+class StubAutoAdapter:
+    name = "stub_auto"
+    display_name = "Stub Auto"
+    version = "0.1.0"
+    schema_version = 1
+
+    def __init__(self, path):
+        self.path = path
+
+    def discover(self, config=None):
+        if self.path.exists():
+            yield ConversationHandle(source_native_id=self.path.stem, path=self.path)
+
+    def parse(self, handle):
+        return ParsedConversation(
+            source_native_id=handle.source_native_id,
+            title="Auto fixture",
+            started_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            messages=[
+                ParsedMessage(
+                    source_native_id="m1",
+                    role=Role.USER,
+                    created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                    blocks=[ContentBlock(type=BlockType.TEXT, text="hello from auto ingest")],
+                )
+            ],
+        )
+
+
+def test_ingest_auto_detects_sources_and_then_uses_incremental(tmp_path, monkeypatch):
+    source_file = tmp_path / "session.jsonl"
+    source_file.write_text("{}\n", encoding="utf-8")
+    adapter = StubAutoAdapter(source_file)
+    monkeypatch.setattr("chatstrata.cli.load_adapters", lambda: {adapter.name: adapter})
+
+    db_path = str(tmp_path / "archive.duckdb")
+    runner = CliRunner()
+
+    result1 = runner.invoke(cli, ["ingest", "--auto", "--no-embed", "--db", db_path])
+
+    assert result1.exit_code == 0
+    assert "stub_auto: 1 conversation found (full)" in result1.output
+    assert "stub_auto" in result1.output
+    assert "ingested=1 skipped=0 failed=0" in result1.output
+
+    result2 = runner.invoke(cli, ["ingest", "--auto", "--no-embed", "--db", db_path])
+
+    assert result2.exit_code == 0
+    assert "stub_auto: 1 conversation found (incremental)" in result2.output
+    assert "ingested=0 skipped=1 failed=0" in result2.output
+
+
+def test_ingest_auto_dry_run_lists_detected_sources(tmp_path, monkeypatch):
+    source_file = tmp_path / "session.jsonl"
+    source_file.write_text("{}\n", encoding="utf-8")
+    adapter = StubAutoAdapter(source_file)
+    monkeypatch.setattr("chatstrata.cli.load_adapters", lambda: {adapter.name: adapter})
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["ingest", "--auto", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "Would auto-ingest detected sources:" in result.output
+    assert "stub_auto" in result.output

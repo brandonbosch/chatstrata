@@ -28,7 +28,7 @@ No flags. Output shows adapter name, display name, and version.
 
 ### ingest
 
-Import conversations from a source adapter into the database.
+Import conversations from a source adapter into the database. For first-time setup, `chatstrata ingest --auto` is the recommended path: it checks every installed adapter's default location, ingests detected sources, and generates embeddings for eligible messages.
 
 | Flag | Description |
 |------|-------------|
@@ -37,8 +37,22 @@ Import conversations from a source adapter into the database.
 | `--limit N` | Ingest at most N conversations |
 | `--dry-run` | Discover conversations but do not write to the database |
 | `--incremental` | Skip conversations whose source file has not changed since the last ingest |
+| `--auto` | Detect available default sources, ingest them, and generate embeddings |
+| `--no-embed` | With `--auto`, skip embedding generation |
+| `--model MODEL` | Embedding model for `--auto` |
+| `--min-tokens N` | Minimum message size for `--auto` embeddings |
+| `--batch-size N` | Embedding batch size for `--auto` |
 
 ```bash
+# Auto-detect local app conversations, ingest them, and generate embeddings
+chatstrata ingest --auto
+
+# Preview detected default sources without writing
+chatstrata ingest --auto --dry-run
+
+# Auto-ingest without requiring the embeddings extra
+chatstrata ingest --auto --no-embed
+
 # Ingest all Claude Code conversations
 chatstrata ingest claude_code
 
@@ -57,6 +71,8 @@ chatstrata ingest opencode
 # Ingest OpenCode from a non-default database
 chatstrata ingest opencode --path ~/alternate/opencode.db
 ```
+
+Auto mode does a full ingest for sources that are not yet in the database. On later runs, it switches those sources to incremental ingest and skips unchanged file-backed conversations. Sources that do not have a default discoverable location, such as an extracted claude.ai export, still need a manual `--path`.
 
 ### query
 
@@ -282,6 +298,8 @@ chatstrata mcp config claude-code --runner installed
 ### embed
 
 Generate vector embeddings for messages and store them in the `message_embeddings` table. This is a prerequisite for `search --semantic` and `search --hybrid`. Messages already embedded with the same model are skipped automatically.
+
+`chatstrata ingest --auto` runs this embedding step automatically unless `--no-embed` is set.
 
 Requires the `[embeddings]` extras: `uv tool install "chatstrata[embeddings]"`.
 

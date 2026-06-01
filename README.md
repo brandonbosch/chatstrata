@@ -43,14 +43,14 @@ Requires Python 3.10+. DuckDB is installed as a Python dependency; you do not
 need to install a separate DuckDB server or CLI.
 
 ```bash
-uv tool install chatstrata
-# or: pipx install chatstrata
+uv tool install "chatstrata[embeddings]"
+# or: pipx install "chatstrata[embeddings]"
 
 # Create the local DuckDB archive and show detected sources
 chatstrata init
 
-# Ingest your Claude Code transcripts
-chatstrata ingest claude_code --incremental
+# Auto-detect local app transcripts, ingest them, and generate embeddings
+chatstrata ingest --auto
 
 # See what's there
 chatstrata stats
@@ -74,8 +74,8 @@ then write and run SQL against your conversations directly.
 ### 1. Install with MCP support
 
 ```bash
-uv tool install "chatstrata[mcp]"
-# or: pipx install "chatstrata[mcp]"
+uv tool install "chatstrata[embeddings,mcp]"
+# or: pipx install "chatstrata[embeddings,mcp]"
 ```
 
 ### 2. Create and populate the archive
@@ -85,9 +85,12 @@ first:
 
 ```bash
 chatstrata init
-chatstrata ingest claude_code --incremental
+chatstrata ingest --auto
 chatstrata paths               # note the database path for the next step
 ```
+
+If you installed without the `embeddings` extra, use `chatstrata ingest --auto --no-embed`
+or install the extra before running auto mode.
 
 ### 3. Point your MCP client at chatstrata
 
@@ -152,6 +155,25 @@ chatstrata normalizes every conversation into the same shape regardless of sourc
 
 See [docs/schema.md](docs/schema.md) for the full schema.
 
+## Auto ingest
+
+`chatstrata ingest --auto` scans every installed adapter's default location,
+ingests the sources it finds, and then generates missing message embeddings.
+For each source, the first auto run does a full ingest; later auto runs switch
+that source to incremental mode and skip unchanged files.
+
+Embedding uses a local sentence-transformers model. The first embedding run may
+download the model if it is not already cached; transcript content is not sent
+to chatstrata or a hosted inference API.
+
+Use explicit source commands when you need a custom path or a provider export
+that has no default location:
+
+```bash
+chatstrata ingest claude_export --path ~/Downloads/claude-export/
+chatstrata ingest claude_code --path ~/alternate/.claude/projects --incremental
+```
+
 ## Adding a source
 
 Each source (Claude Code, ChatGPT export, etc.) is an adapter that implements a
@@ -164,10 +186,11 @@ that register via entry points.
 
 ## Privacy
 
-Your data stays on your machine. chatstrata makes no network calls during
-ingestion or querying. Semantic search can optionally use DuckDB's VSS
-extension; chatstrata only installs that extension when
-`CHATSTRATA_INSTALL_DUCKDB_VSS=1` is set.
+Your transcript content stays on your machine. Standard ingestion and querying
+make no network calls. Semantic search uses local embeddings; the first run may
+download the configured sentence-transformers model if it is not already cached.
+DuckDB's VSS extension is optional, and chatstrata only installs that extension
+when `CHATSTRATA_INSTALL_DUCKDB_VSS=1` is set.
 
 If you want to share queries or notebooks publicly, an optional redaction layer
 (`uv tool install "chatstrata[redact]"`) wraps Microsoft Presidio with

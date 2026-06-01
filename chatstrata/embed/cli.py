@@ -5,6 +5,15 @@ from __future__ import annotations
 import click
 
 
+class EmbedStats:
+    """Summary of an embedding generation run."""
+
+    def __init__(self, candidates: int, above_threshold: int, embedded: int) -> None:
+        self.candidates = candidates
+        self.above_threshold = above_threshold
+        self.embedded = embedded
+
+
 def _estimate_tokens(text: str) -> int:
     return len(text.split())
 
@@ -54,45 +63,91 @@ def embed(
 
     conn = connect(resolve_db_path(db))
     try:
-        candidates = _get_candidates(conn, provider.name, source=source, since=since)
-        if not candidates:
+        stats = generate_embeddings(
+            conn,
+            provider,
+            source=source,
+            since=since,
+            min_tokens=min_tokens,
+            batch_size=batch_size,
+            show_progress=True,
+        )
+        if not stats.candidates:
             click.echo("No new messages to embed.")
             return
 
-        above_threshold = [
-            (mid, text) for mid, text in candidates if _estimate_tokens(text) >= min_tokens
-        ]
         click.echo(
-            f"Found {len(candidates)} un-embedded messages, "
-            f"{len(above_threshold)} above {min_tokens}-token threshold."
+            f"Found {stats.candidates} un-embedded messages, "
+            f"{stats.above_threshold} above {min_tokens}-token threshold."
         )
-        if not above_threshold:
+        if not stats.above_threshold:
             click.echo("Nothing to embed.")
             return
 
-        embedded = 0
-        with click.progressbar(
-            length=len(above_threshold), label="Embedding"
-        ) as bar:
-            for i in range(0, len(above_threshold), batch_size):
-                batch = above_threshold[i : i + batch_size]
-                ids = [mid for mid, _ in batch]
-                texts = [text for _, text in batch]
-
-                vectors = provider.embed_texts(texts)
-
-                for msg_id, vector in zip(ids, vectors):
-                    conn.execute(
-                        "INSERT INTO message_embeddings (message_id, model, vector) "
-                        "VALUES (?, ?, ?)",
-                        [msg_id, provider.name, vector],
-                    )
-                embedded += len(batch)
-                bar.update(len(batch))
-
-        click.echo(f"\nDone. Embedded {embedded} messages with {provider.name}.")
+        click.echo(f"\nDone. Embedded {stats.embedded} messages with {provider.name}.")
     finally:
         conn.close()
+
+
+def generate_embeddings(
+    conn,
+    provider,
+    *,
+    source: str | None = None,
+    since: str | None = None,
+    min_tokens: int = 50,
+    batch_size: int = 64,
+    show_progress: bool = False,
+) -> EmbedStats:
+    """Generate missing embeddings for messages and return run counts."""
+    candidates = _get_candidates(conn, provider.name, source=source, since=since)
+    above_threshold = [
+        (mid, text) for mid, text in candidates if _estimate_tokens(text) >= min_tokens
+    ]
+    if not above_threshold:
+        return EmbedStats(
+            candidates=len(candidates),
+            above_threshold=len(above_threshold),
+            embedded=0,
+        )
+
+    embedded = 0
+    progress = click.progressbar(length=len(above_threshold), label="Embedding")
+    bar_context = progress if show_progress else NullProgressBar()
+    with bar_context as bar:
+        for i in range(0, len(above_threshold), batch_size):
+            batch = above_threshold[i : i + batch_size]
+            ids = [mid for mid, _ in batch]
+            texts = [text for _, text in batch]
+
+            vectors = provider.embed_texts(texts)
+
+            for msg_id, vector in zip(ids, vectors):
+                conn.execute(
+                    "INSERT INTO message_embeddings (message_id, model, vector) "
+                    "VALUES (?, ?, ?)",
+                    [msg_id, provider.name, vector],
+                )
+            embedded += len(batch)
+            if show_progress:
+                bar.update(len(batch))
+
+    return EmbedStats(
+        candidates=len(candidates),
+        above_threshold=len(above_threshold),
+        embedded=embedded,
+    )
+
+
+class NullProgressBar:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def update(self, n: int) -> None:
+        return None
 
 
 def _get_candidates(

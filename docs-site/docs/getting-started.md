@@ -17,16 +17,13 @@ This guide gets you from zero to querying your conversation archive in under fiv
 ## Install
 
 ```bash
-uv tool install chatstrata
-# or: pipx install chatstrata
+uv tool install "chatstrata[embeddings]"
+# or: pipx install "chatstrata[embeddings]"
 ```
 
-For optional features, install the relevant extras:
+The embeddings extra is recommended for first-time setup because `chatstrata ingest --auto` generates semantic-search embeddings after ingesting. For optional features, install the relevant extras:
 
 ```bash
-# Semantic search via sentence-transformers
-uv tool install "chatstrata[embeddings]"
-
 # PII redaction via Presidio
 uv tool install "chatstrata[redact]"
 
@@ -48,10 +45,10 @@ uv pip install -e ".[dev,redact,embeddings]"
 
 ## Use from an MCP client
 
-Install with the MCP extra:
+Install with the MCP and embeddings extras:
 
 ```bash
-uv tool install "chatstrata[mcp]"
+uv tool install "chatstrata[embeddings,mcp]"
 ```
 
 Then create and ingest your archive as usual. For Claude Code, generate the
@@ -98,7 +95,23 @@ Third-party adapters installed as pip packages appear here automatically.
 
 ## Ingest your conversations
 
-Start with Claude Code — it reads directly from `~/.claude/projects/`:
+To auto-detect local app data in default locations, ingest it, and generate embeddings:
+
+```bash
+chatstrata ingest --auto
+```
+
+Auto mode uses full ingest the first time it sees a source, then switches that source to incremental ingest on later runs. It requires the `[embeddings]` extra; use `--no-embed` to skip embedding generation.
+
+Embedding uses a local sentence-transformers model. The first embedding run may download the model if it is not already cached; transcript content is not sent to chatstrata or a hosted inference API.
+
+To preview what auto mode will ingest:
+
+```bash
+chatstrata ingest --auto --dry-run
+```
+
+For manual control, start with Claude Code — it reads directly from `~/.claude/projects/`:
 
 ```bash
 chatstrata ingest claude_code
@@ -122,7 +135,7 @@ For OpenCode sessions (reads from the local SQLite database):
 chatstrata ingest opencode
 ```
 
-Use `--dry-run` to preview what would be ingested without writing anything:
+Use `--dry-run` to preview what a manual source ingest would import without writing anything:
 
 ```bash
 chatstrata ingest claude_code --dry-run
@@ -174,7 +187,7 @@ Filter by source, date range, or limit results:
 chatstrata search "auth module" --source claude_code --since 2026-01-01 --limit 5
 ```
 
-For semantic search (requires the `[embeddings]` extra), first generate embeddings, then search:
+If you used `chatstrata ingest --auto`, embeddings are already generated for eligible messages. Otherwise, generate them before semantic search:
 
 ```bash
 chatstrata embed --source claude_code

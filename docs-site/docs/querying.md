@@ -144,7 +144,13 @@ For queries where exact keywords fall short -- "that conversation about my grand
 
 ### Generating embeddings
 
-Before semantic search works, you need to populate the `message_embeddings` table:
+Before semantic search works, you need to populate the `message_embeddings` table. The easiest path is auto ingest:
+
+```bash
+chatstrata ingest --auto
+```
+
+If you skipped embeddings during ingest or used manual source ingest, run `chatstrata embed` directly:
 
 ```bash
 chatstrata embed
@@ -158,7 +164,7 @@ The `embed` command requires the optional `[embeddings]` extras:
 uv tool install "chatstrata[embeddings]"
 ```
 
-The default provider uses `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions, ~23M parameters). The embedding architecture is pluggable -- any class implementing the `EmbeddingProvider` protocol (with `embed_texts` and `embed_query` methods) can serve as a provider.
+The default provider uses `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions, ~23M parameters). The first run may download the model if it is not already cached; embedding then runs locally and transcript content is not sent to a hosted inference API. The embedding architecture is pluggable -- any class implementing the `EmbeddingProvider` protocol (with `embed_texts` and `embed_query` methods) can serve as a provider.
 
 Messages shorter than `--min-tokens` (default: 50) are skipped to avoid embedding trivial content. Messages already embedded with the same model are also skipped, making the command safe to re-run incrementally. Processing happens in configurable batches (default: 64).
 

@@ -6,6 +6,7 @@ import json
 import os
 import shlex
 import sys
+from dataclasses import dataclass
 
 import click
 
@@ -154,6 +155,7 @@ def init(db: str | None, no_discover: bool) -> None:
     click.echo()
     click.echo("Next:")
     click.echo("  chatstrata sources")
+    click.echo("  chatstrata ingest --auto")
     click.echo("  chatstrata ingest <source> --incremental")
     click.echo("  chatstrata stats")
 
@@ -167,18 +169,126 @@ def _get_file_mtime(handle: ConversationHandle) -> float | None:
         return None
 
 
+@dataclass
+class IngestResult:
+    source_name: str
+    discovered: int
+    ingested: int = 0
+    skipped: int = 0
+    failed: int = 0
+    warned_no_path: bool = False
+
+
+def _source_has_ingested_conversations(conn, source_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM conversations WHERE source_id = ? LIMIT 1",
+        [source_name],
+    ).fetchone()
+    return row is not None
+
+
+def _ingest_source(
+    conn,
+    adapter,
+    handles: list[ConversationHandle],
+    *,
+    incremental: bool,
+    progress_label: str,
+) -> IngestResult:
+    ensure_source(
+        conn,
+        source_id=adapter.name,
+        name=adapter.display_name,
+        adapter_version=adapter.version,
+    )
+
+    result = IngestResult(source_name=adapter.name, discovered=len(handles))
+
+    with click.progressbar(handles, label=progress_label) as bar:
+        for handle in bar:
+            try:
+                file_mtime = _get_file_mtime(handle)
+
+                if incremental:
+                    if file_mtime is None and not result.warned_no_path:
+                        click.echo(
+                            f"\n  Warning: source '{adapter.name}' has handles without file paths; "
+                            "incremental mode cannot skip these.",
+                            err=True,
+                        )
+                        result.warned_no_path = True
+
+                    if file_mtime is not None:
+                        stored = get_stored_mtime(conn, adapter.name, handle.source_native_id)
+                        if stored is not None and stored == file_mtime:
+                            result.skipped += 1
+                            continue
+
+                conv = adapter.parse(handle)
+                if not conv.messages:
+                    continue
+                ingest_conversation(
+                    conn, adapter.name, conv,
+                    source_file_mtime=file_mtime,
+                )
+                result.ingested += 1
+            except Exception as e:  # noqa: BLE001
+                result.failed += 1
+                click.echo(f"\n  ! failed to parse {handle.source_native_id}: {e}", err=True)
+
+    return result
+
+
 @cli.command()
-@click.argument("source_name", required=True)
+@click.argument("source_name", required=False)
 @click.option("--path", "path", default=None, help="Override the default path for this source.")
 @click.option("--db", "db", default=None, help="Override the database path.")
 @click.option("--limit", type=int, default=None, help="Ingest at most N conversations.")
 @click.option("--dry-run", is_flag=True, help="Discover only; do not write to the database.")
 @click.option("--incremental", is_flag=True, help="Skip conversations whose source file has not changed since last ingest.")
-def ingest(source_name: str, path: str | None, db: str | None, limit: int | None, dry_run: bool, incremental: bool) -> None:
+@click.option("--auto", "auto_mode", is_flag=True, help="Discover available default sources, ingest them, then generate embeddings.")
+@click.option("--no-embed", is_flag=True, help="With --auto, ingest sources but skip embedding generation.")
+@click.option("--model", "embed_model", default="all-MiniLM-L6-v2", help="Embedding model for --auto.")
+@click.option("--min-tokens", type=int, default=50, help="Minimum message size for --auto embeddings.")
+@click.option("--batch-size", type=int, default=64, help="Embedding batch size for --auto.")
+def ingest(
+    source_name: str | None,
+    path: str | None,
+    db: str | None,
+    limit: int | None,
+    dry_run: bool,
+    incremental: bool,
+    auto_mode: bool,
+    no_embed: bool,
+    embed_model: str,
+    min_tokens: int,
+    batch_size: int,
+) -> None:
     """Ingest conversations from a source.
 
     Example: chatstrata ingest claude_code
     """
+    if auto_mode:
+        if source_name:
+            raise click.UsageError("Do not pass a source name with --auto.")
+        if path:
+            raise click.UsageError("--path is only supported when ingesting one source.")
+        _auto_ingest(
+            db=db,
+            limit=limit,
+            dry_run=dry_run,
+            no_embed=no_embed,
+            embed_model=embed_model,
+            min_tokens=min_tokens,
+            batch_size=batch_size,
+        )
+        return
+
+    if not source_name:
+        raise click.UsageError("Missing argument 'SOURCE_NAME'. Use `chatstrata ingest --auto` to auto-detect sources.")
+    if no_embed:
+        raise click.UsageError("--no-embed is only supported with --auto.")
+
     adapters = load_adapters()
     if source_name not in adapters:
         click.echo(f"Unknown source: {source_name}", err=True)
@@ -207,51 +317,110 @@ def ingest(source_name: str, path: str | None, db: str | None, limit: int | None
     db_path = resolve_db_path(db)
     conn = connect(db_path)
     try:
-        ensure_source(
+        result = _ingest_source(
             conn,
-            source_id=adapter.name,
-            name=adapter.display_name,
-            adapter_version=adapter.version,
+            adapter,
+            handles,
+            incremental=incremental,
+            progress_label=f"Ingesting from {source_name}",
         )
+        click.echo(
+            f"\nDone. Ingested: {result.ingested}  "
+            f"Skipped: {result.skipped}  Failed: {result.failed}"
+        )
+        click.echo(f"Database: {db_path}")
+    finally:
+        conn.close()
 
-        successes = 0
-        skipped = 0
-        failures = 0
-        no_path_warned = False
 
-        with click.progressbar(handles, label=f"Ingesting from {source_name}") as bar:
-            for handle in bar:
-                try:
-                    file_mtime = _get_file_mtime(handle)
+def _auto_ingest(
+    *,
+    db: str | None,
+    limit: int | None,
+    dry_run: bool,
+    no_embed: bool,
+    embed_model: str,
+    min_tokens: int,
+    batch_size: int,
+) -> None:
+    adapters = load_adapters()
+    if not adapters:
+        click.echo("No source adapters installed.")
+        return
 
-                    if incremental:
-                        if file_mtime is None and not no_path_warned:
-                            click.echo(
-                                f"\n  Warning: source '{source_name}' has handles without file paths; "
-                                "incremental mode cannot skip these.",
-                                err=True,
-                            )
-                            no_path_warned = True
+    discovered: list[tuple[str, object, list[ConversationHandle]]] = []
+    errors: list[tuple[str, Exception]] = []
+    for name, adapter in sorted(adapters.items()):
+        try:
+            handles = list(adapter.discover())
+        except Exception as exc:  # noqa: BLE001
+            errors.append((name, exc))
+            continue
+        if limit:
+            handles = handles[:limit]
+        if handles:
+            discovered.append((name, adapter, handles))
 
-                        if file_mtime is not None:
-                            stored = get_stored_mtime(conn, adapter.name, handle.source_native_id)
-                            if stored is not None and stored == file_mtime:
-                                skipped += 1
-                                continue
+    if errors:
+        for name, exc in errors:
+            click.echo(f"  ! failed to discover {name}: {exc}", err=True)
 
-                    conv = adapter.parse(handle)
-                    if not conv.messages:
-                        continue
-                    ingest_conversation(
-                        conn, adapter.name, conv,
-                        source_file_mtime=file_mtime,
-                    )
-                    successes += 1
-                except Exception as e:  # noqa: BLE001
-                    failures += 1
-                    click.echo(f"\n  ! failed to parse {handle.source_native_id}: {e}", err=True)
+    if not discovered:
+        click.echo("No conversations found in default source locations.")
+        return
 
-        click.echo(f"\nDone. Ingested: {successes}  Skipped: {skipped}  Failed: {failures}")
+    if dry_run:
+        click.echo("Would auto-ingest detected sources:")
+        for name, _adapter, handles in discovered:
+            click.echo(f"  {name:20} {len(handles)} conversation{'s' if len(handles) != 1 else ''}")
+        return
+
+    db_path = resolve_db_path(db)
+    conn = connect(db_path)
+    try:
+        results: list[tuple[IngestResult, bool]] = []
+        for name, adapter, handles in discovered:
+            use_incremental = _source_has_ingested_conversations(conn, name)
+            mode = "incremental" if use_incremental else "full"
+            click.echo(f"\n{name}: {len(handles)} conversation{'s' if len(handles) != 1 else ''} found ({mode})")
+            result = _ingest_source(
+                conn,
+                adapter,
+                handles,
+                incremental=use_incremental,
+                progress_label=f"Ingesting from {name}",
+            )
+            results.append((result, use_incremental))
+
+        click.echo("\nIngest summary:")
+        for result, use_incremental in results:
+            mode = "incremental" if use_incremental else "full"
+            click.echo(
+                f"  {result.source_name:20} {mode:11} "
+                f"ingested={result.ingested} skipped={result.skipped} failed={result.failed}"
+            )
+
+        if no_embed:
+            click.echo(f"\nDatabase: {db_path}")
+            return
+
+        from chatstrata.embed import get_provider
+        from chatstrata.embed.cli import _require_embeddings, generate_embeddings
+
+        _require_embeddings()
+        provider = get_provider(embed_model)
+        click.echo(f"\nEmbedding model: {provider.name} ({provider.dimension}d)")
+        stats = generate_embeddings(
+            conn,
+            provider,
+            min_tokens=min_tokens,
+            batch_size=batch_size,
+            show_progress=True,
+        )
+        click.echo(
+            f"\nEmbedding summary: candidates={stats.candidates} "
+            f"above_threshold={stats.above_threshold} embedded={stats.embedded}"
+        )
         click.echo(f"Database: {db_path}")
     finally:
         conn.close()

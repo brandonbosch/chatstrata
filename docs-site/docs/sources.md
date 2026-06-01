@@ -22,6 +22,8 @@ This prints a table of registered adapters loaded via the `chatstrata.sources` e
 
 Each adapter implements two methods: `discover()` finds conversations on disk and yields handles, and `parse()` reads one conversation into the canonical `ParsedConversation` model. The sections below cover where each source stores its data, what the raw format looks like, and what chatstrata extracts from it.
 
+For default local sources, `chatstrata ingest --auto` will detect and ingest any adapters whose files are present. Use the per-source commands below when you need a custom path or an export source that has no default location.
+
 ---
 
 ## Claude Code (`claude_code`)

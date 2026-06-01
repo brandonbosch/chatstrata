@@ -125,14 +125,38 @@ chatstrata ingest claude_code --incremental
 
 The first ingest always processes everything (no stored mtimes yet). Subsequent `--incremental` runs skip unchanged files. If a handle has no `path` (e.g., API-based sources), a warning is emitted and those conversations are always processed.
 
+## Auto mode
+
+`chatstrata ingest --auto` wraps discovery, ingest, incremental selection, and embedding generation into one first-run command:
+
+1. It loads every installed source adapter.
+2. It calls each adapter's default `discover()` method with no custom path.
+3. It ignores sources with no discovered conversations and reports discovery errors.
+4. For each detected source, it checks whether that source already has conversations in the database.
+5. New sources are ingested in full; existing sources use the same file-mtime incremental skip logic described above.
+6. Unless `--no-embed` is passed, it generates missing embeddings for eligible messages after ingest completes.
+
+```bash
+chatstrata ingest --auto
+chatstrata ingest --auto --dry-run
+chatstrata ingest --auto --no-embed
+```
+
+Auto mode only uses adapter default locations. Sources that require a user-provided export path still use the explicit source form, for example:
+
+```bash
+chatstrata ingest claude_export --path ~/Downloads/claude-export/
+```
+
 ## Key entry points
 
 | Function | Location | Purpose |
 |----------|----------|---------|
-| `ingest` CLI command | `chatstrata/cli.py` | Orchestrates the full pipeline with progress bar, `--dry-run`, `--incremental`, `--limit` |
+| `ingest` CLI command | `chatstrata/cli.py` | Orchestrates manual and auto ingest with progress bars, `--dry-run`, `--incremental`, `--auto`, `--limit` |
 | `ingest_conversation()` | `chatstrata/core/ingest.py` | Persists one `ParsedConversation` to DuckDB (idempotent) |
 | `ensure_source()` | `chatstrata/core/ingest.py` | Registers or updates a source adapter in the `sources` table |
 | `get_stored_mtime()` | `chatstrata/core/ingest.py` | Retrieves the stored file mtime for incremental skip checks |
+| `generate_embeddings()` | `chatstrata/embed/cli.py` | Generates missing message embeddings for `chatstrata embed` and `ingest --auto` |
 | `_hash_content()` | `chatstrata/core/ingest.py` | Computes SHA-256 content hash for dedup detection |
 | `connect()` | `chatstrata/core/db.py` | Opens DuckDB, auto-applies pending migrations |
 

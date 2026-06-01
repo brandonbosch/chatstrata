@@ -44,10 +44,10 @@ Find abandoned threads. See which models you've used most. Audit every tool call
 ## Quick start
 
 ```bash
-uv tool install chatstrata
+uv tool install "chatstrata[embeddings]"
 
 chatstrata init
-chatstrata ingest claude_code --incremental
+chatstrata ingest --auto
 chatstrata stats
 chatstrata query "SELECT role, COUNT(*) FROM messages GROUP BY role"
 ```
