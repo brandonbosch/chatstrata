@@ -28,6 +28,7 @@ from chatstrata.core.search import search_messages, snippet
 from chatstrata.embed.cli import embed
 from chatstrata.mcp.safety import execute_safe
 from chatstrata.redact.cli import redact
+from chatstrata.schedule.cli import schedule
 from chatstrata.sources import load_adapters
 
 
@@ -748,6 +749,7 @@ def serve(transport: str, host: str, port: int) -> None:
 cli.add_command(analyze)
 cli.add_command(embed)
 cli.add_command(redact)
+cli.add_command(schedule)
 
 if __name__ == "__main__":
     cli()
