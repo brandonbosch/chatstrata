@@ -69,7 +69,7 @@ def install(interval: str, binary: str | None, no_embed: bool) -> None:
         minutes = interval_seconds // 60
         click.echo(f"Installed launchd agent (every {minutes}m).")
         click.echo(f"  Plist: {plist_path}")
-        click.echo(f"  Logs:  ~/Library/Logs/chatstrata/")
+        click.echo("  Logs:  ~/Library/Logs/chatstrata/")
         click.echo()
         click.echo("Sync will run automatically in the background.")
         click.echo("Use `chatstrata schedule status` to check, `chatstrata schedule uninstall` to remove.")
@@ -91,8 +91,8 @@ def uninstall() -> None:
     system = platform.system()
 
     if system == "Darwin":
-        from chatstrata.schedule.launchd import uninstall as launchd_uninstall
         from chatstrata.schedule.launchd import PLIST_PATH
+        from chatstrata.schedule.launchd import uninstall as launchd_uninstall
 
         if not PLIST_PATH.exists():
             click.echo("No scheduled sync is installed.")
