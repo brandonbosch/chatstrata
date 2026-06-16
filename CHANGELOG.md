@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-06-16
+
+- Add `chatstrata schedule` command group for automatic background sync.
+- macOS: install a launchd agent that runs `chatstrata ingest --auto` on a configurable interval (default 15m).
+- Subcommands: `schedule install`, `schedule uninstall`, `schedule status`.
+- Supports `--interval`, `--no-embed`, and `--binary` options.
+- Catches up automatically after sleep/wake via RunAtLoad.
+- Logs to `~/Library/Logs/chatstrata/`.
+- Linux (systemd) scheduling planned for a future release.
+
 ## 0.1.1 - 2026-06-01
 
 - Add `chatstrata ingest --auto` to detect default local sources, ingest all available conversations, choose full vs incremental ingest per source, and generate missing embeddings.
