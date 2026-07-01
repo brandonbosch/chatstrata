@@ -32,30 +32,64 @@ Concretely, with chatstrata you can:
 
 ## Status
 
-**Early alpha.** v0 includes adapters for Claude Code, claude.ai exports, Codex
-CLI, and OpenCode. The architecture is built so that adding more sources
-(ChatGPT exports, Cursor, etc.) is the work of one adapter — see
-[docs/adapter-guide.md](docs/adapter-guide.md).
+**Alpha.** Published on [PyPI](https://pypi.org/project/chatstrata/). Includes
+adapters for Claude Code, claude.ai exports, Codex CLI, and OpenCode, plus
+scheduled background sync so your archive stays current without manual runs. The
+architecture is built so that adding more sources (ChatGPT exports, Cursor, etc.)
+is the work of one adapter — see [docs/adapter-guide.md](docs/adapter-guide.md).
 
 ## Quickstart
 
-Requires Python 3.10+. DuckDB is installed as a Python dependency; you do not
-need to install a separate DuckDB server or CLI.
+Requires Python 3.10+. We recommend [uv](https://docs.astral.sh/uv/) — it's the
+fastest way to get started (no virtualenv wrangling, no dependency conflicts).
+
+### 1. Install
 
 ```bash
 uv tool install "chatstrata[embeddings]"
-# or: pipx install "chatstrata[embeddings]"
+```
 
-# Create the local DuckDB archive and show detected sources
-chatstrata init
+<details>
+<summary>Alternative: pipx</summary>
 
-# Auto-detect local app transcripts, ingest them, and generate embeddings
-chatstrata ingest --auto
+```bash
+pipx install "chatstrata[embeddings]"
+```
+</details>
 
-# See what's there
+### 2. Initialize and ingest
+
+```bash
+chatstrata init                  # create the local DuckDB archive
+chatstrata ingest --auto         # auto-detect transcripts and generate embeddings
+```
+
+### 3. Set up background sync
+
+Never think about syncing again — chatstrata can keep your archive up to date
+automatically in the background:
+
+```bash
+chatstrata schedule install              # sync every 15 minutes (default)
+chatstrata schedule install --interval 1h   # or pick your own interval
+chatstrata schedule status               # check that it's running
+```
+
+On macOS this installs a launchd agent that runs `chatstrata ingest --auto`
+on the configured interval. Logs go to `~/Library/Logs/chatstrata/`. To stop
+background sync:
+
+```bash
+chatstrata schedule uninstall
+```
+
+> **Linux:** systemd scheduling is not yet implemented. Use cron as a workaround:
+> `*/15 * * * * chatstrata ingest --auto`
+
+### 4. Query your archive
+
+```bash
 chatstrata stats
-
-# Run a query
 chatstrata query "SELECT model, COUNT(*) FROM messages GROUP BY model"
 ```
 
