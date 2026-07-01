@@ -227,9 +227,12 @@ DuckDB's VSS extension is optional, and chatstrata only installs that extension
 when `CHATSTRATA_INSTALL_DUCKDB_VSS=1` is set.
 
 If you want to share queries or notebooks publicly, an optional redaction layer
-(`uv tool install "chatstrata[redact]"`) wraps Microsoft Presidio with
-chatstrata-specific recognizers for API keys, file paths, and other things that
-commonly appear in LLM transcripts. See [docs/redaction.md](docs/redaction.md).
+(`uv pip install "chatstrata[redact]"`) wraps Microsoft Presidio with
+chatstrata-specific recognizers for API keys, file paths, connection strings,
+git credentials, internal hostnames, private IPs, private keys, and other
+secrets that commonly appear in LLM transcripts. Noisy entity types like
+person names and dates are denied by default but can be enabled per-command.
+See [docs/redaction.md](docs/redaction.md).
 
 ## Contributing
 
