@@ -14,6 +14,14 @@ from chatstrata.cli import cli
 
 HAS_PRESIDIO = find_spec("presidio_analyzer") is not None
 
+try:
+    import spacy
+
+    spacy.load("en_core_web_sm")
+    HAS_SPACY_MODEL = True
+except (ImportError, OSError):
+    HAS_SPACY_MODEL = False
+
 FIXTURES = (
     Path(__file__).parent.parent
     / "chatstrata"
@@ -55,6 +63,7 @@ class TestRequirePresidio:
 
 @pytest.mark.skipif(not HAS_PRESIDIO, reason="presidio not installed")
 class TestAllowEntityOption:
+    @pytest.mark.skipif(not HAS_SPACY_MODEL, reason="spaCy English model not installed")
     def test_allow_person_detects_names(self, runner):
         result = runner.invoke(
             cli,
