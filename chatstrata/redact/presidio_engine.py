@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
-import sys
 from collections import defaultdict
 
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
@@ -89,11 +89,10 @@ class PresidioEngine:
             models=[{"lang_code": "en", "model_name": "en_core_web_sm"}]
         )
         engine.nlp = {"en": spacy.blank("en")}
-        print(
-            "Warning: No spaCy English model found. "
+        logging.getLogger(__name__).warning(
+            "No spaCy English model found. "
             "NLP-based recognizers (names, locations) will be unavailable. "
             "Install with: python -m spacy download en_core_web_lg",
-            file=sys.stderr,
         )
         return engine
 
