@@ -6,7 +6,10 @@ from presidio_analyzer import PatternRecognizer
 
 from chatstrata.redact.recognizers.api_keys import get_api_key_recognizers
 from chatstrata.redact.recognizers.connection_strings import get_connection_string_recognizers
+from chatstrata.redact.recognizers.git_remotes import get_git_remote_recognizers
+from chatstrata.redact.recognizers.hostnames import get_hostname_recognizers
 from chatstrata.redact.recognizers.paths import get_path_recognizers
+from chatstrata.redact.recognizers.private_keys import get_private_key_recognizers
 from chatstrata.redact.recognizers.tokens import get_token_recognizers
 
 
@@ -17,4 +20,7 @@ def get_all_recognizers() -> list[PatternRecognizer]:
         + get_path_recognizers()
         + get_connection_string_recognizers()
         + get_token_recognizers()
+        + get_git_remote_recognizers()
+        + get_hostname_recognizers()
+        + get_private_key_recognizers()
     )

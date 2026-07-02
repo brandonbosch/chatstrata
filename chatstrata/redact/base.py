@@ -1,7 +1,7 @@
 """Redaction engine protocol and shared types.
 
 The engine is pluggable: chatstrata ships with a Presidio-backed default in
-`chatstrata.redact.presidio_engine` (TODO), but contributors can implement
+`chatstrata.redact.presidio_engine`, but contributors can implement
 alternative engines (DataFog, regex-only, fine-tuned local models) by
 implementing this protocol.
 """
@@ -52,7 +52,3 @@ class RedactionEngine(Protocol):
     def redact(self, text: str, mode: RedactionMode = RedactionMode.MASK) -> RedactionResult:
         """Apply redaction. Returns both redacted text and a mapping for reversal."""
         ...
-
-
-# TODO: presidio_engine.py — wraps Microsoft Presidio with chatstrata-specific
-# recognizers for API keys, file paths, internal hostnames, git remotes, etc.
