@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u1","timestamp":"2026-03-14T10:00:00Z","message":{"role":"user","content":"hello, this transcript records no cwd"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-03-14T10:00:05Z","message":{"role":"assistant","model":"claude-opus-4-7","content":[{"type":"text","text":"acknowledged"}]}}
