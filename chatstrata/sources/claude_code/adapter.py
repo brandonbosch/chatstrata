@@ -49,14 +49,37 @@ def _parse_timestamp(s: Any) -> datetime | None:
 
 
 def _decode_project_dir(dir_name: str) -> str:
-    """Claude Code encodes the project cwd by replacing '/' with '-'.
+    """Decode Claude Code's encoded project-folder name back into a path.
 
     e.g. '-Users-alice-code-myproj' -> '/Users/alice/code/myproj'
-    This is lossy but a reasonable best effort.
+
+    This decode is *lossy and irreversible*: Claude Code collapses '/', '_',
+    '-', and '.' in the cwd all into '-' when naming the folder, so a '-' in
+    the folder name could have been any of those characters. As a result many
+    distinct cwds map to the same decoded path (e.g. both '.../my_proj' and
+    '.../my/proj' decode identically). Prefer the lossless cwd recorded inside
+    the transcript (see `_project_from_events`); this decode is only a
+    last-resort fallback for transcripts that never recorded a cwd.
     """
     if dir_name.startswith("-"):
         return "/" + dir_name[1:].replace("-", "/")
     return dir_name
+
+
+def _project_from_events(events: list[dict[str, Any]]) -> str | None:
+    """Return the real working directory recorded in the transcript.
+
+    Every Claude Code event carries the session cwd, e.g.
+    ``"cwd": "/Users/alice/code/my_project"``. This is the lossless source of
+    truth for the project path -- unlike the encoded folder name, which cannot
+    be reversed (see `_decode_project_dir`). Use the first event that records a
+    non-empty cwd; the cwd is constant across a session.
+    """
+    for ev in events:
+        cwd = ev.get("cwd")
+        if isinstance(cwd, str) and cwd:
+            return cwd
+    return None
 
 
 def _role_from_event(event: dict[str, Any]) -> Role | None:
@@ -153,6 +176,8 @@ class ClaudeCodeAdapter:
             return
         for jsonl in sorted(root.glob("*/*.jsonl")):
             session_id = jsonl.stem
+            # Lossy fallback only: parse() prefers the lossless cwd from the
+            # transcript and uses this decoded folder name just as a backstop.
             project = _decode_project_dir(jsonl.parent.name)
             yield ConversationHandle(
                 source_native_id=session_id,
@@ -228,7 +253,12 @@ class ClaudeCodeAdapter:
                 )
             )
 
-        project = handle.metadata.get("project") if handle.metadata else None
+        # Prefer the lossless cwd recorded in the transcript over the lossy
+        # folder-name decode carried on the handle. Fall back to the decoded
+        # folder name only for transcripts that never recorded a cwd.
+        project = _project_from_events(events)
+        if project is None and handle.metadata:
+            project = handle.metadata.get("project")
         # If no summary, fall back to the first user text block as a title.
         if title is None:
             for m in messages:

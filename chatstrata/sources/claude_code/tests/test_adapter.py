@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 
 from chatstrata.core.models import BlockType, ConversationHandle, Role
-from chatstrata.sources.claude_code.adapter import ClaudeCodeAdapter
+from chatstrata.sources.claude_code.adapter import (
+    ClaudeCodeAdapter,
+    _project_from_events,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -95,6 +98,50 @@ def test_parse_preserves_raw_events(adapter, sample_handle):
     conv = adapter.parse(sample_handle)
     # 6 lines total in the fixture (1 summary + 5 messages)
     assert len(conv.raw_events) == 6
+
+
+def test_project_uses_transcript_cwd_not_lossy_folder_decode(adapter):
+    """project must come from the lossless transcript cwd, not the folder decode.
+
+    Claude Code's folder-name encoding collapses '/', '_', '-', and '.' all
+    into '-', so decoding it is lossy. Here the handle carries a *corrupted*
+    decoded path (as the on-disk folder name would produce) that disagrees with
+    the real cwd recorded in the transcript; the transcript cwd must win.
+    """
+    handle = ConversationHandle(
+        source_native_id="sample_session",
+        path=FIXTURES / "sample_session.jsonl",
+        # What the lossy folder-name decode would yield (wrong):
+        metadata={"project": "/Users/example/my/proj"},
+    )
+    conv = adapter.parse(handle)
+    # The real cwd from the transcript (correct):
+    assert conv.project == "/Users/example/myproj"
+
+
+def test_project_falls_back_to_folder_decode_when_no_cwd(adapter):
+    """When no event records a cwd, fall back to the decoded folder name."""
+    handle = ConversationHandle(
+        source_native_id="no_cwd_session",
+        path=FIXTURES / "no_cwd_session.jsonl",
+        metadata={"project": "/Users/example/fallback"},
+    )
+    conv = adapter.parse(handle)
+    assert conv.project == "/Users/example/fallback"
+
+
+def test_project_from_events_returns_first_non_empty_cwd():
+    events = [
+        {"type": "summary"},
+        {"type": "user", "cwd": ""},
+        {"type": "user", "cwd": "/Users/example/real"},
+        {"type": "assistant", "cwd": "/Users/example/later"},
+    ]
+    assert _project_from_events(events) == "/Users/example/real"
+
+
+def test_project_from_events_returns_none_when_absent():
+    assert _project_from_events([{"type": "user"}, {"type": "summary"}]) is None
 
 
 def test_discover_walks_a_directory(adapter, tmp_path):
