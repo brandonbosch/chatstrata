@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-07-22
+
+- Fix `claude_code` conversation `project` paths: derive the project from the lossless `cwd` recorded in each transcript instead of decoding the session folder name. The folder-name encoding collapses `/`, `_`, `-`, and `.` all into `-`, so decoding it produced wrong, non-existent paths (e.g. `bstaq_git/pepstaq` became `bstaq/git`). New ingests are now correct automatically; `codex_cli` and `opencode` were unaffected.
+
 ## 0.2.0 - 2026-06-16
 
 - Add `chatstrata schedule` command group for automatic background sync.
