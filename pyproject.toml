@@ -1,6 +1,6 @@
 [project]
 name = "chatstrata"
-version = "0.2.1"
+version = "0.2.2"
 description = "A personal, queryable archive of your AI conversations across providers"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,7 +45,7 @@ redact = [
     "spacy>=3.7",
 ]
 mcp = [
-    "mcp[cli]>=1.12.0",
+    "mcp[cli]>=1.12.0,<2",
 ]
 dev = [
     "pytest>=8.0",

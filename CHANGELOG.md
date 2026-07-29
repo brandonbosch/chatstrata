@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 - 2026-07-29
+
+- Cap the `mcp` dependency at `>=1.12.0,<2`. `mcp` 2.0.0 removed the `mcp.server.fastmcp` module that `chatstrata/mcp/server.py` imports, so the previously unbounded pin resolved 2.0.0 and crashed `chatstrata-mcp` on startup with `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`.
+
 ## 0.2.1 - 2026-07-22
 
 - Fix `claude_code` conversation `project` paths: derive the project from the lossless `cwd` recorded in each transcript instead of decoding the session folder name. The folder-name encoding collapses `/`, `_`, `-`, and `.` all into `-`, so decoding it produced wrong, non-existent paths (e.g. `bstaq_git/pepstaq` became `bstaq/git`). New ingests are now correct automatically; `codex_cli` and `opencode` were unaffected.
