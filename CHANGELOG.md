@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 - 2026-09-12
+
+- Add Oh My Pi (`omp`) source adapter: ingests session transcripts from `~/.omp/agent/sessions/`, including tool calls/results, thinking blocks, extension (`custom_message`) turns, titles, and project paths from the session header.
+- Fix `codex_cli` adapter: newer Codex rollouts encode tool-result `output` fields as content arrays instead of plain strings; these now parse correctly.
+
 ## 0.2.2 - 2026-07-29
 
 - Cap the `mcp` dependency at `>=1.12.0,<2`. `mcp` 2.0.0 removed the `mcp.server.fastmcp` module that `chatstrata/mcp/server.py` imports, so the previously unbounded pin resolved 2.0.0 and crashed `chatstrata-mcp` on startup with `ModuleNotFoundError: No module named 'mcp.server.fastmcp'`.
