@@ -1,0 +1,12 @@
+name: omp
+display_name: Oh My Pi
+version: "0.1.0"
+schema_version: 1
+description: |
+  Ingests Oh My Pi (omp) session transcripts from ~/.omp/agent/sessions/.
+  Each session is a JSONL file beginning with a fixed-width title slot and a
+  session header, followed by append-only entries (message, custom_message,
+  compaction, model_change, ...). Messages use camelCase roles (user,
+  assistant, toolResult) with toolCall blocks inside assistant content.
+data_source: local_filesystem
+default_path: ~/.omp/agent/sessions
