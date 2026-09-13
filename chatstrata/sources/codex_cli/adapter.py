@@ -93,6 +93,18 @@ def _text_from_content(content: list[dict[str, Any]]) -> str | None:
     return "\n".join(parts) if parts else None
 
 
+def _text_from_value(value: Any) -> str | None:
+    """Normalize text fields that newer Codex rollouts encode as content arrays."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return _text_from_content(value)
+    if isinstance(value, dict):
+        text = value.get("text")
+        return text if isinstance(text, str) else None
+    return None
+
+
 def _blocks_from_response_item(
     payload: dict[str, Any],
 ) -> tuple[Role | None, list[ContentBlock]]:
@@ -139,7 +151,7 @@ def _blocks_from_response_item(
             ContentBlock(
                 type=BlockType.TOOL_RESULT,
                 tool_use_id=payload.get("call_id"),
-                text=payload.get("output"),
+                text=_text_from_value(payload.get("output")),
             )
         ]
 
@@ -172,7 +184,7 @@ def _blocks_from_response_item(
             ContentBlock(
                 type=BlockType.TOOL_RESULT,
                 tool_use_id=payload.get("call_id"),
-                text=payload.get("output"),
+                text=_text_from_value(payload.get("output")),
             )
         ]
 
