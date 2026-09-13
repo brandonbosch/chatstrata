@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 from chatstrata.core.models import BlockType, ConversationHandle, Role
-from chatstrata.sources.codex_cli.adapter import CodexCliAdapter, _extract_session_id
+from chatstrata.sources.codex_cli.adapter import (
+    CodexCliAdapter,
+    _blocks_from_response_item,
+    _extract_session_id,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -119,6 +123,22 @@ def test_parse_custom_tool_call_output(adapter, sample_handle):
     assert ctco.role == Role.TOOL
     assert ctco.blocks[0].type == BlockType.TOOL_RESULT
     assert ctco.blocks[0].tool_use_id == "call-002"
+
+
+def test_custom_tool_call_output_accepts_content_array():
+    role, blocks = _blocks_from_response_item(
+        {
+            "type": "custom_tool_call_output",
+            "call_id": "call-new-format",
+            "output": [
+                {"type": "input_text", "text": "first line"},
+                {"type": "input_text", "text": "second line"},
+            ],
+        }
+    )
+    assert role == Role.TOOL
+    assert blocks[0].tool_use_id == "call-new-format"
+    assert blocks[0].text == "first line\nsecond line"
 
 
 def test_parse_web_search(adapter, sample_handle):
