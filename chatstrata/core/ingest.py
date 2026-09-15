@@ -1,8 +1,8 @@
 """Source-agnostic ingester.
 
 Takes a `ParsedConversation` from any adapter and persists it to DuckDB.
-Idempotent: re-ingesting the same conversation (matched by
-source_id + source_native_id) replaces existing rows for that conversation.
+Idempotent: re-ingesting the same conversation preserves existing rows, appends
+stable suffixes, and replaces rows only when previously stored content changed.
 """
 
 from __future__ import annotations
@@ -10,32 +10,99 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from typing import TYPE_CHECKING
 
-from chatstrata.core.models import ParsedConversation
+from chatstrata.core.models import ParsedConversation, ParsedMessage
 
 if TYPE_CHECKING:
     import duckdb
+
+
+class IngestAction(str, Enum):
+    """How an ingest changed the stored conversation."""
+
+    INSERTED = "inserted"
+    APPENDED = "appended"
+    REPLACED = "replaced"
+    UNCHANGED = "unchanged"
+
+
+@dataclass(frozen=True)
+class IngestOutcome:
+    conversation_id: str
+    action: IngestAction
 
 
 def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+def _decode_json(value):
+    """Normalize DuckDB JSON values and in-memory objects for comparisons."""
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return value
+
+
+def _canonical_json(value) -> str:
+    return json.dumps(
+        _decode_json(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    )
+
+
+def _timestamp_key(dt: datetime | None) -> str | None:
+    normalized = _as_utc(dt)
+    return normalized.isoformat() if normalized is not None else None
+
+
+def _message_payload(message: ParsedMessage) -> dict:
+    return {
+        "source_native_id": message.source_native_id,
+        "parent_source_native_id": message.parent_source_native_id,
+        "role": message.role.value,
+        "model": message.model,
+        "created_at": _timestamp_key(message.created_at),
+        "metadata": message.metadata,
+        "blocks": [
+            {
+                "type": block.type.value,
+                "text": block.text,
+                "tool_name": block.tool_name,
+                "tool_use_id": block.tool_use_id,
+                "payload": block.payload or None,
+            }
+            for block in message.blocks
+        ],
+    }
+
+
+def _message_fingerprint(message: ParsedMessage) -> str:
+    return _canonical_json(_message_payload(message))
+
+
+def _raw_event_fingerprint(event: dict) -> str:
+    return _canonical_json(event)
+
+
 def _hash_content(conv: ParsedConversation) -> str:
-    """Stable hash of conversation content, for dedup detection."""
+    """Stable hash of every persisted message, block, and raw event field."""
     h = hashlib.sha256()
     for m in conv.messages:
-        h.update(m.role.value.encode())
-        for b in m.blocks:
-            h.update(b.type.value.encode())
-            if b.text:
-                h.update(b.text.encode("utf-8", errors="replace"))
-            if b.payload:
-                h.update(
-                    json.dumps(b.payload, sort_keys=True, default=str).encode("utf-8")
-                )
+        h.update(b"message\0")
+        h.update(_message_fingerprint(m).encode("utf-8", errors="replace"))
+    for event in conv.raw_events:
+        h.update(b"raw_event\0")
+        h.update(_raw_event_fingerprint(event).encode("utf-8", errors="replace"))
     return h.hexdigest()
 
 
@@ -91,42 +158,16 @@ def get_stored_mtime(
     return row[0]
 
 
-def ingest_conversation(
+def _update_conversation(
     conn: duckdb.DuckDBPyConnection,
-    source_id: str,
+    conv_id: str,
     conv: ParsedConversation,
+    content_hash: str,
+    source_file_mtime: float | None,
     *,
-    source_file_mtime: float | None = None,
-) -> str:
-    """Persist a single ParsedConversation. Returns the chatstrata conversation id.
-
-    Idempotent: if a conversation with the same (source_id, source_native_id)
-    already exists, its messages and content_blocks are replaced.
-    """
-    content_hash = _hash_content(conv)
-
-    # Look up existing conversation
-    existing = conn.execute(
-        "SELECT id FROM conversations WHERE source_id = ? AND source_native_id = ?",
-        [source_id, conv.source_native_id],
-    ).fetchone()
-
-    if existing:
-        conv_id = existing[0]
-        # Clear out previous content for clean replacement.
-        # Order matters: child tables -> messages, due to FK.
-        conn.execute(
-            """
-            DELETE FROM content_blocks
-            WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)
-            """,
-            [conv_id],
-        )
-        conn.execute("DELETE FROM attachments WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)", [conv_id])
-        conn.execute("DELETE FROM message_embeddings WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)", [conv_id])
-        conn.execute("DELETE FROM messages WHERE conversation_id = ?", [conv_id])
-        conn.execute("DELETE FROM raw_events WHERE source_id = ? AND source_native_conversation_id = ?",
-                     [source_id, conv.source_native_id])
+    include_indexed_fields: bool = False,
+) -> None:
+    if include_indexed_fields:
         conn.execute(
             """
             UPDATE conversations SET
@@ -154,34 +195,81 @@ def ingest_conversation(
                 conv_id,
             ],
         )
-    else:
-        conv_id = _uuid()
-        conn.execute(
-            """
-            INSERT INTO conversations (
-                id, source_id, source_native_id, title, project,
-                started_at, ended_at, message_count, content_hash,
-                raw_path, metadata, source_file_mtime
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                conv_id,
-                source_id,
-                conv.source_native_id,
-                conv.title,
-                conv.project,
-                _as_utc(conv.started_at),
-                _as_utc(conv.ended_at),
-                len(conv.messages),
-                content_hash,
-                conv.raw_path,
-                _json(conv.metadata),
-                source_file_mtime,
-            ],
-        )
+        return
 
-    # Insert messages and content blocks
-    for seq, msg in enumerate(conv.messages):
+    # DuckDB rejects updates to indexed columns on a row that is referenced by
+    # a foreign key, even when the primary key itself is unchanged. Project and
+    # started_at have secondary indexes, so append/no-op paths update only the
+    # unindexed fields while messages still reference this conversation.
+    conn.execute(
+        """
+        UPDATE conversations SET
+            title = ?,
+            ended_at = ?,
+            message_count = ?,
+            content_hash = ?,
+            raw_path = ?,
+            metadata = ?,
+            source_file_mtime = ?
+        WHERE id = ?
+        """,
+        [
+            conv.title,
+            _as_utc(conv.ended_at),
+            len(conv.messages),
+            content_hash,
+            conv.raw_path,
+            _json(conv.metadata),
+            source_file_mtime,
+            conv_id,
+        ],
+    )
+
+
+def _insert_conversation(
+    conn: duckdb.DuckDBPyConnection,
+    source_id: str,
+    conv: ParsedConversation,
+    content_hash: str,
+    source_file_mtime: float | None,
+) -> str:
+    conv_id = _uuid()
+    conn.execute(
+        """
+        INSERT INTO conversations (
+            id, source_id, source_native_id, title, project,
+            started_at, ended_at, message_count, content_hash,
+            raw_path, metadata, source_file_mtime
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            conv_id,
+            source_id,
+            conv.source_native_id,
+            conv.title,
+            conv.project,
+            _as_utc(conv.started_at),
+            _as_utc(conv.ended_at),
+            len(conv.messages),
+            content_hash,
+            conv.raw_path,
+            _json(conv.metadata),
+            source_file_mtime,
+        ],
+    )
+    return conv_id
+
+
+def _insert_messages(
+    conn: duckdb.DuckDBPyConnection,
+    conv_id: str,
+    messages: list[ParsedMessage],
+    *,
+    start_index: int = 0,
+) -> None:
+    parent_refs: list[tuple[str, str]] = []
+    for offset, msg in enumerate(messages):
+        seq = start_index + offset
         msg_id = _uuid()
         conn.execute(
             """
@@ -194,7 +282,7 @@ def ingest_conversation(
                 msg_id,
                 conv_id,
                 msg.source_native_id,
-                None,  # parent resolved in a second pass below
+                None,
                 msg.role.value,
                 msg.model,
                 _as_utc(msg.created_at),
@@ -202,6 +290,8 @@ def ingest_conversation(
                 _json(msg.metadata),
             ],
         )
+        if msg.parent_source_native_id:
+            parent_refs.append((msg_id, msg.parent_source_native_id))
         for bidx, block in enumerate(msg.blocks):
             conn.execute(
                 """
@@ -222,51 +312,292 @@ def ingest_conversation(
                 ],
             )
 
-    # Second pass: resolve parent_message_id references using source_native_id
-    if any(m.parent_source_native_id for m in conv.messages):
-        conn.execute(
-            """
-            UPDATE messages AS child
-            SET parent_message_id = parent.id
-            FROM messages AS parent
-            WHERE child.conversation_id = ?
-              AND parent.conversation_id = ?
-              AND child.source_native_id IS NOT NULL
-              AND parent.source_native_id IS NOT NULL
-              AND child.source_native_id IN (
-                SELECT source_native_id FROM messages
-                WHERE conversation_id = ?
-              )
-              AND parent.source_native_id = (
-                SELECT m2.source_native_id FROM messages m2
-                WHERE m2.id = child.id
-              )
-            """,
-            [conv_id, conv_id, conv_id],
-        )
-        # The above is a placeholder; precise parent resolution is adapter-dependent
-        # and may be cleaner to do in the adapter. We resolve only the rows we have.
-        # Adapters that need tree structure (ChatGPT) should populate parent IDs
-        # directly when implementing parse().
-
-    # Insert raw events if provided
-    if conv.raw_events:
-        for line_no, event in enumerate(conv.raw_events):
+    if parent_refs:
+        parent_ids = dict(
             conn.execute(
                 """
-                INSERT INTO raw_events (
-                    id, source_id, source_native_conversation_id,
-                    raw_path, line_number, payload
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                SELECT source_native_id, id
+                FROM messages
+                WHERE conversation_id = ? AND source_native_id IS NOT NULL
                 """,
-                [
-                    _uuid(),
-                    source_id,
-                    conv.source_native_id,
-                    conv.raw_path,
-                    line_no,
-                    json.dumps(event, default=str),
-                ],
+                [conv_id],
+            ).fetchall()
+        )
+        updates = [
+            [parent_ids[parent_source_id], child_id]
+            for child_id, parent_source_id in parent_refs
+            if parent_source_id in parent_ids
+        ]
+        if updates:
+            conn.executemany(
+                "UPDATE messages SET parent_message_id = ? WHERE id = ?",
+                updates,
             )
 
-    return conv_id
+
+def _insert_raw_events(
+    conn: duckdb.DuckDBPyConnection,
+    source_id: str,
+    conv: ParsedConversation,
+    events: list[dict],
+    *,
+    start_line: int = 0,
+) -> None:
+    for offset, event in enumerate(events):
+        conn.execute(
+            """
+            INSERT INTO raw_events (
+                id, source_id, source_native_conversation_id,
+                raw_path, line_number, payload
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                _uuid(),
+                source_id,
+                conv.source_native_id,
+                conv.raw_path,
+                start_line + offset,
+                json.dumps(event, default=str),
+            ],
+        )
+
+
+def _stored_message_fingerprints(
+    conn: duckdb.DuckDBPyConnection,
+    conv_id: str,
+) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT
+            m.sequence_index,
+            m.source_native_id,
+            parent.source_native_id AS parent_source_native_id,
+            m.role,
+            m.model,
+            m.created_at,
+            m.metadata,
+            cb.block_index,
+            cb.type,
+            cb.text,
+            cb.tool_name,
+            cb.tool_use_id,
+            cb.payload
+        FROM messages m
+        LEFT JOIN messages parent ON parent.id = m.parent_message_id
+        LEFT JOIN content_blocks cb ON cb.message_id = m.id
+        WHERE m.conversation_id = ?
+        ORDER BY m.sequence_index, cb.block_index
+        """,
+        [conv_id],
+    ).fetchall()
+
+    messages: list[dict] = []
+    current_seq: int | None = None
+    current: dict | None = None
+    for row in rows:
+        seq = row[0]
+        if seq != current_seq:
+            current = {
+                "source_native_id": row[1],
+                "parent_source_native_id": row[2],
+                "role": row[3],
+                "model": row[4],
+                "created_at": _timestamp_key(row[5]),
+                "metadata": _decode_json(row[6]),
+                "blocks": [],
+            }
+            messages.append(current)
+            current_seq = seq
+        if row[7] is not None and current is not None:
+            current["blocks"].append(
+                {
+                    "type": row[8],
+                    "text": row[9],
+                    "tool_name": row[10],
+                    "tool_use_id": row[11],
+                    "payload": _decode_json(row[12]),
+                }
+            )
+
+    return [_canonical_json(message) for message in messages]
+
+
+def _stored_raw_event_fingerprints(
+    conn: duckdb.DuckDBPyConnection,
+    source_id: str,
+    source_native_id: str,
+) -> list[str]:
+    rows = conn.execute(
+        """
+        SELECT payload
+        FROM raw_events
+        WHERE source_id = ? AND source_native_conversation_id = ?
+        ORDER BY line_number
+        """,
+        [source_id, source_native_id],
+    ).fetchall()
+    return [_canonical_json(payload) for (payload,) in rows]
+
+
+def _is_prefix(stored: list[str], incoming: list[str]) -> bool:
+    return len(stored) <= len(incoming) and stored == incoming[: len(stored)]
+
+
+def _clear_conversation_content(
+    conn: duckdb.DuckDBPyConnection,
+    source_id: str,
+    source_native_id: str,
+    conv_id: str,
+) -> None:
+    conn.execute(
+        """
+        DELETE FROM content_blocks
+        WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)
+        """,
+        [conv_id],
+    )
+    conn.execute(
+        """
+        DELETE FROM attachments
+        WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)
+        """,
+        [conv_id],
+    )
+    conn.execute(
+        """
+        DELETE FROM message_embeddings
+        WHERE message_id IN (SELECT id FROM messages WHERE conversation_id = ?)
+        """,
+        [conv_id],
+    )
+    conn.execute("DELETE FROM messages WHERE conversation_id = ?", [conv_id])
+    conn.execute(
+        """
+        DELETE FROM raw_events
+        WHERE source_id = ? AND source_native_conversation_id = ?
+        """,
+        [source_id, source_native_id],
+    )
+
+
+def ingest_conversation_with_status(
+    conn: duckdb.DuckDBPyConnection,
+    source_id: str,
+    conv: ParsedConversation,
+    *,
+    source_file_mtime: float | None = None,
+) -> IngestOutcome:
+    """Persist a conversation while avoiding destructive rewrites when possible."""
+    content_hash = _hash_content(conv)
+    existing = conn.execute(
+        """
+        SELECT id, content_hash, project, started_at
+        FROM conversations
+        WHERE source_id = ? AND source_native_id = ?
+        """,
+        [source_id, conv.source_native_id],
+    ).fetchone()
+
+    if existing is None:
+        conv_id = _insert_conversation(
+            conn,
+            source_id,
+            conv,
+            content_hash,
+            source_file_mtime,
+        )
+        _insert_messages(conn, conv_id, conv.messages)
+        _insert_raw_events(conn, source_id, conv, conv.raw_events)
+        return IngestOutcome(conv_id, IngestAction.INSERTED)
+
+    conv_id, stored_hash, stored_project, stored_started_at = existing
+    indexed_fields_changed = (
+        stored_project != conv.project
+        or _timestamp_key(stored_started_at) != _timestamp_key(conv.started_at)
+    )
+    if stored_hash == content_hash and not indexed_fields_changed:
+        _update_conversation(
+            conn,
+            conv_id,
+            conv,
+            content_hash,
+            source_file_mtime,
+        )
+        return IngestOutcome(conv_id, IngestAction.UNCHANGED)
+
+    stored_messages = _stored_message_fingerprints(conn, conv_id)
+    incoming_messages = [_message_fingerprint(message) for message in conv.messages]
+    stored_events = _stored_raw_event_fingerprints(
+        conn,
+        source_id,
+        conv.source_native_id,
+    )
+    incoming_events = [_raw_event_fingerprint(event) for event in conv.raw_events]
+
+    if (
+        not indexed_fields_changed
+        and _is_prefix(stored_messages, incoming_messages)
+        and _is_prefix(stored_events, incoming_events)
+    ):
+        _update_conversation(
+            conn,
+            conv_id,
+            conv,
+            content_hash,
+            source_file_mtime,
+        )
+        _insert_messages(
+            conn,
+            conv_id,
+            conv.messages[len(stored_messages) :],
+            start_index=len(stored_messages),
+        )
+        _insert_raw_events(
+            conn,
+            source_id,
+            conv,
+            conv.raw_events[len(stored_events) :],
+            start_line=len(stored_events),
+        )
+        action = (
+            IngestAction.APPENDED
+            if len(stored_messages) < len(incoming_messages)
+            or len(stored_events) < len(incoming_events)
+            else IngestAction.UNCHANGED
+        )
+        return IngestOutcome(conv_id, action)
+
+    _clear_conversation_content(
+        conn,
+        source_id,
+        conv.source_native_id,
+        conv_id,
+    )
+    _update_conversation(
+        conn,
+        conv_id,
+        conv,
+        content_hash,
+        source_file_mtime,
+        include_indexed_fields=True,
+    )
+    _insert_messages(conn, conv_id, conv.messages)
+    _insert_raw_events(conn, source_id, conv, conv.raw_events)
+    return IngestOutcome(conv_id, IngestAction.REPLACED)
+
+
+def ingest_conversation(
+    conn: duckdb.DuckDBPyConnection,
+    source_id: str,
+    conv: ParsedConversation,
+    *,
+    source_file_mtime: float | None = None,
+) -> str:
+    """Persist a conversation and return its stable chatstrata id."""
+    outcome = ingest_conversation_with_status(
+        conn,
+        source_id,
+        conv,
+        source_file_mtime=source_file_mtime,
+    )
+    return outcome.conversation_id

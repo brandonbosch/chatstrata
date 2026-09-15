@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Prevent database growth from repeated ingestion: unchanged conversations now keep their existing rows, and append-only sessions insert only new messages, content blocks, and raw events. Full replacement is reserved for conversations whose stored prefix changed.
+- Add `chatstrata compact` to copy live rows into a fresh database, rebuild and verify the full-text index, validate core table counts, atomically swap files, and optionally retain the original database as a backup.
+
 ## 0.3.1 - 2026-09-15
 
 - Fix `chatstrata.__version__`: it was hardcoded (`0.2.1`) and stopped matching the package version at every release since; it is now read from installed package metadata, so `chatstrata --version` always agrees with the PyPI version.
