@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 - 2026-09-15
 
 - Prevent database growth from repeated ingestion: unchanged conversations now keep their existing rows, and append-only sessions insert only new messages, content blocks, and raw events. Full replacement is reserved for conversations whose stored prefix changed.
 - Add `chatstrata compact` to copy live rows into a fresh database, rebuild and verify the full-text index, validate core table counts, atomically swap files, and optionally retain the original database as a backup.
