@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 - 2026-09-15
+
+- Fix `chatstrata.__version__`: it was hardcoded (`0.2.1`) and stopped matching the package version at every release since; it is now read from installed package metadata, so `chatstrata --version` always agrees with the PyPI version.
+
 ## 0.3.0 - 2026-09-15
 
 - Add Hermes Agent (`hermes_agent`) source adapter: ingests conversations from Hermes Agent's canonical SQLite session store (`~/.hermes/state.db`, or `$HERMES_HOME/state.db`). Maps assistant tool calls to `tool_use` blocks, tool rows to `tool_result`, reasoning columns to `thinking` blocks; skips superseded rows after rewinds, flags compaction summaries, and preserves raw session/message rows for re-parsing. The database is opened read-only. A `{"path": ...}` source config targets profile-specific databases.
