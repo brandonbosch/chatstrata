@@ -12,6 +12,7 @@ import click
 
 from chatstrata import __version__
 from chatstrata.analysis.cli import analyze
+from chatstrata.core.compact import CompactionError, compact_database
 from chatstrata.core.db import (
     apply_migrations,
     connect,
@@ -21,7 +22,12 @@ from chatstrata.core.db import (
     rebuild_fts_index,
     resolve_db_path,
 )
-from chatstrata.core.ingest import ensure_source, get_stored_mtime, ingest_conversation
+from chatstrata.core.ingest import (
+    IngestAction,
+    ensure_source,
+    get_stored_mtime,
+    ingest_conversation_with_status,
+)
 from chatstrata.core.migrations import LATEST_VERSION
 from chatstrata.core.models import ConversationHandle
 from chatstrata.core.search import search_messages, snippet
@@ -228,11 +234,14 @@ def _ingest_source(
                 conv = adapter.parse(handle)
                 if not conv.messages:
                     continue
-                ingest_conversation(
+                outcome = ingest_conversation_with_status(
                     conn, adapter.name, conv,
                     source_file_mtime=file_mtime,
                 )
-                result.ingested += 1
+                if outcome.action == IngestAction.UNCHANGED:
+                    result.skipped += 1
+                else:
+                    result.ingested += 1
             except Exception as e:  # noqa: BLE001
                 result.failed += 1
                 click.echo(f"\n  ! failed to parse {handle.source_native_id}: {e}", err=True)
@@ -586,6 +595,56 @@ def reindex(db: str | None) -> None:
         click.echo("Done. Search index is up to date.")
     finally:
         conn.close()
+
+
+def _format_bytes(size: int) -> str:
+    value = float(size)
+    for unit in ("bytes", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{value:.1f} {unit}" if unit != "bytes" else f"{int(value)} bytes"
+        value /= 1024
+    return f"{size} bytes"
+
+
+@cli.command()
+@click.option("--db", "db", default=None, help="Override the database path.")
+@click.option(
+    "--no-backup",
+    is_flag=True,
+    help="Delete the original database after the compacted copy is verified.",
+)
+@click.option("--yes", is_flag=True, help="Skip the confirmation prompt.")
+def compact(db: str | None, no_backup: bool, yes: bool) -> None:
+    """Reclaim unused database space by rewriting live data."""
+    db_path = resolve_db_path(db).expanduser().resolve()
+    if not db_path.is_file():
+        raise click.ClickException(f"Database does not exist: {db_path}")
+
+    original_size = db_path.stat().st_size
+    click.echo(f"Database: {db_path}")
+    click.echo(f"Current size: {_format_bytes(original_size)}")
+    click.echo("All other chatstrata processes must be stopped during compaction.")
+    if not yes and not click.confirm("Continue?"):
+        click.echo("Cancelled.")
+        return
+
+    click.echo("Copying live data into a fresh database...")
+    try:
+        result = compact_database(db_path, keep_backup=not no_backup)
+    except CompactionError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Compacted size: {_format_bytes(result.compacted_size)}")
+    click.echo(f"Database reduction: {_format_bytes(result.reclaimed_bytes)}")
+    if result.backup_path is not None:
+        click.echo(f"Backup retained: {result.backup_path}")
+        click.echo(
+            "Disk space will be released after you verify and delete the backup."
+        )
+    else:
+        click.echo(
+            f"Disk space reclaimed: {_format_bytes(result.reclaimed_bytes)}"
+        )
 
 
 @cli.command()

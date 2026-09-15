@@ -208,6 +208,21 @@ chatstrata ingest claude_export --path ~/Downloads/claude-export/
 chatstrata ingest claude_code --path ~/alternate/.claude/projects --incremental
 ```
 
+## Database maintenance
+
+Repeated updates and deletes can leave unused space inside a DuckDB file. Rewrite
+the live data into a compact database with:
+
+```bash
+chatstrata compact
+```
+
+Stop scheduled ingestion, MCP servers, and other chatstrata processes first.
+The command verifies core table counts, rebuilds the full-text index, atomically
+swaps the compacted database into place, and retains the original as a timestamped
+backup. After checking the compacted database, delete that backup to release the
+disk space. Pass `--no-backup` to remove it automatically after verification.
+
 ## Adding a source
 
 Each source (Claude Code, ChatGPT export, etc.) is an adapter that implements a

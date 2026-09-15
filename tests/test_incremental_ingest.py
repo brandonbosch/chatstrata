@@ -11,7 +11,13 @@ from click.testing import CliRunner
 
 from chatstrata.cli import _get_file_mtime, cli
 from chatstrata.core.db import connect
-from chatstrata.core.ingest import ensure_source, get_stored_mtime, ingest_conversation
+from chatstrata.core.ingest import (
+    IngestAction,
+    ensure_source,
+    get_stored_mtime,
+    ingest_conversation,
+    ingest_conversation_with_status,
+)
 from chatstrata.core.models import ConversationHandle
 from chatstrata.sources.claude_code.adapter import ClaudeCodeAdapter
 
@@ -79,7 +85,7 @@ class TestMtimeStorage:
         ingest_conversation(db, adapter.name, conv, source_file_mtime=2000.0)
         assert get_stored_mtime(db, adapter.name, "sample_session") == 2000.0
 
-    def test_reingest_removes_stale_embeddings_before_replacing_messages(self, db):
+    def test_noop_reingest_preserves_message_ids_and_embeddings(self, db):
         adapter = ClaudeCodeAdapter()
         handle = ConversationHandle(
             source_native_id="sample_session",
@@ -106,13 +112,163 @@ class TestMtimeStorage:
             [message_id, "test-model", [0.1, 0.2]],
         )
 
-        ingest_conversation(db, adapter.name, conv, source_file_mtime=2000.0)
+        outcome = ingest_conversation_with_status(
+            db,
+            adapter.name,
+            conv,
+            source_file_mtime=2000.0,
+        )
 
-        stale_embedding_count = db.execute(
+        embedding_count = db.execute(
             "SELECT COUNT(*) FROM message_embeddings WHERE message_id = ?",
             [message_id],
         ).fetchone()[0]
-        assert stale_embedding_count == 0
+        assert outcome.action == IngestAction.UNCHANGED
+        assert embedding_count == 1
+        assert get_stored_mtime(db, adapter.name, "sample_session") == 2000.0
+
+    def test_changed_content_replaces_messages_and_removes_stale_embeddings(self, db):
+        adapter = ClaudeCodeAdapter()
+        handle = ConversationHandle(
+            source_native_id="sample_session",
+            path=FIXTURES / "sample_session.jsonl",
+            metadata={"project": "/Users/example/myproj"},
+        )
+        ensure_source(db, adapter.name, adapter.display_name, adapter.version)
+        conv = adapter.parse(handle)
+
+        ingest_conversation(db, adapter.name, conv, source_file_mtime=1000.0)
+        message_id = db.execute(
+            "SELECT id FROM messages ORDER BY sequence_index LIMIT 1"
+        ).fetchone()[0]
+        db.execute(
+            "INSERT INTO message_embeddings (message_id, model, vector) VALUES (?, ?, ?)",
+            [message_id, "test-model", [0.1, 0.2]],
+        )
+
+        changed = conv.model_copy(deep=True)
+        changed.messages[0].blocks[0].text = "Changed content"
+        outcome = ingest_conversation_with_status(
+            db,
+            adapter.name,
+            changed,
+            source_file_mtime=2000.0,
+        )
+
+        assert outcome.action == IngestAction.REPLACED
+        assert (
+            db.execute(
+                "SELECT COUNT(*) FROM message_embeddings WHERE message_id = ?",
+                [message_id],
+            ).fetchone()[0]
+            == 0
+        )
+
+    def test_append_only_reingest_preserves_existing_rows(self, db):
+        adapter = ClaudeCodeAdapter()
+        handle = ConversationHandle(
+            source_native_id="sample_session",
+            path=FIXTURES / "sample_session.jsonl",
+            metadata={"project": "/Users/example/myproj"},
+        )
+        ensure_source(db, adapter.name, adapter.display_name, adapter.version)
+        complete = adapter.parse(handle)
+        initial = complete.model_copy(deep=True)
+        initial.messages = initial.messages[:2]
+        initial.raw_events = initial.raw_events[:3]
+
+        ingest_conversation(db, adapter.name, initial, source_file_mtime=1000.0)
+        original_ids = [
+            row[0]
+            for row in db.execute(
+                "SELECT id FROM messages ORDER BY sequence_index"
+            ).fetchall()
+        ]
+        db.execute(
+            "INSERT INTO message_embeddings (message_id, model, vector) VALUES (?, ?, ?)",
+            [original_ids[0], "test-model", [0.1, 0.2]],
+        )
+
+        outcome = ingest_conversation_with_status(
+            db,
+            adapter.name,
+            complete,
+            source_file_mtime=2000.0,
+        )
+
+        current_ids = [
+            row[0]
+            for row in db.execute(
+                "SELECT id FROM messages ORDER BY sequence_index"
+            ).fetchall()
+        ]
+        assert outcome.action == IngestAction.APPENDED
+        assert current_ids[:2] == original_ids
+        assert len(current_ids) == len(complete.messages)
+        assert db.execute(
+            "SELECT message_count FROM conversations"
+        ).fetchone()[0] == len(complete.messages)
+        assert db.execute("SELECT COUNT(*) FROM raw_events").fetchone()[0] == len(
+            complete.raw_events
+        )
+        assert (
+            db.execute(
+                "SELECT COUNT(*) FROM message_embeddings WHERE message_id = ?",
+                [original_ids[0]],
+            ).fetchone()[0]
+            == 1
+        )
+
+    def test_legacy_content_hash_is_upgraded_without_rewriting(self, db):
+        adapter = ClaudeCodeAdapter()
+        handle = ConversationHandle(
+            source_native_id="sample_session",
+            path=FIXTURES / "sample_session.jsonl",
+        )
+        ensure_source(db, adapter.name, adapter.display_name, adapter.version)
+        conv = adapter.parse(handle)
+        ingest_conversation(db, adapter.name, conv)
+        original_ids = db.execute(
+            "SELECT id FROM messages ORDER BY sequence_index"
+        ).fetchall()
+        db.execute(
+            "UPDATE conversations SET content_hash = 'legacy-hash' "
+            "WHERE source_native_id = 'sample_session'"
+        )
+
+        outcome = ingest_conversation_with_status(db, adapter.name, conv)
+
+        assert outcome.action == IngestAction.UNCHANGED
+        assert (
+            db.execute("SELECT id FROM messages ORDER BY sequence_index").fetchall()
+            == original_ids
+        )
+
+    def test_indexed_conversation_field_change_uses_safe_replacement(self, db):
+        adapter = ClaudeCodeAdapter()
+        handle = ConversationHandle(
+            source_native_id="sample_session",
+            path=FIXTURES / "sample_session.jsonl",
+        )
+        ensure_source(db, adapter.name, adapter.display_name, adapter.version)
+        conv = adapter.parse(handle)
+        ingest_conversation(db, adapter.name, conv)
+        original_ids = db.execute(
+            "SELECT id FROM messages ORDER BY sequence_index"
+        ).fetchall()
+
+        changed = conv.model_copy(deep=True)
+        changed.project = "/Users/example/renamed-project"
+        outcome = ingest_conversation_with_status(db, adapter.name, changed)
+
+        assert outcome.action == IngestAction.REPLACED
+        assert db.execute("SELECT project FROM conversations").fetchone()[0] == (
+            "/Users/example/renamed-project"
+        )
+        assert (
+            db.execute("SELECT id FROM messages ORDER BY sequence_index").fetchall()
+            != original_ids
+        )
 
     def test_get_stored_mtime_returns_none_for_missing(self, db):
         assert get_stored_mtime(db, "nonexistent", "nonexistent") is None
@@ -201,7 +357,7 @@ class TestIncrementalCLI:
         assert "Skipped: 1" in result2.output
         assert "Ingested: 0" in result2.output
 
-    def test_incremental_reingests_after_file_change(self, tmp_path, sample_copy):
+    def test_incremental_skips_when_only_file_mtime_changes(self, tmp_path, sample_copy):
         db_path = str(tmp_path / "cli_test.duckdb")
         projects_dir = str(sample_copy.parent.parent)
         runner = CliRunner()
@@ -217,8 +373,24 @@ class TestIncrementalCLI:
             cli, ["ingest", "claude_code", "--incremental", "--db", db_path, "--path", projects_dir],
         )
         assert result.exit_code == 0
-        assert "Ingested: 1" in result.output
-        assert "Skipped: 0" in result.output
+        assert "Ingested: 0" in result.output
+        assert "Skipped: 1" in result.output
+
+    def test_full_ingest_skips_unchanged_content(self, tmp_path, sample_copy):
+        db_path = str(tmp_path / "cli_test.duckdb")
+        projects_dir = str(sample_copy.parent.parent)
+        runner = CliRunner()
+
+        runner.invoke(
+            cli, ["ingest", "claude_code", "--db", db_path, "--path", projects_dir],
+        )
+        result = runner.invoke(
+            cli, ["ingest", "claude_code", "--db", db_path, "--path", projects_dir],
+        )
+
+        assert result.exit_code == 0
+        assert "Ingested: 0" in result.output
+        assert "Skipped: 1" in result.output
 
     def test_skipped_count_appears_without_incremental(self, tmp_path, sample_copy):
         db_path = str(tmp_path / "cli_test.duckdb")
