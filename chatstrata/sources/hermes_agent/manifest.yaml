@@ -1,0 +1,14 @@
+name: hermes_agent
+display_name: Hermes Agent
+version: "0.1.0"
+schema_version: 1
+description: |
+  Ingests conversations from Hermes Agent's canonical session store, a SQLite
+  database at ~/.hermes/state.db (or $HERMES_HOME/state.db). Sessions live in
+  the `sessions` table; messages in `messages` with roles user/assistant/
+  tool/system, assistant tool_calls as a JSON array, and tool results linked
+  back via tool_call_id. Reasoning traces map to thinking blocks; compaction
+  summaries are kept with a compressed_summary flag. Superseded (inactive,
+  never-compacted) rows are skipped. The database is opened read-only.
+data_source: local_database
+default_path: ~/.hermes/state.db
