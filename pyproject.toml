@@ -63,6 +63,7 @@ claude_export = "chatstrata.sources.claude_export.adapter:ClaudeExportAdapter"
 codex_cli = "chatstrata.sources.codex_cli.adapter:CodexCliAdapter"
 opencode = "chatstrata.sources.opencode.adapter:OpenCodeAdapter"
 omp = "chatstrata.sources.omp.adapter:OmpAdapter"
+hermes_agent = "chatstrata.sources.hermes_agent.adapter:HermesAgentAdapter"
 
 [build-system]
 requires = ["hatchling"]
