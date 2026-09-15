@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0 - 2026-09-15
+
+- Add Hermes Agent (`hermes_agent`) source adapter: ingests conversations from Hermes Agent's canonical SQLite session store (`~/.hermes/state.db`, or `$HERMES_HOME/state.db`). Maps assistant tool calls to `tool_use` blocks, tool rows to `tool_result`, reasoning columns to `thinking` blocks; skips superseded rows after rewinds, flags compaction summaries, and preserves raw session/message rows for re-parsing. The database is opened read-only. A `{"path": ...}` source config targets profile-specific databases.
+
 ## 0.2.3 - 2026-09-12
 
 - Add Oh My Pi (`omp`) source adapter: ingests session transcripts from `~/.omp/agent/sessions/`, including tool calls/results, thinking blocks, extension (`custom_message`) turns, titles, and project paths from the session header.
