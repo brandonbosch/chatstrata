@@ -268,6 +268,31 @@ def compact_database(
             os.replace(backup_path, path)
             raise
 
+        # The FTS match_bm25 macro stores catalog-qualified references
+        # captured at index creation. The index was rebuilt while the copy
+        # was attached as "compacted_db", so the stored macro cannot resolve
+        # in connections that open this file under its own name. Recreate the
+        # index on the final file so the macro references the final catalog.
+        try:
+            fts_conn = duckdb.connect(str(path))
+            try:
+                fts_conn.execute("LOAD fts")
+                fts_conn.execute(
+                    "PRAGMA create_fts_index('content_blocks', 'id', 'text', "
+                    "stemmer='porter', stopwords='english', overwrite=1)"
+                )
+                fts_conn.execute("CHECKPOINT")
+            finally:
+                fts_conn.close()
+        except Exception as exc:
+            os.replace(path, temp_path)
+            os.replace(backup_path, path)
+            raise CompactionError(
+                "The compacted database was swapped in, but its full-text "
+                "index could not be finalized. The original database was "
+                "restored from backup."
+            ) from exc
+
         compacted_size = path.stat().st_size
         retained_backup: Path | None = backup_path
         if not keep_backup:

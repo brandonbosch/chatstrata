@@ -82,6 +82,29 @@ def test_compact_database_preserves_rows_and_retains_backup(tmp_path):
         conn.close()
 
 
+def test_compacted_fts_resolves_in_fresh_connection(tmp_path):
+    """Compaction builds the FTS index on a copy attached as "compacted_db";
+    the stored macro must still resolve when the file is reopened under its
+    own name."""
+    db_path = tmp_path / "archive.duckdb"
+    _populate_database(db_path)
+
+    compact_database(db_path)
+
+    conn = connect(db_path)
+    try:
+        block_id = conn.execute(
+            "SELECT id FROM content_blocks LIMIT 1"
+        ).fetchone()[0]
+        score = conn.execute(
+            "SELECT fts_main_content_blocks.match_bm25(?, 'compaction')",
+            [block_id],
+        ).fetchone()[0]
+        assert score is not None
+    finally:
+        conn.close()
+
+
 def test_compact_cli_can_remove_verified_backup(tmp_path):
     db_path = tmp_path / "archive.duckdb"
     expected_counts = _populate_database(db_path)
