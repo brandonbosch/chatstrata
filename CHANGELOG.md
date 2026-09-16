@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3 - 2026-09-15
+
+- Fix `chatstrata compact` breaking full-text search: the FTS index was rebuilt while the compacted copy was attached as `compacted_db`, and DuckDB baked that catalog alias into the stored `match_bm25` macro, so every later connection failed with `Catalog "compacted_db" does not exist!`. The index is now recreated on the final database after the swap; if that fails, the original is restored from backup. The CLI's silent LIKE fallback had masked the breakage.
+
 ## 0.3.2 - 2026-09-15
 
 - Prevent database growth from repeated ingestion: unchanged conversations now keep their existing rows, and append-only sessions insert only new messages, content blocks, and raw events. Full replacement is reserved for conversations whose stored prefix changed.
