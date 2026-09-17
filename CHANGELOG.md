@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4 - 2026-09-17
+
+- Fix the `hermes_agent` adapter ignoring `$HERMES_HOME`: it read one hardcoded path (`~/.hermes/state.db`), so any install whose Hermes home differed was invisible, and a non-default profile could not be ingested at all. It now resolves the store from `$HERMES_HOME` (falling back to `~/.hermes`) and reads the default store plus every `<root>/profiles/<name>/state.db`, including when `$HERMES_HOME` itself points at a named profile. Sessions from a named profile are archived under a profile-qualified id (`work/<session-id>`) because a cloned profile shares session ids with its origin.
+- Fix a missing or unreadable Hermes store being reported as "No conversations found", which made an installed Hermes Agent indistinguishable from an empty one. Discovery now raises with the path and the reason (`Hermes state database not found: <path>`, or a store with no usable `sessions` table); `chatstrata ingest <source>` prints it and exits 1, and `chatstrata ingest --auto` names the adapters it skipped and why. A readable store that holds no sessions is now the only silent outcome.
+- Correct the `hermes_agent` docs to match the code: the source README documented a `--config` flag that does not exist (use `--path`), and the docstring and manifest promised `$HERMES_HOME` support the implementation did not have.
+
 ## 0.3.3 - 2026-09-15
 
 - Fix `chatstrata compact` breaking full-text search: the FTS index was rebuilt while the compacted copy was attached as `compacted_db`, and DuckDB baked that catalog alias into the stored `match_bm25` macro, so every later connection failed with `Catalog "compacted_db" does not exist!`. The index is now recreated on the final database after the swap; if that fails, the original is restored from backup. The CLI's silent LIKE fallback had masked the breakage.
