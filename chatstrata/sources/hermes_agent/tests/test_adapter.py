@@ -11,6 +11,7 @@ import pytest
 from chatstrata.core.models import BlockType, ConversationHandle, Role
 from chatstrata.sources.hermes_agent.adapter import (
     HermesAgentAdapter,
+    HermesStateDatabaseError,
     _parse_tool_calls,
 )
 
@@ -120,15 +121,149 @@ def db_path(tmp_path: Path) -> Path:
     return db
 
 
+@pytest.fixture
+def hermes_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An isolated Hermes root: the adapter reads HERMES_HOME, never ~/.hermes."""
+    home = tmp_path / "hermes"
+    home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    return home
+
+
+def _profile_store(hermes_home: Path, name: str) -> Path:
+    profile_dir = hermes_home / "profiles" / name
+    profile_dir.mkdir(parents=True)
+    build_fixture_db(profile_dir / "state.db")
+    return profile_dir / "state.db"
+
+
 def test_discover_lists_sessions(adapter, db_path):
     handles = list(adapter.discover({"path": str(db_path)}))
     assert [h.source_native_id for h in handles] == ["sess_1", "sess_2"]
     assert all(h.path == db_path for h in handles)
     assert handles[0].metadata["source"] == "cli"
+    assert handles[0].metadata["profile"] == "default"
 
 
-def test_discover_missing_db_yields_nothing(adapter, tmp_path):
-    assert list(adapter.discover({"path": str(tmp_path / "nope.db")})) == []
+def test_discover_missing_db_raises_with_the_path(adapter, tmp_path):
+    missing = tmp_path / "nope.db"
+    with pytest.raises(FileNotFoundError) as excinfo:
+        adapter.discover({"path": str(missing)})
+    assert "Hermes state database not found" in str(excinfo.value)
+    assert str(missing) in str(excinfo.value)
+
+
+def test_discover_honours_hermes_home(adapter, hermes_home):
+    build_fixture_db(hermes_home / "state.db")
+    handles = list(adapter.discover())
+    assert [h.source_native_id for h in handles] == ["sess_1", "sess_2"]
+    assert all(h.path == hermes_home / "state.db" for h in handles)
+
+
+def test_discover_without_a_store_names_what_it_searched(adapter, hermes_home):
+    # A profile dir that exists but was never used is not an error in itself,
+    # but with no store anywhere the failure must name the paths, not read empty.
+    (hermes_home / "profiles" / "work").mkdir(parents=True)
+    with pytest.raises(FileNotFoundError) as excinfo:
+        adapter.discover()
+    assert "Hermes state database not found" in str(excinfo.value)
+    assert str(hermes_home / "state.db") in str(excinfo.value)
+
+
+def test_discover_reads_the_default_store_and_every_profile(adapter, hermes_home):
+    build_fixture_db(hermes_home / "state.db")
+    _profile_store(hermes_home, "work")
+    _profile_store(hermes_home, "ops")
+    # A name Hermes would not accept as a profile id is not a profile store.
+    stray = hermes_home / "profiles" / "Not A Profile"
+    stray.mkdir(parents=True)
+    build_fixture_db(stray / "state.db")
+
+    handles = list(adapter.discover())
+
+    # Default store first (ids unqualified), then named profiles in name order.
+    assert [h.source_native_id for h in handles] == [
+        "sess_1",
+        "sess_2",
+        "ops/sess_1",
+        "ops/sess_2",
+        "work/sess_1",
+        "work/sess_2",
+    ]
+    assert {h.metadata["profile"] for h in handles} == {"default", "ops", "work"}
+
+
+def test_discover_profile_config_selects_one_profile(adapter, hermes_home):
+    build_fixture_db(hermes_home / "state.db")
+    work_db = _profile_store(hermes_home, "work")
+
+    handles = list(adapter.discover({"profile": "work"}))
+
+    assert [h.source_native_id for h in handles] == ["work/sess_1", "work/sess_2"]
+    assert all(h.path == work_db for h in handles)
+
+
+def test_discover_from_a_profile_home_still_sees_the_root(adapter, hermes_home, monkeypatch):
+    build_fixture_db(hermes_home / "state.db")
+    _profile_store(hermes_home, "work")
+    # Hermes binds a non-launch profile by pointing HERMES_HOME at its dir.
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home / "profiles" / "work"))
+
+    handles = list(adapter.discover())
+
+    assert [h.source_native_id for h in handles] == [
+        "sess_1",
+        "sess_2",
+        "work/sess_1",
+        "work/sess_2",
+    ]
+
+
+def test_discover_reports_a_store_without_a_sessions_table(adapter, hermes_home):
+    db = hermes_home / "state.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE unrelated (x)")
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(HermesStateDatabaseError) as excinfo:
+        adapter.discover()
+
+    assert str(db) in str(excinfo.value)
+    assert "sessions" in str(excinfo.value)
+
+
+def test_discover_reports_an_unreadable_store(adapter, hermes_home):
+    (hermes_home / "state.db").write_bytes(b"definitely not a sqlite database")
+
+    with pytest.raises(HermesStateDatabaseError) as excinfo:
+        adapter.discover()
+
+    assert str(hermes_home / "state.db") in str(excinfo.value)
+
+
+def test_discover_empty_store_is_not_an_error(adapter, hermes_home):
+    """A readable store that holds no sessions is the one silent outcome."""
+    conn = sqlite3.connect(hermes_home / "state.db")
+    conn.executescript(SESSION_SCHEMA)
+    conn.commit()
+    conn.close()
+
+    assert list(adapter.discover()) == []
+
+
+def test_parse_resolves_a_profile_qualified_handle(adapter, hermes_home):
+    build_fixture_db(hermes_home / "state.db")
+    work_db = _profile_store(hermes_home, "work")
+
+    handle = next(
+        h for h in adapter.discover() if h.source_native_id.startswith("work/")
+    )
+    conv = adapter.parse(handle)
+
+    assert conv.source_native_id == "work/sess_1"
+    assert conv.title == "Fix the login bug"
+    assert conv.raw_path == str(work_db)
 
 
 def test_parse_conversation_fields(adapter, db_path):

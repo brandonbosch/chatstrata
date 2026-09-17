@@ -1,9 +1,24 @@
 """Hermes Agent adapter.
 
-Hermes Agent (Nous Research) persists its canonical session store in a
-SQLite database at ~/.hermes/state.db (or $HERMES_HOME/state.db when a
-profile/HERMES_HOME is set). Sessions live in the `sessions` table and their
-messages in the `messages` table, ordered by (timestamp, id).
+Hermes Agent (Nous Research) persists its canonical session store in SQLite
+databases under its Hermes home. Sessions live in the `sessions` table and
+their messages in the `messages` table, ordered by (timestamp, id).
+
+Where the databases are found (see `_candidate_databases`):
+
+    $HERMES_HOME/state.db                     the default profile's store
+    $HERMES_HOME/profiles/<name>/state.db     every named profile's store
+
+`HERMES_HOME` defaults to `~/.hermes` when unset. When it already points at a
+named profile (`<root>/profiles/<name>`) the containing root is searched, so a
+process running as one profile still sees the default store and its siblings.
+A source config narrows the search: `{"path": "/path/to/state.db"}` ingests
+exactly that store, `{"profile": "work"}` exactly that named profile.
+
+Discovery is loud about a store it cannot read: nothing found, an unopenable
+file, and a database without a `sessions` table each raise, so the CLI can name
+the source and the reason instead of reporting an empty archive. "Found the
+store, it holds no sessions" is the only silent outcome.
 
 Message shapes observed in real databases:
 
@@ -31,6 +46,8 @@ row) so users can re-parse later if normalization improves.
 from __future__ import annotations
 
 import json
+import os
+import re
 import sqlite3
 from collections.abc import Iterable
 from datetime import datetime, timezone
@@ -46,7 +63,15 @@ from chatstrata.core.models import (
     Role,
 )
 
-DEFAULT_DB_PATH = "~/.hermes/state.db"
+DEFAULT_HERMES_HOME = "~/.hermes"
+
+# Mirrors hermes_cli.profiles._PROFILE_ID_RE: the only directory names Hermes
+# recognises as a named profile under <root>/profiles/.
+PROFILE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+_SESSION_COLUMNS = (
+    "id, title, model, source, started_at, ended_at, message_count, cwd, display_name"
+)
 
 _ROLE_MAP: dict[str, Role] = {
     "user": Role.USER,
@@ -56,8 +81,66 @@ _ROLE_MAP: dict[str, Role] = {
 }
 
 
-def _db_path(config: dict | None) -> Path:
-    return Path((config or {}).get("path") or DEFAULT_DB_PATH).expanduser()
+class HermesStateDatabaseError(RuntimeError):
+    """A store exists at the expected path but is not a usable Hermes state DB."""
+
+
+def _hermes_root() -> Path:
+    """The Hermes home owning the profile tree: ``$HERMES_HOME`` or ``~/.hermes``.
+
+    A ``HERMES_HOME`` that already points at a named profile
+    (``<root>/profiles/<name>``, how Hermes binds a non-launch profile) resolves
+    to ``<root>`` so the default store and the sibling profiles stay visible.
+    """
+    env = os.environ.get("HERMES_HOME", "").strip()
+    if not env:
+        return Path(DEFAULT_HERMES_HOME).expanduser()
+    home = Path(env).expanduser()
+    if home.parent.name == "profiles" and PROFILE_ID_RE.match(home.name):
+        return home.parent.parent
+    return home
+
+
+def _candidate_databases(config: dict | None) -> list[tuple[str, Path]]:
+    """Every store to read, as (profile_name, path) pairs, in ingest order.
+
+    An explicit ``path`` is authoritative — it is exactly the store to ingest.
+    ``profile`` selects one named profile; otherwise the default store plus every
+    named profile under the Hermes root are candidates.
+    """
+    cfg = config or {}
+    if cfg.get("path"):
+        return [(cfg.get("profile") or "default", Path(cfg["path"]).expanduser())]
+
+    root = _hermes_root()
+    profile = cfg.get("profile")
+    if profile:
+        if profile == "default":
+            return [("default", root / "state.db")]
+        return [(profile, root / "profiles" / profile / "state.db")]
+
+    candidates = [("default", root / "state.db")]
+    profiles_dir = root / "profiles"
+    if profiles_dir.is_dir():
+        for entry in sorted(profiles_dir.iterdir()):
+            if entry.is_dir() and entry.name != "default" and PROFILE_ID_RE.match(entry.name):
+                candidates.append((entry.name, entry / "state.db"))
+    return candidates
+
+
+def _db_path(config: dict | None = None) -> Path:
+    """The store this adapter reads when a handle carries no path of its own."""
+    return _candidate_databases(config)[0][1]
+
+
+def _native_id(profile: str, session_id: str) -> str:
+    """Archive-wide session id; qualified by profile for every non-default store.
+
+    A profile can be cloned from another (``hermes -p work --clone default``),
+    which copies session ids verbatim, so the raw id alone does not identify a
+    session within this source.
+    """
+    return session_id if profile == "default" else f"{profile}/{session_id}"
 
 
 def _connect_readonly(db: Path) -> sqlite3.Connection:
@@ -154,47 +237,70 @@ class HermesAgentAdapter:
     schema_version = 1
 
     def discover(self, config: dict | None = None) -> Iterable[ConversationHandle]:
-        db = _db_path(config)
-        if not db.exists():
-            return
-        try:
-            conn = _connect_readonly(db)
-        except sqlite3.Error:
-            return
-        try:
-            rows = conn.execute(
-                """
-                SELECT id, title, model, source, started_at, ended_at,
-                       message_count, cwd, display_name
-                FROM sessions
-                ORDER BY started_at
-                """
-            ).fetchall()
-        except sqlite3.Error:
-            return
-        finally:
-            conn.close()
+        """List sessions across every store this adapter can read.
 
-        for row in rows:
-            yield ConversationHandle(
-                source_native_id=row["id"],
-                path=db,
-                metadata={
-                    "source": row["source"],
-                    "model": row["model"],
-                    "message_count": row["message_count"],
-                },
+        Raises FileNotFoundError when no store exists at any candidate path, and
+        :class:`HermesStateDatabaseError` when one exists but is unreadable or is
+        not a Hermes session store — an empty result means the store itself is
+        fine and holds no sessions.
+        """
+        candidates = _candidate_databases(config)
+        present = [(profile, db) for profile, db in candidates if db.exists()]
+        if not present:
+            searched = ", ".join(str(db) for _profile, db in candidates)
+            raise FileNotFoundError(
+                f"Hermes state database not found: {searched} "
+                "(set HERMES_HOME, or pass --path to pick one store)"
             )
 
+        handles: list[ConversationHandle] = []
+        for profile, db in present:
+            try:
+                conn = _connect_readonly(db)
+            except sqlite3.Error as exc:
+                raise HermesStateDatabaseError(
+                    f"Hermes state database is not readable: {db} ({exc})"
+                ) from exc
+            try:
+                rows = conn.execute(
+                    f"SELECT {_SESSION_COLUMNS} FROM sessions ORDER BY started_at"
+                ).fetchall()
+            except sqlite3.Error as exc:
+                raise HermesStateDatabaseError(
+                    f"Hermes state database has no usable 'sessions' table: {db} ({exc})"
+                ) from exc
+            finally:
+                conn.close()
+
+            for row in rows:
+                handles.append(
+                    ConversationHandle(
+                        source_native_id=_native_id(profile, row["id"]),
+                        path=db,
+                        metadata={
+                            "profile": profile,
+                            "session_id": row["id"],
+                            "source": row["source"],
+                            "model": row["model"],
+                            "message_count": row["message_count"],
+                        },
+                    )
+                )
+
+        return handles
+
     def parse(self, handle: ConversationHandle) -> ParsedConversation:
-        db = handle.path or _db_path(None)
+        db = handle.path or _db_path()
+        # Handles from a named-profile store carry a profile-qualified id; the
+        # raw session id is kept alongside it in metadata.
+        session_id = handle.metadata.get("session_id") or handle.source_native_id
         conn = _connect_readonly(Path(db))
         try:
             session = conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (handle.source_native_id,)
+                "SELECT * FROM sessions WHERE id = ?", (session_id,)
             ).fetchone()
             if session is None:
-                raise ValueError(f"Session not found: {handle.source_native_id}")
+                raise ValueError(f"Session not found: {session_id}")
 
             rows = conn.execute(
                 """
@@ -202,7 +308,7 @@ class HermesAgentAdapter:
                 WHERE session_id = ?
                 ORDER BY timestamp, id
                 """,
-                (handle.source_native_id,),
+                (session_id,),
             ).fetchall()
         finally:
             conn.close()

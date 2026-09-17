@@ -4,13 +4,20 @@ Hermes Agent (Nous Research) is a terminal/desktop AI agent. It persists every
 session — messages, tool calls, reasoning traces, token usage, costs — in a
 canonical SQLite store:
 
-    ~/.hermes/state.db        (or $HERMES_HOME/state.db when a profile is set)
+    $HERMES_HOME/state.db                     the default profile
+    $HERMES_HOME/profiles/<name>/state.db     every named profile
 
-Supporting tables live in the same file (FTS indexes, session_model_usage,
-system_prompts). Multiple Hermes profiles each keep their own state.db; point
-this adapter at a specific one with a source config:
+`HERMES_HOME` defaults to `~/.hermes` when unset. Ingestion reads all of them:
+the default store first, then each named profile, and sessions from a named
+profile are archived under a profile-qualified id (`work/<session-id>`) because
+profiles can be cloned and then share session ids. Point the adapter at exactly
+one store with `--path`, or at one named profile with a source config:
 
-    chatstrata ingest hermes_agent --config '{"path": "/path/to/state.db"}'
+    chatstrata ingest hermes_agent --path /path/to/state.db
+
+A store that is missing, unreadable, or has no `sessions` table is reported as
+an error; only a readable store that holds no sessions reads as an empty
+source.
 
 ## Format notes
 
