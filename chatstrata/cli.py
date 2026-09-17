@@ -307,7 +307,11 @@ def ingest(
     adapter = adapters[source_name]
 
     config = {"path": path} if path else None
-    handles = list(adapter.discover(config))
+    try:
+        handles = list(adapter.discover(config))
+    except Exception as exc:  # noqa: BLE001 — adapters raise to report an unusable source
+        click.echo(f"! {exc}", err=True)
+        sys.exit(1)
     if not handles:
         click.echo(f"No conversations found for source '{source_name}'.")
         return
@@ -360,6 +364,7 @@ def _auto_ingest(
 
     discovered: list[tuple[str, object, list[ConversationHandle]]] = []
     errors: list[tuple[str, Exception]] = []
+    empty: list[str] = []
     for name, adapter in sorted(adapters.items()):
         try:
             handles = list(adapter.discover())
@@ -370,10 +375,17 @@ def _auto_ingest(
             handles = handles[:limit]
         if handles:
             discovered.append((name, adapter, handles))
+        else:
+            empty.append(name)
 
     if errors:
         for name, exc in errors:
             click.echo(f"  ! failed to discover {name}: {exc}", err=True)
+
+    # Name the sources that yielded nothing, so a real-but-empty install is
+    # distinguishable from one the adapter could not find at all.
+    for name in empty:
+        click.echo(f"  - skipped {name}: no conversations found")
 
     if not discovered:
         click.echo("No conversations found in default source locations.")
