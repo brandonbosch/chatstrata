@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add `chatstrata label` (optional `jev` extra) to classify archive data with TypeSafe's Jev model. Built-in packs: `tool-failures` labels every tool call's failure mode and whether the agent caused it; `user-turns` labels your own messages by intent, frustration, and whether they state done criteria. `label run` prints an item count and cost estimate and asks before sending anything (`--dry-run --show-state` shows exactly what would be sent); re-runs skip items already labelled under the same pack version. `label summary` aggregates by source, tool, model, project, month, or quarter.
+- Schema v4 adds the `labels` and `label_runs` tables (ADR 0004).
+
 ## 0.3.4 - 2026-09-17
 
 - Fix the `hermes_agent` adapter ignoring `$HERMES_HOME`: it read one hardcoded path (`~/.hermes/state.db`), so any install whose Hermes home differed was invisible, and a non-default profile could not be ingested at all. It now resolves the store from `$HERMES_HOME` (falling back to `~/.hermes`) and reads the default store plus every `<root>/profiles/<name>/state.db`, including when `$HERMES_HOME` itself points at a named profile. Sessions from a named profile are archived under a profile-qualified id (`work/<session-id>`) because a cloned profile shares session ids with its origin.

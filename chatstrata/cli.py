@@ -32,6 +32,7 @@ from chatstrata.core.migrations import LATEST_VERSION
 from chatstrata.core.models import ConversationHandle
 from chatstrata.core.search import search_messages, snippet
 from chatstrata.embed.cli import embed
+from chatstrata.label.cli import label
 from chatstrata.mcp.safety import execute_safe
 from chatstrata.redact.cli import redact
 from chatstrata.schedule.cli import schedule
@@ -819,6 +820,7 @@ def serve(transport: str, host: str, port: int) -> None:
 
 cli.add_command(analyze)
 cli.add_command(embed)
+cli.add_command(label)
 cli.add_command(redact)
 cli.add_command(schedule)
 

@@ -23,6 +23,7 @@ MIGRATIONS: list[Migration] = [
     Migration(version=1, description="Initial schema", sql=_load("0001_initial.sql")),
     Migration(version=2, description="Full-text search index", sql=_load("0002_fts_index.sql")),
     Migration(version=3, description="Source file mtime for incremental ingest", sql=_load("0003_conversation_mtime.sql")),
+    Migration(version=4, description="Classifier labels", sql=_load("0004_labels.sql")),
 ]
 
 LATEST_VERSION = MIGRATIONS[-1].version

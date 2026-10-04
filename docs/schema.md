@@ -89,6 +89,32 @@ The source data preserved line-for-line. Lets us re-parse without re-ingesting
 when normalization logic changes. **This is critical** — never assume the
 normalized data is the only copy.
 
+### `labels`
+Typed classifier answers written by `chatstrata label` (schema v4). One row
+per target × question; see [labeling.md](labeling.md) and
+[ADR 0004](adr/0004-classifier-labels.md).
+
+| column         | type        | notes                                                    |
+|----------------|-------------|----------------------------------------------------------|
+| pack           | VARCHAR     | question pack name (e.g. `tool-failures`)                |
+| target_kind    | VARCHAR     | `tool_call` / `message`                                  |
+| target_id      | VARCHAR     | `content_blocks.id` for tool calls, `messages.id` for messages |
+| question       | VARCHAR     | question id within the pack                              |
+| answer_type    | VARCHAR     | `noul` / `choice` / `score`                              |
+| value          | DOUBLE      | noul probability or score expectation                   |
+| choice         | VARCHAR     | chosen option for choice answers                         |
+| confidence     | DOUBLE      | choice/score confidence; NULL for noul                   |
+| probabilities  | JSON        | full distribution for choice/score                       |
+| pack_version   | VARCHAR     | hash of the pack's questions; stale labels are re-run    |
+| model          | VARCHAR     | versioned model id that answered                        |
+| run_id         | VARCHAR     | -> label_runs.id                                         |
+
+Primary key `(pack, target_id, question)`.
+
+### `label_runs`
+One row per `chatstrata label run`: pack, pack version, backend, model,
+start/finish time, items labelled, failures, and input tokens used.
+
 ### `message_embeddings`
 Reserved for future use. Embeddings are generated lazily, not on ingest.
 
