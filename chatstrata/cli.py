@@ -792,7 +792,12 @@ def migrate(db: str | None, status_only: bool) -> None:
 )
 @click.option("--host", default="127.0.0.1", help="Host for HTTP transports.")
 @click.option("--port", type=int, default=8462, help="Port for HTTP transports.")
-def serve(transport: str, host: str, port: int) -> None:
+@click.option(
+    "--filter", "filters", multiple=True, metavar="RULE",
+    help="Hide content by label, e.g. cyber:security_related>0.3 (repeatable; "
+    "default: $CHATSTRATA_MCP_FILTER). Unlabelled content is hidden too.",
+)
+def serve(transport: str, host: str, port: int, filters: tuple[str, ...]) -> None:
     """Start the ChatStrata MCP server.
 
     \b
@@ -800,15 +805,25 @@ def serve(transport: str, host: str, port: int) -> None:
         chatstrata serve                                    # stdio for Claude Code
         chatstrata serve --transport streamable-http        # HTTP for remote access
         chatstrata serve --transport streamable-http --host 0.0.0.0  # Tailscale
+        chatstrata serve --filter 'cyber:security_related>0.3'       # hide flagged content
     """
     try:
         from chatstrata.mcp.server import mcp as mcp_server
+        from chatstrata.mcp.server import set_filter
     except ImportError:
         click.echo(
             "MCP dependencies not installed. Run: uv pip install chatstrata[mcp]",
             err=True,
         )
         sys.exit(1)
+
+    if filters:
+        from chatstrata.label.filter import FilterError, parse_rules
+
+        try:
+            set_filter(parse_rules(",".join(filters)))
+        except FilterError as exc:
+            raise click.BadParameter(str(exc), param_hint="--filter") from exc
 
     if transport == "stdio":
         mcp_server.run(transport="stdio")

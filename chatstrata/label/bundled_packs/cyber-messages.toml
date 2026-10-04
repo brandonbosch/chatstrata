@@ -1,0 +1,55 @@
+name = "cyber-messages"
+description = """
+Flag security / offensive-security messages (user and assistant text, plus \
+thinking) so they can be filtered out. Companion to `cyber`, which only sees \
+tool calls: use both with the MCP content filter to cover a whole archive."""
+target_kind = "message"
+state_version = 1
+
+# Every user/assistant message with text or thinking, its blocks joined in
+# order. Messages that are only tool calls/results are left to `cyber`.
+target_sql = """
+SELECT
+    m.id AS target_id,
+    c.source_id,
+    c.project,
+    m.created_at,
+    m.role,
+    string_agg(cb.text, '\n' ORDER BY cb.block_index) AS text
+FROM messages m
+JOIN conversations c ON c.id = m.conversation_id
+JOIN content_blocks cb ON cb.message_id = m.id AND cb.type IN ('text', 'thinking')
+WHERE m.role IN ('user', 'assistant') AND cb.text IS NOT NULL AND cb.text <> ''
+GROUP BY ALL
+"""
+
+[state]
+role = { column = "role" }
+text = { column = "text", clip = 4000 }
+
+[questions.security_related]
+type = "noul"
+instructions = """
+Is this message part of computer-security or hacking-related work? Judge from \
+`text`; `role` says who wrote it."""
+
+[questions.security_related.criteria]
+true = """
+The message concerns security work of any kind: vulnerabilities, exploits, \
+malware, reverse engineering, penetration testing, CTF challenges, network \
+attacks or defense, cryptography attacks, credential handling, or security \
+tooling."""
+false = "Ordinary software, data, writing, or system work with no security angle."
+
+[questions.sensitive_capability]
+type = "noul"
+instructions = """
+Does `text` contain concrete offensive capability rather than just discussion \
+of it?"""
+
+[questions.sensitive_capability.criteria]
+true = """
+Contains working exploit or malware code, a live C2 / payload, specific \
+intrusion or evasion steps, harvested credentials, or similar directly usable \
+attack material."""
+false = "Only discusses, plans, or analyzes security topics without usable attack material."
