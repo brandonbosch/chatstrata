@@ -40,6 +40,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -171,17 +172,27 @@ def user_packs_dir() -> Path:
     return Path(user_config_dir("chatstrata", appauthor=False)) / "packs"
 
 
-def discover_toml_packs() -> dict[str, Pack]:
+def discover_toml_packs(
+    on_error: Callable[[PackFileError], None] | None = None,
+) -> dict[str, Pack]:
     """Load every ``*.toml`` pack from the bundled and user directories.
 
     User packs load last, so a user file can shadow a bundled one by name.
-    An unreadable file raises :class:`PackFileError` naming the file.
+    A broken user file is passed to ``on_error`` and skipped, so one typo does
+    not take down every other pack; without ``on_error`` it raises
+    :class:`PackFileError` naming the file. A broken bundled file always raises.
     """
     packs: dict[str, Pack] = {}
     for directory in (_BUNDLED_DIR, user_packs_dir()):
         if not directory.is_dir():
             continue
         for path in sorted(directory.glob("*.toml")):
-            pack = load_pack_file(path)
+            try:
+                pack = load_pack_file(path)
+            except PackFileError as exc:
+                if on_error is None or directory == _BUNDLED_DIR:
+                    raise
+                on_error(exc)
+                continue
             packs[pack.name] = pack
     return packs

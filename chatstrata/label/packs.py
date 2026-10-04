@@ -318,17 +318,21 @@ USER_TURNS = Pack(
 BUILTIN_PACKS: dict[str, Pack] = {p.name: p for p in (TOOL_FAILURES, USER_TURNS)}
 
 
-def all_packs() -> dict[str, Pack]:
-    """Built-in packs plus every discovered TOML pack, keyed by name."""
+def all_packs(on_error: Callable[[Exception], None] | None = None) -> dict[str, Pack]:
+    """Built-in packs plus every discovered TOML pack, keyed by name.
+
+    ``on_error`` receives broken user pack files, which are then skipped; see
+    :func:`~chatstrata.label.toml_packs.discover_toml_packs`.
+    """
     from chatstrata.label.toml_packs import discover_toml_packs
 
     packs = dict(BUILTIN_PACKS)
-    packs.update(discover_toml_packs())  # file packs may override a built-in name
+    packs.update(discover_toml_packs(on_error))  # file packs may override a built-in name
     return packs
 
 
-def get_pack(name: str) -> Pack:
-    packs = all_packs()
+def get_pack(name: str, on_error: Callable[[Exception], None] | None = None) -> Pack:
+    packs = all_packs(on_error)
     try:
         return packs[name]
     except KeyError:

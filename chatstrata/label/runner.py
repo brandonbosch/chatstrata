@@ -41,6 +41,24 @@ class RunStats:
     errors: list[str] = field(default_factory=list)
 
 
+REQUIRED_TARGET_COLUMNS = ("target_id", "source_id", "project", "created_at")
+
+
+def _check_target_columns(conn: duckdb.DuckDBPyConnection, pack: Pack) -> None:
+    """Fail clearly if ``target_sql`` lacks a column the runner filters on."""
+    cols = {
+        d[0]
+        for d in conn.execute(f"SELECT * FROM ({pack.target_sql}) t LIMIT 0").description
+    }
+    missing = [c for c in REQUIRED_TARGET_COLUMNS if c not in cols]
+    if missing:
+        where = f" ({pack.source})" if pack.source != "builtin" else ""
+        raise ValueError(
+            f"Pack {pack.name!r}{where}: target_sql must return "
+            f"{', '.join(REQUIRED_TARGET_COLUMNS)}; missing {', '.join(missing)}."
+        )
+
+
 def select_targets(
     conn: duckdb.DuckDBPyConnection,
     pack: Pack,
@@ -55,6 +73,7 @@ def select_targets(
     ``relabel`` is set, so re-running a pack only pays for new data.
     """
     filters = filters or TargetFilters()
+    _check_target_columns(conn, pack)
     clauses: list[str] = []
     params: list[Any] = []
     if filters.source:
@@ -212,6 +231,12 @@ _DIMENSIONS: dict[str, dict[str, str]] = {
         "month": "strftime(date_trunc('month', m.created_at), '%Y-%m')",
         "quarter": "strftime(m.created_at, '%Y') || '-Q' || quarter(m.created_at)",
     },
+    "conversation": {
+        "source": "c.source_id",
+        "project": "c.project",
+        "month": "strftime(date_trunc('month', c.started_at), '%Y-%m')",
+        "quarter": "strftime(c.started_at, '%Y') || '-Q' || quarter(c.started_at)",
+    },
 }
 
 _TARGET_JOINS: dict[str, str] = {
@@ -223,6 +248,9 @@ _TARGET_JOINS: dict[str, str] = {
     "message": """
         JOIN messages m ON m.id = l.target_id
         JOIN conversations c ON c.id = m.conversation_id
+    """,
+    "conversation": """
+        JOIN conversations c ON c.id = l.target_id
     """,
 }
 
@@ -289,14 +317,17 @@ class ClearScope:
     runs: int = 0
 
 
-def _clear_filters(pack: str, version: str | None, run_id: str | None) -> tuple[str, list[Any]]:
+def _clear_filters(
+    pack: str, version: str | None, run_id: str | None, *, run_id_column: str
+) -> tuple[str, list[Any]]:
+    """WHERE clause for a clear. ``labels`` keys runs by ``run_id``, ``label_runs`` by ``id``."""
     clauses = ["pack = ?"]
     params: list[Any] = [pack]
     if version is not None:
         clauses.append("pack_version = ?")
         params.append(version)
     if run_id is not None:
-        clauses.append("run_id = ?")
+        clauses.append(f"{run_id_column} = ?")
         params.append(run_id)
     return " AND ".join(clauses), params
 
@@ -309,11 +340,12 @@ def count_labels(
     run_id: str | None = None,
 ) -> ClearScope:
     """Count the labels and runs a matching ``clear`` would delete, without deleting."""
-    where, params = _clear_filters(pack, version, run_id)
+    where, params = _clear_filters(pack, version, run_id, run_id_column="run_id")
     labels = conn.execute(f"SELECT COUNT(*) FROM labels WHERE {where}", params).fetchone()[0]
-    # label_runs has no run_id column of its own; its id is the labels.run_id.
-    run_where = where.replace("run_id = ?", "id = ?")
-    runs = conn.execute(f"SELECT COUNT(*) FROM label_runs WHERE {run_where}", params).fetchone()[0]
+    run_where, run_params = _clear_filters(pack, version, run_id, run_id_column="id")
+    runs = conn.execute(
+        f"SELECT COUNT(*) FROM label_runs WHERE {run_where}", run_params
+    ).fetchone()[0]
     return ClearScope(pack=pack, version=version, run_id=run_id, labels=labels, runs=runs)
 
 
@@ -330,8 +362,8 @@ def clear_labels(
     and ``label_runs`` tables are touched; the archive itself is never changed.
     """
     scope = count_labels(conn, pack, version=version, run_id=run_id)
-    where, params = _clear_filters(pack, version, run_id)
-    run_where = where.replace("run_id = ?", "id = ?")
+    where, params = _clear_filters(pack, version, run_id, run_id_column="run_id")
+    run_where, run_params = _clear_filters(pack, version, run_id, run_id_column="id")
     conn.execute(f"DELETE FROM labels WHERE {where}", params)
-    conn.execute(f"DELETE FROM label_runs WHERE {run_where}", params)
+    conn.execute(f"DELETE FROM label_runs WHERE {run_where}", run_params)
     return scope

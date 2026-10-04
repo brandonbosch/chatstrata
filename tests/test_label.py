@@ -302,6 +302,42 @@ class TestTomlPacks:
         n = conn.execute("SELECT COUNT(*) FROM labels WHERE pack = 'mini-cyber'").fetchone()[0]
         assert n == len(targets)  # one noul question each
 
+    def test_conversation_pack_runs_and_summarizes(self, conn, tmp_path):
+        toml = CYBER_TOML.replace('target_kind = "tool_call"', 'target_kind = "conversation"')
+        toml = toml.replace(
+            'target_sql = "SELECT 1"',
+            'target_sql = "SELECT id AS target_id, source_id, project, '
+            'started_at AS created_at, title FROM conversations"',
+        )
+        pack = load_pack_file(self._write(tmp_path, toml))
+        run_pack(conn, pack, FakeBackend(), select_targets(conn, pack))
+        cols, rows = summarize(conn, pack, by="source")
+        assert {r[cols.index("group")] for r in rows} == {"claude_code", "omp"}
+
+    def test_target_sql_missing_required_columns(self, conn, tmp_path):
+        toml = CYBER_TOML.replace(
+            'target_sql = "SELECT 1"', 'target_sql = "SELECT id AS target_id FROM conversations"'
+        )
+        pack = load_pack_file(self._write(tmp_path, toml))
+        with pytest.raises(ValueError, match="missing source_id, project, created_at"):
+            select_targets(conn, pack)
+
+    def test_broken_user_pack_is_skipped_with_warning(self, tmp_path, monkeypatch):
+        self._write(tmp_path, CYBER_TOML, "good.toml")
+        self._write(tmp_path, "name = [unterminated", "bad.toml")
+        monkeypatch.setenv("CHATSTRATA_PACKS_DIR", str(tmp_path))
+
+        with pytest.raises(PackFileError, match="bad.toml"):
+            discover_toml_packs()
+        errors: list[Exception] = []
+        assert "mini-cyber" in discover_toml_packs(errors.append)
+        assert len(errors) == 1 and "bad.toml" in str(errors[0])
+
+        result = CliRunner().invoke(cli, ["label", "packs"])
+        assert result.exit_code == 0, result.output
+        assert "mini-cyber" in result.output and "tool-failures" in result.output
+        assert "skipping pack file" in result.output and "bad.toml" in result.output
+
 
 class TestClear:
     def test_clear_removes_only_that_pack(self, conn):
@@ -335,6 +371,17 @@ class TestClear:
         scope = clear_labels(conn, "tool-failures", run_id=stats.run_id)
         assert scope.labels > 0 and scope.runs == 1
         assert conn.execute("SELECT COUNT(*) FROM label_runs").fetchone()[0] == 0
+
+    def test_clear_by_version_and_run(self, conn):
+        first = run_pack(conn, TOOL_FAILURES, FakeBackend(), select_targets(conn, TOOL_FAILURES))
+        run_pack(conn, USER_TURNS, FakeBackend(), select_targets(conn, USER_TURNS))
+        scope = clear_labels(
+            conn, "tool-failures", version=TOOL_FAILURES.version, run_id=first.run_id
+        )
+        assert scope.labels > 0 and scope.runs == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM label_runs WHERE pack = 'user-turns'"
+        ).fetchone()[0] == 1
 
     def test_cli_dry_run_keeps_labels(self, db_path):
         c = connect(db_path)

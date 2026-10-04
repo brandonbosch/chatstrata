@@ -29,9 +29,13 @@ def _date(value: str | None) -> datetime | None:
     return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
 
+def _warn_bad_pack(exc: Exception) -> None:
+    click.echo(f"Warning: skipping pack file: {exc}", err=True)
+
+
 def _pack_arg(_ctx, _param, value: str):
     try:
-        return get_pack(value)
+        return get_pack(value, on_error=_warn_bad_pack)
     except KeyError as exc:
         raise click.BadParameter(str(exc.args[0])) from exc
 
@@ -50,7 +54,7 @@ def label() -> None:
 @click.option("--json", "as_json", is_flag=True, help="Output full pack definitions as JSON.")
 def list_packs(as_json: bool) -> None:
     """List available question packs."""
-    packs = all_packs()
+    packs = all_packs(on_error=_warn_bad_pack)
     if as_json:
         out = {
             p.name: {
