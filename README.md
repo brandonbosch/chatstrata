@@ -240,7 +240,10 @@ chatstrata label summary tool-failures --by tool
 ```
 
 This sends the selected content to the TypeSafe API, so it always shows an
-estimate and asks first. See [docs/labeling.md](docs/labeling.md).
+estimate and asks first. You can write your own packs as TOML files (no code)
+and drop them in your packs directory; the bundled `cyber` pack is a worked
+example that flags security-related tool calls so you can filter them out. See
+[docs/labeling.md](docs/labeling.md).
 
 ## Adding a source
 

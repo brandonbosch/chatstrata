@@ -10,7 +10,7 @@ import click
 from chatstrata.analysis.cli import _output
 from chatstrata.core.db import connect, resolve_db_path
 from chatstrata.label.backend import JEV_PRICE_PER_MTOK, BackendError, TypeSafeBackend
-from chatstrata.label.packs import BUILTIN_PACKS, get_pack
+from chatstrata.label.packs import all_packs, get_pack
 from chatstrata.label.runner import (
     TargetFilters,
     clear_labels,
@@ -20,6 +20,7 @@ from chatstrata.label.runner import (
     select_targets,
     summarize,
 )
+from chatstrata.label.toml_packs import user_packs_dir
 
 
 def _date(value: str | None) -> datetime | None:
@@ -49,24 +50,28 @@ def label() -> None:
 @click.option("--json", "as_json", is_flag=True, help="Output full pack definitions as JSON.")
 def list_packs(as_json: bool) -> None:
     """List available question packs."""
+    packs = all_packs()
     if as_json:
         out = {
             p.name: {
                 "description": p.description,
                 "target_kind": p.target_kind,
                 "version": p.version,
+                "source": p.source,
                 "questions": p.questions,
             }
-            for p in BUILTIN_PACKS.values()
+            for p in packs.values()
         }
         click.echo(json.dumps(out, indent=2))
         return
-    for pack in BUILTIN_PACKS.values():
-        click.echo(f"{pack.name}  ({pack.target_kind}, version {pack.version})")
+    for pack in packs.values():
+        origin = "builtin" if pack.source == "builtin" else f"file: {pack.source}"
+        click.echo(f"{pack.name}  ({pack.target_kind}, version {pack.version}, {origin})")
         click.echo(f"  {pack.description}")
         for qid, q in pack.questions.items():
             click.echo(f"  - {qid} [{q['type']}]")
         click.echo("")
+    click.echo(f"Drop your own .toml packs in: {user_packs_dir()}")
 
 
 @label.command("run")

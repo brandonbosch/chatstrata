@@ -35,14 +35,23 @@ class Pack:
     questions: dict[str, dict[str, Any]]
     # Bump when build_state changes shape; questions are hashed automatically.
     state_version: int = 1
+    # Where the pack came from: "builtin" or a file path. Not part of version.
+    source: str = "builtin"
+    # Fingerprint of a declarative state spec (TOML packs); folded into the
+    # version so editing the state mapping invalidates old labels. Python packs
+    # leave this None and bump ``state_version`` by hand instead.
+    state_fingerprint: str | None = None
 
     @property
     def version(self) -> str:
         """Stable hash of everything that changes the meaning of an answer."""
-        blob = json.dumps(
-            {"questions": self.questions, "state_version": self.state_version},
-            sort_keys=True,
-        )
+        payload: dict[str, Any] = {
+            "questions": self.questions,
+            "state_version": self.state_version,
+        }
+        if self.state_fingerprint is not None:
+            payload["state_fingerprint"] = self.state_fingerprint
+        blob = json.dumps(payload, sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()[:12]
 
 
@@ -309,9 +318,19 @@ USER_TURNS = Pack(
 BUILTIN_PACKS: dict[str, Pack] = {p.name: p for p in (TOOL_FAILURES, USER_TURNS)}
 
 
+def all_packs() -> dict[str, Pack]:
+    """Built-in packs plus every discovered TOML pack, keyed by name."""
+    from chatstrata.label.toml_packs import discover_toml_packs
+
+    packs = dict(BUILTIN_PACKS)
+    packs.update(discover_toml_packs())  # file packs may override a built-in name
+    return packs
+
+
 def get_pack(name: str) -> Pack:
+    packs = all_packs()
     try:
-        return BUILTIN_PACKS[name]
+        return packs[name]
     except KeyError:
-        known = ", ".join(sorted(BUILTIN_PACKS))
+        known = ", ".join(sorted(packs))
         raise KeyError(f"Unknown pack {name!r}. Available: {known}") from None

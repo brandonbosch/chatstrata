@@ -1,0 +1,89 @@
+name = "cyber"
+description = """
+Flag security / offensive-security tool calls so you can filter them out of \
+exports, summaries, and anything fed back to a model. Useful when your archive \
+contains pentest, CTF, or malware-analysis work whose text trips content \
+classifiers. Also the worked example of a TOML pack."""
+target_kind = "tool_call"
+state_version = 1
+
+# Every tool_use block, with its first tool_result if one exists (LEFT JOIN so
+# calls that never returned are still labelled). Columns beyond the required
+# target_id / source_id / project / created_at feed [state] below.
+target_sql = """
+WITH results AS (
+    SELECT
+        m.conversation_id,
+        cb.tool_use_id,
+        cb.text AS result_text
+    FROM content_blocks cb
+    JOIN messages m ON m.id = cb.message_id
+    WHERE cb.type = 'tool_result' AND cb.tool_use_id IS NOT NULL
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY m.conversation_id, cb.tool_use_id ORDER BY m.sequence_index
+    ) = 1
+)
+SELECT
+    cb.id AS target_id,
+    c.source_id,
+    c.project,
+    m.created_at,
+    cb.tool_name,
+    cb.payload AS arguments,
+    r.result_text
+FROM content_blocks cb
+JOIN messages m ON m.id = cb.message_id
+JOIN conversations c ON c.id = m.conversation_id
+LEFT JOIN results r
+    ON r.conversation_id = m.conversation_id AND r.tool_use_id = cb.tool_use_id
+WHERE cb.type = 'tool_use'
+"""
+
+[state]
+harness = { column = "source_id" }
+tool_name = { column = "tool_name" }
+arguments = { column = "arguments", unwrap = true, json = true, clip = 2000 }
+result = { column = "result_text", clip = 3000, default = "(no output)" }
+
+[questions.security_related]
+type = "noul"
+instructions = """
+Is this tool call part of computer-security or hacking-related work? Judge from \
+`tool_name`, `arguments`, and `result` together."""
+
+[questions.security_related.criteria]
+true = """
+The call concerns security work of any kind: vulnerabilities, exploits, \
+malware, reverse engineering, penetration testing, CTF challenges, network \
+attacks or defense, cryptography attacks, credential handling, or security \
+tooling."""
+false = "Ordinary software, data, writing, or system work with no security angle."
+
+[questions.posture]
+type = "choice"
+instructions = """
+If this tool call is security-related, which side is it on? Judge the intent of \
+the work the call is doing, not just the topic."""
+
+[questions.posture.criteria]
+offensive = """
+Building or using capability to attack, exploit, intrude, evade defenses, or \
+develop malware / C2 / exploits, including for pentesting or CTF."""
+defensive = """
+Detection, hardening, incident response, patching, secure configuration, or \
+analysis meant to protect a system."""
+general_security = "Security topic that is neither clearly attack nor defense (e.g. learning, theory, audit)."
+not_security = "The call is not security-related at all."
+
+[questions.sensitive_capability]
+type = "noul"
+instructions = """
+Do `arguments` or `result` contain concrete offensive capability rather than \
+just discussion of it?"""
+
+[questions.sensitive_capability.criteria]
+true = """
+Contains working exploit or malware code, a live C2 / payload, specific \
+intrusion or evasion steps, harvested credentials, or similar directly usable \
+attack material."""
+false = "Only discusses, plans, or analyzes security topics without usable attack material."

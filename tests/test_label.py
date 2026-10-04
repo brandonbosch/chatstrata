@@ -25,8 +25,29 @@ from chatstrata.label.runner import (
     select_targets,
     summarize,
 )
+from chatstrata.label.toml_packs import (
+    PackFileError,
+    discover_toml_packs,
+    load_pack_file,
+)
 from chatstrata.sources.claude_code.adapter import ClaudeCodeAdapter
 from chatstrata.sources.omp.adapter import OmpAdapter
+
+CYBER_TOML = """
+name = "mini-cyber"
+description = "test pack"
+target_kind = "tool_call"
+target_sql = "SELECT 1"
+
+[state]
+harness = { column = "source_id" }
+args = { column = "arguments", unwrap = true, json = true, clip = 50 }
+result = { column = "result_text", clip = 20, default = "(none)" }
+
+[questions.security_related]
+type = "noul"
+instructions = "Security?"
+"""
 
 SOURCES = Path(__file__).parent.parent / "chatstrata" / "sources"
 
@@ -200,6 +221,86 @@ class TestSummarize:
     def test_unknown_dimension(self, conn):
         with pytest.raises(ValueError, match="--by must be one of"):
             summarize(conn, USER_TURNS, by="tool")
+
+
+class TestTomlPacks:
+    def _write(self, tmp_path, text, name="p.toml"):
+        path = tmp_path / name
+        path.write_text(text)
+        return path
+
+    def test_loads_valid_pack(self, tmp_path):
+        pack = load_pack_file(self._write(tmp_path, CYBER_TOML))
+        assert pack.name == "mini-cyber"
+        assert pack.target_kind == "tool_call"
+        assert pack.source.endswith("p.toml")
+        assert pack.state_fingerprint is not None
+        assert "security_related" in pack.questions
+
+    def test_state_builder_transforms(self, tmp_path):
+        pack = load_pack_file(self._write(tmp_path, CYBER_TOML))
+        state = pack.build_state(
+            {
+                "source_id": "omp",
+                "arguments": json.dumps({"input": {"cmd": "x" * 200}}),
+                "result_text": None,
+            }
+        )
+        assert state["harness"] == "omp"
+        assert state["result"] == "(none)"  # default used for NULL
+        # unwrapped out of the {"input": ...} envelope, rendered as JSON, clipped
+        assert '"cmd"' in state["args"]
+        assert "chars omitted" in state["args"]
+        assert len(state["args"]) < 120  # far shorter than the 200-char input
+
+    def test_state_fingerprint_changes_version(self, tmp_path):
+        a = load_pack_file(self._write(tmp_path, CYBER_TOML, "a.toml"))
+        b = load_pack_file(
+            self._write(tmp_path, CYBER_TOML.replace("clip = 50", "clip = 80"), "b.toml")
+        )
+        assert a.version != b.version
+
+    def test_missing_field(self, tmp_path):
+        bad = CYBER_TOML.replace('target_kind = "tool_call"', "")
+        with pytest.raises(PackFileError, match="target_kind"):
+            load_pack_file(self._write(tmp_path, bad))
+
+    def test_bad_target_kind(self, tmp_path):
+        bad = CYBER_TOML.replace('target_kind = "tool_call"', 'target_kind = "nope"')
+        with pytest.raises(PackFileError, match="target_kind must be one of"):
+            load_pack_file(self._write(tmp_path, bad))
+
+    def test_bad_question_type(self, tmp_path):
+        bad = CYBER_TOML.replace('type = "noul"', 'type = "vibes"')
+        with pytest.raises(PackFileError, match="type"):
+            load_pack_file(self._write(tmp_path, bad))
+
+    def test_unknown_state_option(self, tmp_path):
+        bad = CYBER_TOML.replace("clip = 50", "clip = 50, bogus = 1")
+        with pytest.raises(PackFileError, match="unknown options"):
+            load_pack_file(self._write(tmp_path, bad))
+
+    def test_discovery_and_get_pack(self, tmp_path, monkeypatch):
+        self._write(tmp_path, CYBER_TOML)
+        monkeypatch.setenv("CHATSTRATA_PACKS_DIR", str(tmp_path))
+        assert "mini-cyber" in discover_toml_packs()
+        from chatstrata.label.packs import get_pack
+
+        assert get_pack("mini-cyber").name == "mini-cyber"
+
+    def test_bundled_cyber_pack_is_discovered(self):
+        assert "cyber" in discover_toml_packs()
+
+    def test_run_toml_pack(self, conn, tmp_path, monkeypatch):
+        # a real tool_call pack over the fixture DB, via the shared tool-call SQL
+        toml = CYBER_TOML.replace("SELECT 1", TOOL_FAILURES.target_sql.replace("\n", " "))
+        pack = load_pack_file(self._write(tmp_path, toml))
+        targets = select_targets(conn, pack)
+        assert targets
+        stats = run_pack(conn, pack, FakeBackend(), targets)
+        assert stats.labelled == len(targets)
+        n = conn.execute("SELECT COUNT(*) FROM labels WHERE pack = 'mini-cyber'").fetchone()[0]
+        assert n == len(targets)  # one noul question each
 
 
 class TestClear:

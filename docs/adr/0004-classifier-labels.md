@@ -37,5 +37,9 @@ item was rendered into model input, and on the model version.
 - Labels can be joined to any table by `target_id` and queried through the
   existing read-only MCP `query` tool.
 - Re-running a pack only pays for new or changed targets.
-- Packs are Python for now. A file-based format for user-defined packs can
-  come later without a schema change.
+- Packs are either built-in (Python) or user-defined (TOML files discovered
+  from a bundled directory and `$CHATSTRATA_PACKS_DIR`). A TOML pack declares
+  its target SQL, a declarative state mapping, and its questions; the state
+  mapping is fingerprinted into `pack_version` so editing it invalidates old
+  labels, matching the manual `state_version` bump Python packs use. This
+  needed no schema change.

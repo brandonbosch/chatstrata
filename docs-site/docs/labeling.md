@@ -56,6 +56,24 @@ before it for context.
 - `frustration` (score): four levels from neutral to exasperated
 - `states_done_criteria` (noul): the message says what "done" looks like
 
+**`cyber`** (a TOML pack; see below): one item per tool call, for flagging
+security work so you can filter it out of exports and anything fed back to a
+model.
+- `security_related` (noul): the call concerns security / hacking work
+- `posture` (choice): offensive, defensive, general_security, not_security
+- `sensitive_capability` (noul): contains usable attack material, not just
+  discussion
+
+```sql
+-- hide security-related tool calls from a dump
+SELECT cb.* FROM content_blocks cb
+WHERE cb.type = 'tool_use'
+  AND cb.id NOT IN (
+    SELECT target_id FROM labels
+    WHERE pack = 'cyber' AND question = 'security_related' AND value > 0.5
+  );
+```
+
 ## Running
 
 ```bash
@@ -104,6 +122,73 @@ GROUP BY ALL ORDER BY q;
 `answer_type`, `value` (noul probability or score mean), `choice`,
 `confidence`, `probabilities` (JSON), `pack_version`, `model`, `run_id`.
 `label_runs` records each invocation's model and token usage.
+
+## Throwing away an experiment
+
+Labels are derived data: deleting them never touches your archive, only the
+`labels` and `label_runs` tables. Use `label clear` to undo a run you don't
+want to keep.
+
+```bash
+chatstrata label clear tool-failures --dry-run        # show what would go
+chatstrata label clear tool-failures                  # whole pack (asks first)
+chatstrata label clear tool-failures --version <hash> # just one stale version
+chatstrata label clear user-turns --run <run-id> --yes
+```
+
+Editing a pack's questions or bumping its `state_version` changes its
+`pack_version`, so a re-run writes a fresh set of labels and leaves the old
+ones addressable by their version if you want to clear just those.
+
+## Writing your own packs (TOML)
+
+A pack is a `.toml` file. Drop one in your packs directory and `chatstrata
+label` picks it up — no code, no reinstall. `chatstrata label packs` prints
+the directory (default `<config>/chatstrata/packs`, override with
+`$CHATSTRATA_PACKS_DIR`). The bundled `cyber` pack is a full worked example;
+copy it as a starting point.
+
+```toml
+name = "my-pack"
+description = "What this pack is for."
+target_kind = "tool_call"        # tool_call | message | conversation
+state_version = 1                 # bump by hand only if you change [state]
+
+# Must return target_id, source_id, project, created_at (the runner filters
+# and de-dupes on them) plus any columns [state] reads.
+target_sql = """
+SELECT cb.id AS target_id, c.source_id, c.project, m.created_at,
+       cb.tool_name, cb.payload AS arguments
+FROM content_blocks cb
+JOIN messages m ON m.id = cb.message_id
+JOIN conversations c ON c.id = m.conversation_id
+WHERE cb.type = 'tool_use'
+"""
+
+# Each key becomes a field of the state sent to the model.
+[state]
+harness   = { column = "source_id" }
+tool_name = { column = "tool_name" }
+arguments = { column = "arguments", unwrap = true, json = true, clip = 2000 }
+
+[questions.example]
+type = "noul"                     # noul | choice | score
+instructions = "Ask one thing about this item."
+[questions.example.criteria]      # choice/noul: a table; score: a list
+true = "..."
+false = "..."
+```
+
+`[state]` field options: `column` (required), `clip` (trim a long string,
+keeping head and tail), `json` (render as JSON text, then clip), `unwrap`
+(strip the `{"input": ...}` / `{"arguments": ...}` envelope before `json`),
+and `default` (used when the column is null or empty). Editing `[state]`
+changes the pack's version automatically, so old labels won't silently mix
+with new ones — no need to touch `state_version` for that. Use it only to
+force a re-label when you've changed `target_sql` without changing `[state]`.
+
+Validate a file by listing packs: a broken file fails with its path and the
+problem.
 
 ## Writing good questions
 
