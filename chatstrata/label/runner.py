@@ -276,3 +276,62 @@ def summarize(
     """
     result = conn.execute(sql, [pack.name, pack.version, min_confidence])
     return [d[0] for d in result.description], result.fetchall()
+
+
+@dataclass
+class ClearScope:
+    """What a clear operation will remove, resolved before anything is deleted."""
+
+    pack: str
+    version: str | None = None
+    run_id: str | None = None
+    labels: int = 0
+    runs: int = 0
+
+
+def _clear_filters(pack: str, version: str | None, run_id: str | None) -> tuple[str, list[Any]]:
+    clauses = ["pack = ?"]
+    params: list[Any] = [pack]
+    if version is not None:
+        clauses.append("pack_version = ?")
+        params.append(version)
+    if run_id is not None:
+        clauses.append("run_id = ?")
+        params.append(run_id)
+    return " AND ".join(clauses), params
+
+
+def count_labels(
+    conn: duckdb.DuckDBPyConnection,
+    pack: str,
+    *,
+    version: str | None = None,
+    run_id: str | None = None,
+) -> ClearScope:
+    """Count the labels and runs a matching ``clear`` would delete, without deleting."""
+    where, params = _clear_filters(pack, version, run_id)
+    labels = conn.execute(f"SELECT COUNT(*) FROM labels WHERE {where}", params).fetchone()[0]
+    # label_runs has no run_id column of its own; its id is the labels.run_id.
+    run_where = where.replace("run_id = ?", "id = ?")
+    runs = conn.execute(f"SELECT COUNT(*) FROM label_runs WHERE {run_where}", params).fetchone()[0]
+    return ClearScope(pack=pack, version=version, run_id=run_id, labels=labels, runs=runs)
+
+
+def clear_labels(
+    conn: duckdb.DuckDBPyConnection,
+    pack: str,
+    *,
+    version: str | None = None,
+    run_id: str | None = None,
+) -> ClearScope:
+    """Delete a pack's labels (and matching label_runs), returning what was removed.
+
+    Scopes to a single ``version`` or ``run_id`` when given. Only the ``labels``
+    and ``label_runs`` tables are touched; the archive itself is never changed.
+    """
+    scope = count_labels(conn, pack, version=version, run_id=run_id)
+    where, params = _clear_filters(pack, version, run_id)
+    run_where = where.replace("run_id = ?", "id = ?")
+    conn.execute(f"DELETE FROM labels WHERE {where}", params)
+    conn.execute(f"DELETE FROM label_runs WHERE {run_where}", params)
+    return scope

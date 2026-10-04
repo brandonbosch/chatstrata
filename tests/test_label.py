@@ -18,6 +18,8 @@ from chatstrata.label.backend import BackendError, BackendResult
 from chatstrata.label.packs import TOOL_FAILURES, USER_TURNS, clip
 from chatstrata.label.runner import (
     TargetFilters,
+    clear_labels,
+    count_labels,
     estimate_tokens,
     run_pack,
     select_targets,
@@ -198,6 +200,58 @@ class TestSummarize:
     def test_unknown_dimension(self, conn):
         with pytest.raises(ValueError, match="--by must be one of"):
             summarize(conn, USER_TURNS, by="tool")
+
+
+class TestClear:
+    def test_clear_removes_only_that_pack(self, conn):
+        run_pack(conn, TOOL_FAILURES, FakeBackend(), select_targets(conn, TOOL_FAILURES))
+        run_pack(conn, USER_TURNS, FakeBackend(), select_targets(conn, USER_TURNS))
+        before = conn.execute("SELECT COUNT(*) FROM labels WHERE pack = 'user-turns'").fetchone()[0]
+
+        scope = clear_labels(conn, "tool-failures")
+
+        assert scope.labels > 0 and scope.runs == 1
+        assert conn.execute("SELECT COUNT(*) FROM labels WHERE pack = 'tool-failures'").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM label_runs WHERE pack = 'tool-failures'").fetchone()[0] == 0
+        # the other pack is untouched
+        assert conn.execute("SELECT COUNT(*) FROM labels WHERE pack = 'user-turns'").fetchone()[0] == before
+
+    def test_count_does_not_delete(self, conn):
+        run_pack(conn, TOOL_FAILURES, FakeBackend(), select_targets(conn, TOOL_FAILURES))
+        scope = count_labels(conn, "tool-failures")
+        assert scope.labels > 0
+        assert conn.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == scope.labels
+
+    def test_clear_by_version(self, conn):
+        run_pack(conn, TOOL_FAILURES, FakeBackend(), select_targets(conn, TOOL_FAILURES))
+        assert clear_labels(conn, "tool-failures", version="nope").labels == 0
+        assert conn.execute("SELECT COUNT(*) FROM labels").fetchone()[0] > 0
+        assert clear_labels(conn, "tool-failures", version=TOOL_FAILURES.version).labels > 0
+        assert conn.execute("SELECT COUNT(*) FROM labels").fetchone()[0] == 0
+
+    def test_clear_by_run(self, conn):
+        stats = run_pack(conn, TOOL_FAILURES, FakeBackend(), select_targets(conn, TOOL_FAILURES))
+        scope = clear_labels(conn, "tool-failures", run_id=stats.run_id)
+        assert scope.labels > 0 and scope.runs == 1
+        assert conn.execute("SELECT COUNT(*) FROM label_runs").fetchone()[0] == 0
+
+    def test_cli_dry_run_keeps_labels(self, db_path):
+        c = connect(db_path)
+        run_pack(c, TOOL_FAILURES, FakeBackend(), select_targets(c, TOOL_FAILURES))
+        c.close()
+        result = CliRunner().invoke(
+            cli, ["label", "clear", "tool-failures", "--dry-run", "--db", str(db_path)]
+        )
+        assert result.exit_code == 0 and "match" in result.output
+        c = connect(db_path)
+        assert c.execute("SELECT COUNT(*) FROM labels").fetchone()[0] > 0
+        c.close()
+
+    def test_cli_nothing_matches(self, db_path):
+        result = CliRunner().invoke(
+            cli, ["label", "clear", "tool-failures", "--yes", "--db", str(db_path)]
+        )
+        assert result.exit_code == 0 and "nothing matched" in result.output
 
 
 class TestCli:

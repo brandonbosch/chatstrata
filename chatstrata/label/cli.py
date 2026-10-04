@@ -13,6 +13,8 @@ from chatstrata.label.backend import JEV_PRICE_PER_MTOK, BackendError, TypeSafeB
 from chatstrata.label.packs import BUILTIN_PACKS, get_pack
 from chatstrata.label.runner import (
     TargetFilters,
+    clear_labels,
+    count_labels,
     estimate_tokens,
     run_pack,
     select_targets,
@@ -147,6 +149,50 @@ def run(
         for err in stats.errors:
             click.echo(f"  ! {err}", err=True)
         click.echo(f"Summarize with: chatstrata label summary {pack.name}")
+    finally:
+        conn.close()
+
+
+@label.command("clear")
+@click.argument("pack")
+@click.option("--version", "version", default=None, help="Only clear this pack_version (e.g. a stale experiment).")
+@click.option("--run", "run_id", default=None, help="Only clear labels from this run id.")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting.")
+@click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt.")
+@click.option("--db", default=None, help="Override the database path.")
+def clear(pack: str, version, run_id, dry_run: bool, yes: bool, db: str | None) -> None:
+    """Delete labels for PACK, to throw away an experiment.
+
+    Only the labels and label_runs tables are touched; your archive is never
+    changed. Scope the delete with --version (a single pack version) or --run.
+
+    \b
+    Examples:
+        chatstrata label clear tool-failures --dry-run
+        chatstrata label clear tool-failures --version cd323b311b30
+        chatstrata label clear user-turns --run 3f2a... --yes
+    """
+    conn = connect(resolve_db_path(db))
+    try:
+        scope = count_labels(conn, pack, version=version, run_id=run_id)
+        if scope.labels == 0 and scope.runs == 0:
+            click.echo(f"No labels to clear for {pack!r} (nothing matched).")
+            return
+
+        where = pack
+        if version:
+            where += f" version {version}"
+        if run_id:
+            where += f" run {run_id}"
+        click.echo(f"{where}: {scope.labels} labels and {scope.runs} runs match.")
+
+        if dry_run:
+            return
+        if not yes:
+            click.confirm(f"Delete {scope.labels} labels and {scope.runs} runs?", abort=True)
+
+        clear_labels(conn, pack, version=version, run_id=run_id)
+        click.echo(f"Cleared {scope.labels} labels and {scope.runs} runs.")
     finally:
         conn.close()
 

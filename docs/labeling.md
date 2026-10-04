@@ -100,6 +100,23 @@ GROUP BY ALL ORDER BY q;
 `confidence`, `probabilities` (JSON), `pack_version`, `model`, `run_id`.
 `label_runs` records each invocation's model and token usage.
 
+## Throwing away an experiment
+
+Labels are derived data: deleting them never touches your archive, only the
+`labels` and `label_runs` tables. Use `label clear` to undo a run you don't
+want to keep.
+
+```bash
+chatstrata label clear tool-failures --dry-run        # show what would go
+chatstrata label clear tool-failures                  # whole pack (asks first)
+chatstrata label clear tool-failures --version <hash> # just one stale version
+chatstrata label clear user-turns --run <run-id> --yes
+```
+
+Editing a pack's questions or bumping its `state_version` changes its
+`pack_version`, so a re-run writes a fresh set of labels and leaves the old
+ones addressable by their version if you want to clear just those.
+
 ## Writing good questions
 
 The guidance in TypeSafe's
