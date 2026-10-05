@@ -140,6 +140,48 @@ Editing a pack's questions or bumping its `state_version` changes its
 `pack_version`, so a re-run writes a fresh set of labels and leaves the old
 ones addressable by their version if you want to clear just those.
 
+## Hiding labelled content from the MCP server
+
+If parts of your archive should never reach a model that reads it through
+`chatstrata serve` (say, security work whose text trips a content
+classifier), label it and give the server a filter:
+
+```bash
+chatstrata label run cyber
+chatstrata label run cyber-messages
+chatstrata serve --filter 'cyber:security_related>0.3' \
+                 --filter 'cyber-messages:security_related>0.3'
+```
+
+Or set `CHATSTRATA_MCP_FILTER` (comma-separated rules) in your MCP client's
+config for the server. A rule is `pack:question>threshold` for noul and score
+questions, or `pack:question=option` for choice questions
+(`cyber:posture=offensive`).
+
+With a filter on, the server shadows the archive tables with filtered views,
+so queries run unchanged and counts stay correct, but:
+
+- The text of a hidden block becomes `[hidden by chatstrata filter: <reason>]`
+  and its `payload` is NULL. Hiding a tool call also hides its result, and
+  the other way round.
+- Titles and metadata of conversations with hidden content are hidden, as are
+  metadata and attachment details of affected messages. `raw_events.payload`
+  is always NULL.
+- **It fails closed.** Anything a rule's pack covers but has no current label
+  for (new data, a failed request, a pack you edited) is hidden as
+  `unlabelled:<pack>` until you run the pack again. A filter that cannot be
+  applied (unknown pack or question, no labels table) refuses every query
+  rather than serving unfiltered data.
+- File access is switched off for the connection, and queries that name the
+  archive catalog directly (`<db>.main.content_blocks`) or read the full-text
+  index's internal tables are rejected.
+
+Content no rule's pack covers stays visible: `cyber` only sees tool calls, so
+pair it with `cyber-messages` for message text and thinking. The labels are a
+classifier's probabilities, so a lower threshold hides more. The filter
+prevents accidental exposure through the server; it is not access control
+against someone with the database file.
+
 ## Writing your own packs (TOML)
 
 A pack is a `.toml` file. Drop one in your packs directory and `chatstrata

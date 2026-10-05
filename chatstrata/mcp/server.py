@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 import duckdb
 from mcp.server.fastmcp import FastMCP
 
 from chatstrata.core.db import get_default_db_path
+from chatstrata.label.filter import FilterRule, apply_filter, check_query, parse_rules
 from chatstrata.mcp.safety import execute_safe
 
 logger = logging.getLogger(__name__)
@@ -85,8 +87,32 @@ mcp = FastMCP(
 )
 
 
+FILTER_ENV = "CHATSTRATA_MCP_FILTER"
+
+# Set by --filter; otherwise read from $CHATSTRATA_MCP_FILTER on every call.
+_filter_rules: list[FilterRule] | None = None
+
+
+def set_filter(rules: list[FilterRule] | None) -> None:
+    """Configure the content filter (None: use $CHATSTRATA_MCP_FILTER)."""
+    global _filter_rules
+    _filter_rules = rules
+
+
+def _active_filter() -> list[FilterRule]:
+    if _filter_rules is not None:
+        return _filter_rules
+    return parse_rules(os.environ.get(FILTER_ENV))
+
+
 def _open_readonly() -> duckdb.DuckDBPyConnection:
-    """Open a read-only DuckDB connection with extensions loaded."""
+    """Open a read-only DuckDB connection with extensions loaded.
+
+    With a content filter configured, the archive tables are shadowed by
+    filtered views and file access is switched off, so queries cannot reach
+    raw transcripts on disk. If the filter cannot be applied this raises
+    instead of returning an unfiltered connection.
+    """
     db_path = get_default_db_path()
     if not db_path.exists():
         raise FileNotFoundError(
@@ -102,6 +128,15 @@ def _open_readonly() -> duckdb.DuckDBPyConnection:
         conn.execute("LOAD vss")
     except (duckdb.IOException, duckdb.CatalogException):
         pass
+    rules = _active_filter()
+    if rules:
+        try:
+            apply_filter(conn, rules)
+            # One-way: cannot be re-enabled for the life of the connection.
+            conn.execute("SET enable_external_access = false")
+        except BaseException:
+            conn.close()
+            raise
     return conn
 
 
@@ -134,9 +169,18 @@ def query(sql: str) -> str:
     - payload column is JSON -- use ->> for extraction
     - Only SELECT/WITH/DESCRIBE/SHOW/PRAGMA are allowed
     - Results limited to 500 rows / 512 KB
+    - If a content filter is on, some text shows as "[hidden by chatstrata
+      filter: ...]" and its payload is NULL; that content is unavailable
     """
-    conn = _open_readonly()
     try:
+        conn = _open_readonly()
+    except (ValueError, FileNotFoundError) as exc:  # FilterError is a ValueError
+        return json.dumps({"error": str(exc)}, indent=2)
+    except duckdb.Error as exc:
+        return json.dumps({"error": f"Content filter could not be applied: {exc}"}, indent=2)
+    try:
+        if _active_filter():
+            check_query(sql, conn.execute("SELECT current_database()").fetchone()[0])
         cols, rows, truncated = execute_safe(conn, sql)
         result: dict = {
             "columns": cols,
@@ -167,7 +211,7 @@ def get_schema() -> str:
         tables_and_views = conn.execute(
             "SELECT table_name, table_type "
             "FROM information_schema.tables "
-            "WHERE table_schema = 'main' "
+            "WHERE table_schema = 'main' AND table_catalog = current_database() "
             "ORDER BY table_type, table_name"
         ).fetchall()
 
@@ -196,9 +240,19 @@ def get_schema() -> str:
 
         schema_text = "\n\n".join(schema_parts)
         stats_text = "\n".join(stats_parts)
+        rules = _active_filter()
+        filter_text = (
+            "\n## Content Filter\n"
+            f"On ({', '.join(map(str, rules))}). Flagged and not-yet-labelled content "
+            "shows as '[hidden by chatstrata filter: <reason>]' with NULL payload; "
+            "titles and metadata of affected conversations are hidden too. Refer "
+            "to tables unqualified (content_blocks, not <db>.main.content_blocks).\n"
+            if rules
+            else ""
+        )
 
         return f"""# ChatStrata Database Schema
-
+{filter_text}
 {schema_text}
 
 ## Row Counts
@@ -237,7 +291,17 @@ def main() -> None:
     )
     parser.add_argument("--host", default="127.0.0.1", help="Host for HTTP transports")
     parser.add_argument("--port", type=int, default=8462, help="Port for HTTP transports")
+    parser.add_argument(
+        "--filter",
+        action="append",
+        default=None,
+        metavar="RULE",
+        help=f"Hide content by label, e.g. cyber:security_related>0.3 (repeatable; "
+        f"default: ${FILTER_ENV})",
+    )
     args = parser.parse_args()
+    if args.filter:
+        set_filter(parse_rules(",".join(args.filter)))
 
     if args.transport == "stdio":
         mcp.run(transport="stdio")
