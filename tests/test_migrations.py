@@ -28,16 +28,14 @@ def test_fresh_db_version_is_zero(raw_conn):
 
 
 def test_latest_version():
-    assert LATEST_VERSION == 3
+    assert LATEST_VERSION == 4
 
 
 def test_apply_migrations_on_fresh_db(raw_conn):
     applied = apply_migrations(raw_conn)
-    assert len(applied) == 3
-    assert applied[0].version == 1
-    assert applied[1].version == 2
-    assert applied[2].version == 3
-    assert get_schema_version(raw_conn) == 3
+    assert len(applied) == 4
+    assert [m.version for m in applied] == [1, 2, 3, 4]
+    assert get_schema_version(raw_conn) == 4
 
     tables = {
         row[0]
@@ -51,11 +49,11 @@ def test_apply_migrations_on_fresh_db(raw_conn):
 
 def test_migrations_are_idempotent(raw_conn):
     first = apply_migrations(raw_conn)
-    assert len(first) == 3
+    assert len(first) == 4
 
     second = apply_migrations(raw_conn)
     assert second == []
-    assert get_schema_version(raw_conn) == 3
+    assert get_schema_version(raw_conn) == 4
 
 
 def test_migration_0003_adds_mtime_column(raw_conn):
@@ -68,6 +66,17 @@ def test_migration_0003_adds_mtime_column(raw_conn):
         ).fetchall()
     }
     assert "source_file_mtime" in cols
+
+
+def test_migration_0004_adds_label_tables(raw_conn):
+    apply_migrations(raw_conn)
+    tables = {
+        row[0]
+        for row in raw_conn.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+        ).fetchall()
+    }
+    assert {"labels", "label_runs"} <= tables
 
 
 def test_auto_migrate_on_connect(db):

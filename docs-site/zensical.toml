@@ -55,6 +55,7 @@ nav = [
     "mcp.md",
     "adapters.md",
     "privacy.md",
+    "labeling.md",
     "migrations.md",
   ] },
   { "CLI Reference" = "cli.md" },

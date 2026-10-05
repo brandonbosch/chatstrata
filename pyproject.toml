@@ -26,6 +26,7 @@ dependencies = [
     "pydantic>=2.0",
     "platformdirs>=4.0",
     "pytz>=2024.1",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.urls]
@@ -46,6 +47,9 @@ redact = [
 ]
 mcp = [
     "mcp[cli]>=1.12.0,<2",
+]
+jev = [
+    "typesafe-sdk>=0.7.2",
 ]
 dev = [
     "pytest>=8.0",

@@ -223,6 +223,28 @@ swaps the compacted database into place, and retains the original as a timestamp
 backup. After checking the compacted database, delete that backup to release the
 disk space. Pass `--no-backup` to remove it automatically after verification.
 
+## Labelling with a classifier (optional)
+
+`chatstrata label` runs [TypeSafe](https://docs.typesafe.ai/introduction)'s Jev
+classifier over your archive and stores typed answers in a `labels` table. The
+built-in packs classify every tool call's failure mode (compare harnesses and
+tools, e.g. omp `edit` vs Claude Code `Edit`) and every message you wrote
+(corrections, frustration, whether you said what "done" looks like).
+
+```bash
+uv tool install "chatstrata[jev]"
+export TYPESAFE_API_KEY=...
+chatstrata label run tool-failures --source omp --dry-run --show-state
+chatstrata label run tool-failures --source omp --limit 200
+chatstrata label summary tool-failures --by tool
+```
+
+This sends the selected content to the TypeSafe API, so it always shows an
+estimate and asks first. You can write your own packs as TOML files (no code)
+and drop them in your packs directory; the bundled `cyber` pack is a worked
+example that flags security-related tool calls so you can filter them out. See
+[docs/labeling.md](docs/labeling.md).
+
 ## Adding a source
 
 Each source (Claude Code, ChatGPT export, etc.) is an adapter that implements a
@@ -236,7 +258,9 @@ that register via entry points.
 ## Privacy
 
 Your transcript content stays on your machine. Standard ingestion and querying
-make no network calls. Semantic search uses local embeddings; the first run may
+make no network calls. The one exception is the opt-in `chatstrata label`
+command, which sends the items you select to the TypeSafe API after showing an
+estimate and asking for confirmation. Semantic search uses local embeddings; the first run may
 download the configured sentence-transformers model if it is not already cached.
 DuckDB's VSS extension is optional, and chatstrata only installs that extension
 when `CHATSTRATA_INSTALL_DUCKDB_VSS=1` is set.

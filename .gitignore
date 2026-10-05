@@ -67,3 +67,7 @@ docs-site/main.py
 
 # uv lockfiles are optional for this library repo
 uv.lock
+
+# Secrets
+.env
+.env.*

@@ -119,6 +119,10 @@ def query(sql: str) -> str:
     - tool_calls (VIEW): call_id, tool_name, input, conversation_id, project, created_at
     - sources: id, name
     - attachments: id, message_id, filename, mime_type
+    - labels: pack, target_kind, target_id, question, answer_type, value, choice,
+      confidence, probabilities (JSON), model -- classifier answers from
+      `chatstrata label`; target_id joins to content_blocks.id (tool_call)
+      or messages.id (message)
 
     Full-text search (BM25):
         WHERE fts_main_content_blocks.match_bm25(cb.id, 'search terms') IS NOT NULL
