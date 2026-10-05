@@ -1,0 +1,346 @@
+{
+  "conversations": [
+    {
+      "ended_at": "2026-02-10T14:05:30Z",
+      "message_count": 2,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Can you explain how Python decorators work?",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-02-10T14:00:00Z",
+          "metadata": {
+            "sender": "human"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg-001"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Python decorators are functions that modify the behavior of other functions. They use the @syntax and are a form of metaprogramming.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-02-10T14:00:15Z",
+          "metadata": {
+            "sender": "assistant"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg-002"
+        }
+      ],
+      "metadata": {
+        "message_count": 2
+      },
+      "project": null,
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "chat_messages": [
+              {
+                "attachments": [],
+                "content": [],
+                "created_at": "2026-02-10T14:00:00.000000+00:00",
+                "sender": "human",
+                "text": "Can you explain how Python decorators work?",
+                "uuid": "msg-001"
+              },
+              {
+                "attachments": [],
+                "content": [
+                  {
+                    "text": "Python decorators are functions that modify the behavior of other functions. They use the @syntax and are a form of metaprogramming.",
+                    "type": "text"
+                  }
+                ],
+                "created_at": "2026-02-10T14:00:15.000000+00:00",
+                "sender": "assistant",
+                "text": "Python decorators are functions that modify the behavior of other functions. They use the @syntax and are a form of metaprogramming.",
+                "uuid": "msg-002"
+              }
+            ],
+            "created_at": "2026-02-10T14:00:00.000000+00:00",
+            "name": "Understanding Python decorators",
+            "updated_at": "2026-02-10T14:05:30.000000+00:00",
+            "uuid": "conv-001"
+          },
+          "raw_path": "$INPUT/conversations.json"
+        }
+      ],
+      "raw_path": "$INPUT/conversations.json",
+      "source_id": "claude_export",
+      "source_native_id": "conv-001",
+      "started_at": "2026-02-10T14:00:00Z",
+      "title": "Understanding Python decorators"
+    },
+    {
+      "ended_at": "2026-02-11T09:45:00Z",
+      "message_count": 3,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "My FastAPI endpoint returns 422 for valid input. Here is the handler.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-02-11T09:30:00Z",
+          "metadata": {
+            "sender": "human"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg-003"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "The 422 error usually means Pydantic validation failed. Let me check your model definition.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "Try adding `Optional` to the `description` field since it can be null.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-02-11T09:31:00Z",
+          "metadata": {
+            "sender": "assistant"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg-004"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "That fixed it, thanks!",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-02-11T09:45:00Z",
+          "metadata": {
+            "sender": "human"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 2,
+          "source_native_id": "msg-005"
+        }
+      ],
+      "metadata": {
+        "message_count": 3
+      },
+      "project": null,
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "chat_messages": [
+              {
+                "attachments": [],
+                "content": [
+                  {
+                    "text": "My FastAPI endpoint returns 422 for valid input. Here is the handler.",
+                    "type": "text"
+                  }
+                ],
+                "created_at": "2026-02-11T09:30:00.000000+00:00",
+                "sender": "human",
+                "text": "My FastAPI endpoint returns 422 for valid input. Here is the handler.",
+                "uuid": "msg-003"
+              },
+              {
+                "attachments": [],
+                "content": [
+                  {
+                    "text": "The 422 error usually means Pydantic validation failed. Let me check your model definition.",
+                    "type": "text"
+                  },
+                  {
+                    "text": "Try adding `Optional` to the `description` field since it can be null.",
+                    "type": "text"
+                  }
+                ],
+                "created_at": "2026-02-11T09:31:00.000000+00:00",
+                "sender": "assistant",
+                "text": "The 422 error usually means Pydantic validation failed. Let me check your model definition.",
+                "uuid": "msg-004"
+              },
+              {
+                "attachments": [],
+                "content": [],
+                "created_at": "2026-02-11T09:45:00.000000+00:00",
+                "sender": "human",
+                "text": "That fixed it, thanks!",
+                "uuid": "msg-005"
+              }
+            ],
+            "created_at": "2026-02-11T09:30:00.000000+00:00",
+            "name": "Debugging a REST API",
+            "updated_at": "2026-02-11T09:45:00.000000+00:00",
+            "uuid": "conv-002"
+          },
+          "raw_path": "$INPUT/conversations.json"
+        }
+      ],
+      "raw_path": "$INPUT/conversations.json",
+      "source_id": "claude_export",
+      "source_native_id": "conv-002",
+      "started_at": "2026-02-11T09:30:00Z",
+      "title": "Debugging a REST API"
+    },
+    {
+      "ended_at": "2026-02-12T16:10:00Z",
+      "message_count": 2,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Can you review this configuration file I uploaded?",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 1,
+              "payload": {
+                "extracted_content": "server:\n  port: 8080\n  host: 0.0.0.0\ndatabase:\n  url: postgres://localhost/mydb",
+                "file_name": "config.yaml",
+                "file_size": 2048,
+                "file_type": "application/x-yaml"
+              },
+              "text": "config.yaml",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "attachment"
+            }
+          ],
+          "created_at": "2026-02-12T16:00:00Z",
+          "metadata": {
+            "sender": "human"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg-006"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "The configuration looks good overall. I notice the database URL uses localhost which will not work in a container environment. Consider using an environment variable instead.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-02-12T16:01:30Z",
+          "metadata": {
+            "sender": "assistant"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg-007"
+        }
+      ],
+      "metadata": {
+        "message_count": 2
+      },
+      "project": null,
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "chat_messages": [
+              {
+                "attachments": [
+                  {
+                    "extracted_content": "server:\n  port: 8080\n  host: 0.0.0.0\ndatabase:\n  url: postgres://localhost/mydb",
+                    "file_name": "config.yaml",
+                    "file_size": 2048,
+                    "file_type": "application/x-yaml"
+                  }
+                ],
+                "content": [],
+                "created_at": "2026-02-12T16:00:00Z",
+                "sender": "human",
+                "text": "Can you review this configuration file I uploaded?",
+                "uuid": "msg-006"
+              },
+              {
+                "attachments": [],
+                "content": [
+                  {
+                    "text": "The configuration looks good overall. I notice the database URL uses localhost which will not work in a container environment. Consider using an environment variable instead.",
+                    "type": "text"
+                  }
+                ],
+                "created_at": "2026-02-12T16:01:30Z",
+                "sender": "assistant",
+                "text": "The configuration looks good overall. I notice the database URL uses localhost which will not work in a container environment. Consider using an environment variable instead.",
+                "uuid": "msg-007"
+              }
+            ],
+            "created_at": "2026-02-12T16:00:00Z",
+            "name": null,
+            "updated_at": "2026-02-12T16:10:00Z",
+            "uuid": "conv-003"
+          },
+          "raw_path": "$INPUT/conversations.json"
+        }
+      ],
+      "raw_path": "$INPUT/conversations.json",
+      "source_id": "claude_export",
+      "source_native_id": "conv-003",
+      "started_at": "2026-02-12T16:00:00Z",
+      "title": "Can you review this configuration file I uploaded?"
+    }
+  ]
+}

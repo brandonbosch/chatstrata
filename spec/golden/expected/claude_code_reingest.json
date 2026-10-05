@@ -1,0 +1,357 @@
+{
+  "conversations": [
+    {
+      "ended_at": "2026-03-14T10:00:05Z",
+      "message_count": 2,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "hello, this transcript records no cwd",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:00Z",
+          "metadata": {
+            "cwd": null,
+            "request_id": null
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "u1"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "acknowledged",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:05Z",
+          "metadata": {
+            "cwd": null,
+            "request_id": null
+          },
+          "model": "claude-opus-4-7",
+          "parent_source_native_id": "u1",
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "a1"
+        }
+      ],
+      "metadata": {
+        "event_count": 2
+      },
+      "project": "/Users/example/other",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "message": {
+              "content": "hello, this transcript records no cwd",
+              "role": "user"
+            },
+            "timestamp": "2026-03-14T10:00:00Z",
+            "type": "user",
+            "uuid": "u1"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-other/no_cwd_session.jsonl"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "message": {
+              "content": [
+                {
+                  "text": "acknowledged",
+                  "type": "text"
+                }
+              ],
+              "model": "claude-opus-4-7",
+              "role": "assistant"
+            },
+            "parentUuid": "u1",
+            "timestamp": "2026-03-14T10:00:05Z",
+            "type": "assistant",
+            "uuid": "a1"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-other/no_cwd_session.jsonl"
+        }
+      ],
+      "raw_path": "$INPUT/projects/-Users-example-other/no_cwd_session.jsonl",
+      "source_id": "claude_code",
+      "source_native_id": "no_cwd_session",
+      "started_at": "2026-03-14T10:00:00Z",
+      "title": "hello, this transcript records no cwd"
+    },
+    {
+      "ended_at": "2026-03-14T10:00:30Z",
+      "message_count": 5,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Can you help me refactor the auth module?",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:00Z",
+          "metadata": {
+            "cwd": "/Users/example/myproj",
+            "request_id": null
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg-001"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Sure, let me start by reading the current auth module.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 1,
+              "payload": {
+                "input": {
+                  "path": "/Users/example/myproj/auth.py"
+                }
+              },
+              "text": null,
+              "tool_name": "view",
+              "tool_use_id": "tool-call-1",
+              "type": "tool_use"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:05Z",
+          "metadata": {
+            "cwd": null,
+            "request_id": null
+          },
+          "model": "claude-opus-4-7",
+          "parent_source_native_id": "msg-001",
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg-002"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "is_error": false,
+                "raw_content": "def login(user, password):\n    return check_password(user, password)\n"
+              },
+              "text": "def login(user, password):\n    return check_password(user, password)\n",
+              "tool_name": null,
+              "tool_use_id": "tool-call-1",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:06Z",
+          "metadata": {
+            "cwd": null,
+            "request_id": null
+          },
+          "model": null,
+          "parent_source_native_id": "msg-002",
+          "role": "user",
+          "sequence_index": 2,
+          "source_native_id": "msg-003"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "The function is too simple to refactor meaningfully without more context.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "This function is already pretty minimal. What specifically did you want to change?",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:12Z",
+          "metadata": {
+            "cwd": null,
+            "request_id": null
+          },
+          "model": "claude-opus-4-7",
+          "parent_source_native_id": "msg-003",
+          "role": "assistant",
+          "sequence_index": 3,
+          "source_native_id": "msg-004"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Add input validation.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-03-14T10:00:30Z",
+          "metadata": {
+            "cwd": null,
+            "request_id": null
+          },
+          "model": null,
+          "parent_source_native_id": "msg-004",
+          "role": "user",
+          "sequence_index": 4,
+          "source_native_id": "msg-005"
+        }
+      ],
+      "metadata": {
+        "event_count": 6
+      },
+      "project": "/Users/example/myproj",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "leafUuid": "msg-005",
+            "summary": "Refactor the user auth module",
+            "type": "summary"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "cwd": "/Users/example/myproj",
+            "message": {
+              "content": "Can you help me refactor the auth module?",
+              "role": "user"
+            },
+            "timestamp": "2026-03-14T10:00:00Z",
+            "type": "user",
+            "uuid": "msg-001"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl"
+        },
+        {
+          "line_number": 2,
+          "payload": {
+            "message": {
+              "content": [
+                {
+                  "text": "Sure, let me start by reading the current auth module.",
+                  "type": "text"
+                },
+                {
+                  "id": "tool-call-1",
+                  "input": {
+                    "path": "/Users/example/myproj/auth.py"
+                  },
+                  "name": "view",
+                  "type": "tool_use"
+                }
+              ],
+              "model": "claude-opus-4-7",
+              "role": "assistant"
+            },
+            "parentUuid": "msg-001",
+            "timestamp": "2026-03-14T10:00:05Z",
+            "type": "assistant",
+            "uuid": "msg-002"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl"
+        },
+        {
+          "line_number": 3,
+          "payload": {
+            "message": {
+              "content": [
+                {
+                  "content": "def login(user, password):\n    return check_password(user, password)\n",
+                  "tool_use_id": "tool-call-1",
+                  "type": "tool_result"
+                }
+              ],
+              "role": "user"
+            },
+            "parentUuid": "msg-002",
+            "timestamp": "2026-03-14T10:00:06Z",
+            "type": "user",
+            "uuid": "msg-003"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl"
+        },
+        {
+          "line_number": 4,
+          "payload": {
+            "message": {
+              "content": [
+                {
+                  "thinking": "The function is too simple to refactor meaningfully without more context.",
+                  "type": "thinking"
+                },
+                {
+                  "text": "This function is already pretty minimal. What specifically did you want to change?",
+                  "type": "text"
+                }
+              ],
+              "model": "claude-opus-4-7",
+              "role": "assistant"
+            },
+            "parentUuid": "msg-003",
+            "timestamp": "2026-03-14T10:00:12Z",
+            "type": "assistant",
+            "uuid": "msg-004"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl"
+        },
+        {
+          "line_number": 5,
+          "payload": {
+            "message": {
+              "content": "Add input validation.",
+              "role": "user"
+            },
+            "parentUuid": "msg-004",
+            "timestamp": "2026-03-14T10:00:30Z",
+            "type": "user",
+            "uuid": "msg-005"
+          },
+          "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl"
+        }
+      ],
+      "raw_path": "$INPUT/projects/-Users-example-myproj/sample_session.jsonl",
+      "source_id": "claude_code",
+      "source_native_id": "sample_session",
+      "started_at": "2026-03-14T10:00:00Z",
+      "title": "Refactor the user auth module"
+    }
+  ]
+}

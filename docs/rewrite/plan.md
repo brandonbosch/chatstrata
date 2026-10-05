@@ -244,7 +244,8 @@ database files as backups.
 Each milestone ends with something I can use. A milestone that fails its
 acceptance check gets fixed or redesigned before the next one starts.
 
-**M0 · Contract (Python, ~1 week)**
+**M0 · Contract (Python, ~1 week)**: done except real-machine timings. See
+[`spec/`](../../spec/README.md) and [baseline.md](baseline.md).
 - Golden fixtures: run the Python ingester over the existing adapter fixtures
   and dump the projection (conversations, messages, content_blocks, tool
   calls) as canonical JSON. Go must reproduce these.

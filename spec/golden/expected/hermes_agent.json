@@ -1,0 +1,510 @@
+{
+  "conversations": [
+    {
+      "ended_at": "1970-01-01T00:16:45Z",
+      "message_count": 7,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "earlier context (compacted)",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:39Z",
+          "metadata": {
+            "compacted": true,
+            "finish_reason": null,
+            "hermes_message_id": 9,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "9"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "You are a helpful agent.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:40.1Z",
+          "metadata": {
+            "finish_reason": null,
+            "hermes_message_id": 1,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "system",
+          "sequence_index": 1,
+          "source_native_id": "1"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "The login endpoint returns 500. Please fix it.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:40.2Z",
+          "metadata": {
+            "finish_reason": null,
+            "hermes_message_id": 2,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 2,
+          "source_native_id": "2"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "arguments": "{\"pattern\": \"auth\"}"
+              },
+              "text": null,
+              "tool_name": "search_files",
+              "tool_use_id": "call_1",
+              "type": "tool_use"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "Let me look at the auth code.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 2,
+              "payload": null,
+              "text": "The user reports a 500 on login.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:41Z",
+          "metadata": {
+            "finish_reason": "tool_calls",
+            "hermes_message_id": 3,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": "test-model",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 3,
+          "source_native_id": "3"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "/src/auth.py",
+              "tool_name": "search_files",
+              "tool_use_id": "call_1",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:41.5Z",
+          "metadata": {
+            "finish_reason": null,
+            "hermes_message_id": 4,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "tool",
+          "sequence_index": 4,
+          "source_native_id": "4"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Summary of earlier turns: the login bug was diagnosed.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:42.5Z",
+          "metadata": {
+            "compressed_summary": true,
+            "finish_reason": "stop",
+            "hermes_message_id": 6,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": "test-model",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 5,
+          "source_native_id": "6"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Fixed the bug in auth.py.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "The fix is a one-liner.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            }
+          ],
+          "created_at": "1970-01-01T00:16:43Z",
+          "metadata": {
+            "finish_reason": "stop",
+            "hermes_message_id": 7,
+            "profile_name": "default",
+            "source": "cli"
+          },
+          "model": "test-model",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 6,
+          "source_native_id": "7"
+        }
+      ],
+      "metadata": {
+        "hermes_source": "cli",
+        "model": "test-model",
+        "session_message_count": 6,
+        "tool_call_count": 2
+      },
+      "project": "/home/example/project",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "cwd": "/home/example/project",
+            "display_name": null,
+            "ended_at": 1005.0,
+            "id": "sess_1",
+            "message_count": 6,
+            "model": "test-model",
+            "profile_name": "default",
+            "source": "cli",
+            "started_at": 1000.0,
+            "system_prompt": null,
+            "title": "Fix the login bug",
+            "tool_call_count": 2
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 1,
+            "content": "earlier context (compacted)",
+            "display_identity": null,
+            "finish_reason": null,
+            "id": 9,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "user",
+            "session_id": "sess_1",
+            "timestamp": 999.0,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 2,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "You are a helpful agent.",
+            "display_identity": null,
+            "finish_reason": null,
+            "id": 1,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "system",
+            "session_id": "sess_1",
+            "timestamp": 1000.1,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 3,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "The login endpoint returns 500. Please fix it.",
+            "display_identity": null,
+            "finish_reason": null,
+            "id": 2,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "user",
+            "session_id": "sess_1",
+            "timestamp": 1000.2,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 4,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "Let me look at the auth code.",
+            "display_identity": null,
+            "finish_reason": "tool_calls",
+            "id": 3,
+            "reasoning": "The user reports a 500 on login.",
+            "reasoning_content": null,
+            "role": "assistant",
+            "session_id": "sess_1",
+            "timestamp": 1001.0,
+            "tool_call_id": null,
+            "tool_calls": "[{\"id\": \"call_1\", \"type\": \"function\", \"function\": {\"name\": \"search_files\", \"arguments\": \"{\\\"pattern\\\": \\\"auth\\\"}\"}}]",
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 5,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "/src/auth.py",
+            "display_identity": null,
+            "finish_reason": null,
+            "id": 4,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "tool",
+            "session_id": "sess_1",
+            "timestamp": 1001.5,
+            "tool_call_id": "call_1",
+            "tool_calls": null,
+            "tool_name": "search_files"
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 6,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 0,
+            "compacted": 0,
+            "content": "outdated draft reply",
+            "display_identity": null,
+            "finish_reason": "stop",
+            "id": 5,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "assistant",
+            "session_id": "sess_1",
+            "timestamp": 1002.0,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 7,
+          "payload": {
+            "_compressed_summary": 1,
+            "active": 1,
+            "compacted": 0,
+            "content": "Summary of earlier turns: the login bug was diagnosed.",
+            "display_identity": null,
+            "finish_reason": "stop",
+            "id": 6,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "assistant",
+            "session_id": "sess_1",
+            "timestamp": 1002.5,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 8,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "Fixed the bug in auth.py.",
+            "display_identity": null,
+            "finish_reason": "stop",
+            "id": 7,
+            "reasoning": "The fix is a one-liner.",
+            "reasoning_content": null,
+            "role": "assistant",
+            "session_id": "sess_1",
+            "timestamp": 1003.0,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 9,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "",
+            "display_identity": null,
+            "finish_reason": null,
+            "id": 8,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "user",
+            "session_id": "sess_1",
+            "timestamp": 1004.0,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        }
+      ],
+      "raw_path": "$INPUT/state.db",
+      "source_id": "hermes_agent",
+      "source_native_id": "sess_1",
+      "started_at": "1970-01-01T00:16:40Z",
+      "title": "Fix the login bug"
+    },
+    {
+      "ended_at": "1970-01-01T00:33:20.5Z",
+      "message_count": 1,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "hello",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "1970-01-01T00:33:20.5Z",
+          "metadata": {
+            "finish_reason": null,
+            "hermes_message_id": 10,
+            "profile_name": "default",
+            "source": "telegram"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "10"
+        }
+      ],
+      "metadata": {
+        "hermes_source": "telegram",
+        "model": "test-model",
+        "session_message_count": 1,
+        "tool_call_count": 0
+      },
+      "project": null,
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "cwd": null,
+            "display_name": null,
+            "ended_at": null,
+            "id": "sess_2",
+            "message_count": 1,
+            "model": "test-model",
+            "profile_name": "default",
+            "source": "telegram",
+            "started_at": 2000.0,
+            "system_prompt": null,
+            "title": "Plan sprint",
+            "tool_call_count": 0
+          },
+          "raw_path": "$INPUT/state.db"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "_compressed_summary": 0,
+            "active": 1,
+            "compacted": 0,
+            "content": "hello",
+            "display_identity": null,
+            "finish_reason": null,
+            "id": 10,
+            "reasoning": null,
+            "reasoning_content": null,
+            "role": "user",
+            "session_id": "sess_2",
+            "timestamp": 2000.5,
+            "tool_call_id": null,
+            "tool_calls": null,
+            "tool_name": null
+          },
+          "raw_path": "$INPUT/state.db"
+        }
+      ],
+      "raw_path": "$INPUT/state.db",
+      "source_id": "hermes_agent",
+      "source_native_id": "sess_2",
+      "started_at": "1970-01-01T00:33:20Z",
+      "title": "Plan sprint"
+    }
+  ]
+}

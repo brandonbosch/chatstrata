@@ -1,0 +1,141 @@
+{
+  "format_version": 1,
+  "status": "proposed: rules follow docs/rewrite/plan.md; review before M2 implements them",
+  "scenarios": [
+    {
+      "name": "same_session_two_devices",
+      "rule": "The same session observed by two devices is one conversation; identical ranges are deduplicated.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "Add a relay."}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "Sure."}]}},
+        "u2": {"type": "user", "uuid": "u2", "parentUuid": "a1", "timestamp": "2026-10-01T10:01:00Z", "message": {"role": "user", "content": "Use tsnet."}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1", "u2"]},
+        {"device": "mac1", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1", "u2"]}
+      ],
+      "expected": {"conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2"]}]}
+    },
+    {
+      "name": "overlapping_appends",
+      "rule": "Overlapping ranges from different devices merge into the union, in source order.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "one"}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "two"}]}},
+        "u2": {"type": "user", "uuid": "u2", "parentUuid": "a1", "timestamp": "2026-10-01T10:01:00Z", "message": {"role": "user", "content": "three"}},
+        "a2": {"type": "assistant", "uuid": "a2", "parentUuid": "u2", "timestamp": "2026-10-01T10:01:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "four"}]}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1"]},
+        {"device": "mac1", "seq": 4, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 1, "lines": ["a1", "u2", "a2"]}
+      ],
+      "expected": {"conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2", "a2"]}]}
+    },
+    {
+      "name": "out_of_order_delivery",
+      "rule": "The projection depends on the set of observations, not the order they arrive in.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "one"}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "two"}]}},
+        "u2": {"type": "user", "uuid": "u2", "parentUuid": "a1", "timestamp": "2026-10-01T10:01:00Z", "message": {"role": "user", "content": "three"}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 2, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 2, "lines": ["u2"]},
+        {"device": "linux", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1"]}
+      ],
+      "check_all_delivery_orders": true,
+      "expected": {"conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2"]}]}
+    },
+    {
+      "name": "duplicate_delivery",
+      "rule": "Receiving the same segment twice changes nothing.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "one"}}
+      },
+      "observations": [
+        {"device": "mac2", "seq": 7, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1"]},
+        {"device": "mac2", "seq": 7, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1"]}
+      ],
+      "expected": {"conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1"]}]}
+    },
+    {
+      "name": "stale_snapshot_after_fuller_history",
+      "rule": "A shorter or stale observation never removes history that another observation established.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "one"}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "two"}]}},
+        "u2": {"type": "user", "uuid": "u2", "parentUuid": "a1", "timestamp": "2026-10-01T10:01:00Z", "message": {"role": "user", "content": "three"}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 3, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1", "u2"]},
+        {"device": "mac1", "seq": 9, "source": "claude_code", "locator": "s1", "kind": "snapshot", "lines": ["u1", "a1"]}
+      ],
+      "expected": {"conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2"]}]}
+    },
+    {
+      "name": "divergent_snapshots",
+      "rule": "Two devices saw different continuations of the same session. Keep both; neither overwrites the other. Siblings are ordered by timestamp, then native id. Record the divergence.",
+      "decision_needed": "Is 'keep both as siblings' the right presentation, or should the projection pick one branch as the main line?",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "one"}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "two"}]}},
+        "u2x": {"type": "user", "uuid": "u2x", "parentUuid": "a1", "timestamp": "2026-10-01T10:01:00Z", "message": {"role": "user", "content": "branch x"}},
+        "u2y": {"type": "user", "uuid": "u2y", "parentUuid": "a1", "timestamp": "2026-10-01T10:02:00Z", "message": {"role": "user", "content": "branch y"}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "snapshot", "lines": ["u1", "a1", "u2x"]},
+        {"device": "mac1", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "snapshot", "lines": ["u1", "a1", "u2y"]}
+      ],
+      "expected": {
+        "conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2x", "u2y"], "parents": {"u2x": "a1", "u2y": "a1"}}],
+        "divergences": [{"source": "claude_code", "locator": "s1", "devices": ["linux", "mac1"]}]
+      }
+    },
+    {
+      "name": "repeated_identical_messages",
+      "rule": "Messages with identical content but different native ids are distinct; identity never comes from content alone.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "continue"}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "ok"}]}},
+        "u2": {"type": "user", "uuid": "u2", "parentUuid": "a1", "timestamp": "2026-10-01T10:01:00Z", "message": {"role": "user", "content": "continue"}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1", "u2"]}
+      ],
+      "expected": {"conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2"]}]}
+    },
+    {
+      "name": "same_locator_different_scope",
+      "rule": "Conversation identity includes the account scope, so equal source ids from different accounts stay separate.",
+      "events": {
+        "m1": {"uuid": "m1", "sender": "human", "text": "personal account", "created_at": "2026-10-01T10:00:00Z"},
+        "m2": {"uuid": "m2", "sender": "human", "text": "other account", "created_at": "2026-10-01T11:00:00Z"}
+      },
+      "observations": [
+        {"device": "linux", "seq": 1, "source": "claude_export", "scope": "org-personal", "locator": "conv-1", "kind": "snapshot", "lines": ["m1"]},
+        {"device": "mac1", "seq": 1, "source": "claude_export", "scope": "org-other", "locator": "conv-1", "kind": "snapshot", "lines": ["m2"]}
+      ],
+      "expected": {
+        "conversations": [
+          {"source": "claude_export", "scope": "org-other", "locator": "conv-1", "messages": ["m2"]},
+          {"source": "claude_export", "scope": "org-personal", "locator": "conv-1", "messages": ["m1"]}
+        ]
+      }
+    },
+    {
+      "name": "tombstone_prevents_resurrection",
+      "rule": "An archive deletion hides the conversation, and later observations of it (e.g. another device resyncing the file) stay hidden.",
+      "events": {
+        "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "secret"}},
+        "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "noted"}]}}
+      },
+      "observations": [
+        {"device": "linux", "seq": 1, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1"]},
+        {"device": "linux", "seq": 2, "source": "claude_code", "locator": "s1", "kind": "tombstone"},
+        {"device": "mac1", "seq": 5, "source": "claude_code", "locator": "s1", "kind": "append", "offset_lines": 0, "lines": ["u1", "a1"]}
+      ],
+      "check_all_delivery_orders": true,
+      "expected": {"conversations": [], "hidden": [{"source": "claude_code", "locator": "s1"}]}
+    }
+  ]
+}
