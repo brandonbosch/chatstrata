@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-10-04
 
 - Add Linux support to `chatstrata schedule`: `install`, `uninstall`, and `status` now manage a systemd user timer (`chatstrata-sync.timer` / `chatstrata-sync.service`) that runs `chatstrata ingest --auto` on the configured interval, with logs in the journal.
 - Add `chatstrata label` (optional `jev` extra) to classify archive data with TypeSafe's Jev model. Built-in packs: `tool-failures` labels every tool call's failure mode and whether the agent caused it; `user-turns` labels your own messages by intent, frustration, and whether they state done criteria. `label run` prints an item count and cost estimate and asks before sending anything (`--dry-run --show-state` shows exactly what would be sent); re-runs skip items already labelled under the same pack version. `label summary` aggregates by source, tool, model, project, month, or quarter. `label clear` deletes a pack's labels (scoped to a `--version` or `--run` if given) so an experiment can be thrown away without touching the archive.
