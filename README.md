@@ -76,15 +76,15 @@ chatstrata schedule status               # check that it's running
 ```
 
 On macOS this installs a launchd agent that runs `chatstrata ingest --auto`
-on the configured interval. Logs go to `~/Library/Logs/chatstrata/`. To stop
+on the configured interval. Logs go to `~/Library/Logs/chatstrata/`. On Linux it
+installs a systemd user timer (`chatstrata-sync.timer`); logs go to the journal
+(`journalctl --user -u chatstrata-sync.service`), and
+`loginctl enable-linger` keeps it running while you are logged out. To stop
 background sync:
 
 ```bash
 chatstrata schedule uninstall
 ```
-
-> **Linux:** systemd scheduling is not yet implemented. Use cron as a workaround:
-> `*/15 * * * * chatstrata ingest --auto`
 
 ### 4. Query your archive
 
