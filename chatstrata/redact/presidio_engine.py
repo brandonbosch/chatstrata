@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
-import sys
 from collections import defaultdict
 
 from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
@@ -69,22 +69,32 @@ class PresidioEngine:
     def _load_nlp_engine():
         """Try to load a spaCy NLP engine, falling back gracefully."""
         try:
+            import spacy
             from presidio_analyzer.nlp_engine import SpacyNlpEngine
-
-            for model in ("en_core_web_lg", "en_core_web_sm"):
-                try:
-                    return SpacyNlpEngine(models=[{"lang_code": "en", "model_name": model}])
-                except OSError:
-                    continue
-            print(
-                "Warning: No spaCy English model found. "
-                "NLP-based recognizers (names, locations) will be unavailable. "
-                "Install with: python -m spacy download en_core_web_lg",
-                file=sys.stderr,
-            )
         except ImportError:
-            pass
-        return None
+            return None
+
+        for model in ("en_core_web_lg", "en_core_web_sm"):
+            try:
+                nlp = spacy.load(model)
+                engine = SpacyNlpEngine(
+                    models=[{"lang_code": "en", "model_name": model}]
+                )
+                engine.nlp = {"en": nlp}
+                return engine
+            except OSError:
+                continue
+
+        engine = SpacyNlpEngine(
+            models=[{"lang_code": "en", "model_name": "en_core_web_sm"}]
+        )
+        engine.nlp = {"en": spacy.blank("en")}
+        logging.getLogger(__name__).warning(
+            "No spaCy English model found. "
+            "NLP-based recognizers (names, locations) will be unavailable. "
+            "Install with: python -m spacy download en_core_web_lg",
+        )
+        return engine
 
     def detect(self, text: str) -> list[Entity]:
         """Return entities found in text without modifying it."""

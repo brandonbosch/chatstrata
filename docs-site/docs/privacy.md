@@ -38,7 +38,7 @@ The default `PresidioEngine` loads all of Presidio's predefined recognizers **pl
 
 ## Custom recognizers
 
-Presidio's built-in recognizers handle standard PII (emails, phone numbers, credit cards, SSNs). chatstrata adds four recognizer modules targeting developer-specific secrets that appear constantly in LLM transcripts:
+Presidio's built-in recognizers handle standard PII (emails, phone numbers, credit cards, SSNs). chatstrata adds seven recognizer modules targeting developer-specific secrets that appear constantly in LLM transcripts:
 
 **API keys** (`chatstrata/redact/recognizers/api_keys.py`):
 
@@ -57,6 +57,17 @@ Presidio's built-in recognizers handle standard PII (emails, phone numbers, cred
 **Tokens** (`chatstrata/redact/recognizers/tokens.py`) -- matches JWT tokens (the `eyJ...` three-segment format) and `Bearer` authorization headers with sufficiently long token values.
 
 **Connection strings** (`chatstrata/redact/recognizers/connection_strings.py`) -- matches `postgresql://`, `mysql://`, `mongodb://`, and `mongodb+srv://` URLs, which typically contain embedded credentials.
+
+**Git remotes** (`chatstrata/redact/recognizers/git_remotes.py`) -- matches credential-bearing HTTPS URLs (`https://user:token@host/...`) and SSH git URLs (`git@host:org/repo.git`) that appear in git remote output and clone commands.
+
+**Hostnames and private IPs** (`chatstrata/redact/recognizers/hostnames.py`):
+
+| Entity type | What it matches | Confidence |
+|---|---|---|
+| `INTERNAL_HOSTNAME` | `*.internal`, `*.local`, `*.corp`, `*.lan`, `*.intranet`, `*.svc.cluster.local` (Kubernetes) | 0.80-0.85 |
+| `PRIVATE_IP` | RFC 1918 addresses: `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x` | 0.75 |
+
+**Private keys** (`chatstrata/redact/recognizers/private_keys.py`) -- matches PEM-encoded private key headers (`-----BEGIN RSA PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, etc.). Does not match public keys or certificates.
 
 ### Filtering noisy entity types
 
@@ -140,13 +151,49 @@ For `mask` mode, the mapping looks like `{"[EMAIL_ADDRESS_1]": "test@example.com
 
 The hash mode uses a random salt (generated per engine instance) to prevent rainbow-table attacks against the hashes. You can also supply a fixed salt for deterministic output across runs.
 
+## Customizing detection from Python
+
+The CLI exposes `--allow-entity` to un-deny specific types, but for full control use the Python API:
+
+```python
+from chatstrata.redact.presidio_engine import PresidioEngine, DEFAULT_DENY_ENTITY_TYPES
+
+# Add types to the deny list (e.g., skip internal hostnames and private IPs)
+engine = PresidioEngine(
+    deny_entity_types=DEFAULT_DENY_ENTITY_TYPES | {"INTERNAL_HOSTNAME", "PRIVATE_IP"},
+)
+
+# Enable a normally-denied type (e.g., detect person names)
+engine = PresidioEngine(
+    deny_entity_types=DEFAULT_DENY_ENTITY_TYPES - {"PERSON"},
+)
+
+# Detect everything -- no deny list at all
+engine = PresidioEngine(deny_entity_types=frozenset())
+
+# Higher threshold = fewer but higher-confidence matches (default: 0.35)
+engine = PresidioEngine(score_threshold=0.5)
+
+# Fixed salt for reproducible hash-mode output across runs
+engine = PresidioEngine(hash_salt="my-stable-salt")
+```
+
+## Limitations
+
+- **Best-effort, not guaranteed.** Regex-based recognizers miss novel formats and context-dependent secrets. Always review output before publishing.
+- **English only.** The NLP engine (spaCy) is configured for English. Entity types that rely on NLP (`PERSON`, `ORGANIZATION`, `LOCATION`) won't work well in other languages.
+- **No `--deny-entity` CLI flag.** You can allow denied types via `--allow-entity`, but you can't deny additional types from the CLI -- use the Python API for that.
+- **No persistence.** The interactive reviewer shows redacted output but doesn't write changes back to the database.
+- **Score threshold is global.** You can't set per-entity-type thresholds; the same `score_threshold` applies to all recognizers.
+- **Pattern-only for custom recognizers.** The chatstrata-specific recognizers use regex patterns, not NLP. They won't catch secrets that don't match known formats.
+
 ## Key entry points
 
 | File | Purpose |
 |---|---|
 | `chatstrata/redact/base.py` | `RedactionEngine` protocol, `RedactionMode` enum, `Entity` and `RedactionResult` types |
 | `chatstrata/redact/presidio_engine.py` | `PresidioEngine` -- the default engine implementation |
-| `chatstrata/redact/recognizers/` | Four custom recognizer modules (API keys, paths, tokens, connection strings) |
+| `chatstrata/redact/recognizers/` | Seven custom recognizer modules (API keys, paths, tokens, connection strings, git remotes, hostnames, private keys) |
 | `chatstrata/redact/cli.py` | CLI commands: `redact text`, `redact query`, `redact interactive` |
 
 ## Related
