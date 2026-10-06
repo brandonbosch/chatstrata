@@ -87,3 +87,12 @@ Options considered:
   protects future segments.
 - Local data stays plaintext. Full local encryption remains a separate, later
   decision.
+
+## Amendment (M3, 2026-10)
+
+Point 3 changed in implementation: the relay is a plain HTTP service that the
+user exposes with `tailscale serve` (or any HTTPS proxy), not a `tsnet` node.
+Authorization uses a bearer token derived from the space key instead of
+tailnet identity; tailnet ACLs still control who can reach it. Segments are
+encrypted with age to an X25519 key shared by the space. Details and
+reasons: `docs/rewrite/sync.md`.

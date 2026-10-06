@@ -275,7 +275,10 @@ claude.ai export adapter.
   identical result. Killing the process between log write and projection
   update loses nothing.
 
-**M3 · Relay and sync**
+**M3 · Relay and sync**: built; see [sync.md](sync.md). The relay is a plain
+HTTP service behind `tailscale serve` rather than a `tsnet` node (reasons in
+sync.md). Tested with simulated devices and a local relay; the run on two real
+machines is still to do.
 - `chatstrata relay` (tsnet), `daemon`, `pair`, `join`, `devices`, `sync`.
 - Acceptance on two real machines: both ingest different sessions offline,
   reconnect, and end up with the same `search` and `stats` output, no

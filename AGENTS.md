@@ -82,7 +82,11 @@ The Go binary uses its own archive (`chatstrata-go.duckdb`, or
 `chatstrata-go.log/` is the observation log: the source of truth, from which
 `chatstrata rebuild` recreates the `.duckdb` file. Never write to the
 projection except through the projector (`internal/project`), or a rebuild
-will lose it. Format and merge rules: `docs/rewrite/observation-log.md`.
+will lose it. Format and merge rules: `docs/rewrite/observation-log.md`. Sync between devices
+(`internal/devsync`, `internal/relay`) only moves encrypted segments; how to
+set it up and its security limits: `docs/rewrite/sync.md`. Never log or
+print `space.key` or pairing codes except where `pair` shows the code on
+purpose.
 Go-only schema migrations live in `internal/store/migrations/` and continue
 the shared numbering. To port an
 adapter: add it under `internal/sources/`, register it in `internal/cli`, and
