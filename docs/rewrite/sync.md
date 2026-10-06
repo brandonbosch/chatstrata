@@ -254,3 +254,34 @@ fine and the query simply matched nothing.
 --install-fts` when the extension is missing) when search fell back to
 substring matching. `search --json` with no matches now prints `[]` instead
 of the text message. Covered by `TestSearchWithNoMatches`.
+
+#### Verifying 78625b3 on the relay node
+
+Rebuilt `~/.local/bin/chatstrata` at `78625b3` (a regular file here, not a
+symlink), restarted the daemon; `go vet`/`gofmt` clean and the full suite
+passes, including `TestSearchWithNoMatches`. On the live archive:
+
+```text
+search qqqwwweee123        → No results.        (one line, no reindex hint)
+search qqqwwweee123 --json → []
+search refactor            → 13 results
+```
+
+Daemon on the new binary, next cycle: `claude_code: logged 1 changed
+conversations` then `sync: uploaded 1, downloaded 0 segments, 0 conversations
+updated` — no warnings.
+
+Reverse probe, for the peer to confirm the other direction: the relay node
+ingested a synthetic session carrying `SYNCPROBE-OMARCHY-1791313021`. It is
+searchable straight away (rank 1, score 8.50, no reindex) and uploaded as
+segment 2 of `919cce88…`. After echo-1's next `sync` the same token should
+rank 1 there. Post-probe totals on the relay node: 34 conversations / 3857
+messages / 3863 blocks, and the fingerprints become:
+
+```sql
+select md5(string_agg(id, ',' order by id)) from conversations;  -- 2347c98d954f9897452a714a63c4f040
+select md5(string_agg(id, ',' order by id)) from messages;       -- 0c3da56cc21a9f36cb39f27180f7dd22
+```
+
+(The earlier `ea5d2a45…` / `b8e0addc…` fingerprints are pre-probe and now
+stale.)
