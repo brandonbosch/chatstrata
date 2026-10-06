@@ -157,3 +157,61 @@ the printed join code to B out of band, `chatstrata join <code>` there. Ingest
 on both, `sync` both, then diff `search`/`stats`. Since the gap 1 fix no
 manual `reindex` is needed, once each device has the FTS extension
 (`chatstrata reindex --install-fts` once).
+
+### Cross-tailscale run: echo-1 ↔ omarchy-macbook (2026-10-06)
+
+First run against a **real tailnet** (the verification above was same-host,
+local HTTP). Both ends on `claude/amazing-davinci-o1nlsv` (`45a8e2d`), the
+commit with the stale-search fix.
+
+Environment:
+
+- echo-1 `100.84.116.80`, Linux **amd64**, Go `1.27.0`, gcc 16.2.1 — built
+  natively (`go build -o ~/.local/bin/chatstrata ./cmd/chatstrata`, 80 MB ELF,
+  `version` → `chatstrata dev`).
+- omarchy-macbook `100.78.103.27`, the relay, `https://omarchy-macbook.tail59d8d.ts.net`.
+- Reachability: `tailscale ping` succeeds (via DERP `den`, ~18 ms; *no direct
+  connection*), `curl` → `http_code=404` (server present, MagicDNS + TLS
+  valid). So the path is relayed, not peer-to-peer, for this pair.
+- Build note: `~/.local/bin/chatstrata` was a symlink into the uv-managed
+  Python tool; `go build -o` would follow it and overwrite the Python
+  binary. Remove the symlink first.
+
+Leg 1 — join and converge:
+
+```text
+ingest claude_code   → Ingested: 29  Skipped: 2  Failed: 0
+join <code>          → Joined. This device (92b52956) …
+                       Synced. Uploaded: 5 segments  Downloaded: 1 segments
+                                Conversations updated: 3
+sync                 → Uploaded: 0  Downloaded: 0   (idle)
+devices              → 919cce88… 1/1   ·   92b52956… (this device) 5/5
+stats                → 32 conversations, 3853 messages, 3859 blocks, 1225 tool_calls
+search refactor      → 13 results
+```
+
+Leg 2 — incremental cross-machine path, using a **genuine** new transcript
+(a headless `claude -p` turn, carried on the wire as the token
+`SYNCPROBE-ECHO1-1791311659`) rather than an edited fixture:
+
+```text
+ingest claude_code   → Ingested: 1  Skipped: 31  Failed: 0
+sync                 → Uploaded: 1 segments  Downloaded: 0
+search <token>       → exact matches at ranks 1–2 (scores 8.47 / 8.35)
+devices              → this device now 6/6 locally and on relay
+stats                → 33 conversations, 3855 messages, 3861 blocks, 1225 tool_calls
+search refactor      → 13 results (unchanged)
+sync                 → Uploaded: 0  Downloaded: 0   (idle)
+```
+
+Confirms, on two real hosts across a tailnet: one-sided ingest → `sync`
+uploads the missing segment; the peer's projection picks up exactly the delta
+(+1 conversation, +2 messages, +6 content blocks; tool calls unchanged); and
+**search is current with no `reindex`** — the gap 1 fix holds end-to-end here.
+The relay's per-device segment count matched local after each leg.
+
+Observations for the relay-side diff (pending): a unique-token search returns
+a **fixed 20 rows** regardless of match strength, with only the true matches
+ranked top — diffing "same `search` output" between nodes should compare the
+top-ranked rows, not the row count. The probe token above is the diff key;
+the peer should surface it at ranks 1–2 once it syncs.
