@@ -289,8 +289,15 @@ machines is still to do.
 **M4 · Parity**
 - Remaining adapters, `analyze`, MCP server, `schedule` (launchd/systemd
   installing the daemon), `paths`, `sources`, `mcp config`.
+- Incremental search index. Since M3, every catch-up that changed anything
+  rebuilds the whole FTS index (about 1.5 s on the 8 MB benchmark corpus), so
+  its cost grows with the archive, not with the change. Fix before the
+  scheduled daemon runs every 5 minutes against a multi-GB archive: update
+  only the changed conversations, or debounce the rebuild. (Found in the M3
+  acceptance run, brandonbosch/chatstrata#29.)
 - Acceptance: golden fixtures pass for every adapter; MCP works from Claude
-  Code and Codex with the same queries agents use today.
+  Code and Codex with the same queries agents use today; a daemon cycle that
+  changed one conversation doesn't scale with archive size.
 
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
