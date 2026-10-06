@@ -1,5 +1,11 @@
 # Contributing to chatstrata
 
+> **A Go rewrite is under way** ([plan](docs/rewrite/plan.md)). The Python app
+> is feature-frozen: bug fixes and performance improvements are welcome, new
+> features go into the Go version. New adapters are still welcome, but will be
+> ported to Go, so include fixtures under `spec/golden/inputs/` and a case in
+> `spec/golden/cases.json` (see [spec/README.md](spec/README.md)).
+
 Thanks for your interest. The most valuable contributions right now are **new
 source adapters** — anything that adds a new provider or tool to the supported
 list.

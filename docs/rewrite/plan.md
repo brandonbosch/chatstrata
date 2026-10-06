@@ -254,7 +254,7 @@ acceptance check gets fixed or redesigned before the next one starts.
 - Write the projection-rule fixtures listed above as test cases.
 
 **M1 · Local Go core**
-- Go module under `go/` in this repo. CLI with `ingest` (claude_code only),
+- Go module at the repo root (`cmd/chatstrata`, `internal/`). CLI with `ingest` (claude_code only),
   `query`, `search`, `stats`, `doctor`. DuckDB via `duckdb-go`, schema from
   the existing migrations.
 - Acceptance: matches the M0 golden output for claude_code; faster than the
@@ -284,6 +284,11 @@ acceptance check gets fixed or redesigned before the next one starts.
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
   install instructions without Python.
+- chatstrata is on PyPI, so `pip install chatstrata` users need a path over.
+  Either publish a final Python release whose README and CLI point to the Go
+  binary, or keep publishing to PyPI as platform wheels that contain the Go
+  binary (the way ruff and uv ship), so `pip install` and `uvx chatstrata`
+  keep working. Decide before M5.
 - Two weeks of parallel use on all three personal machines; then make v2 the
   daily driver. Python stays installable as a fallback, and `import-legacy` is
   how anything it collected in the meantime comes back.
