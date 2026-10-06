@@ -1,15 +1,15 @@
 module github.com/brandonbosch/chatstrata
 
-go 1.24.0
-
-toolchain go1.24.7
+go 1.25.0
 
 require (
+	filippo.io/age v1.3.2
 	github.com/duckdb/duckdb-go/v2 v2.10506.0
 	github.com/klauspost/compress v1.18.3
 )
 
 require (
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/apache/arrow-go/v18 v18.5.1 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.10506.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64 v0.10506.0 // indirect
@@ -24,11 +24,12 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.25 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
-	golang.org/x/mod v0.32.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/telemetry v0.0.0-20260116145544-c6413dc483f5 // indirect
-	golang.org/x/tools v0.41.0 // indirect
+	golang.org/x/mod v0.39.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/telemetry v0.0.0-20260811182544-a038080d80e5 // indirect
+	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 )

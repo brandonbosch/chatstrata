@@ -62,6 +62,12 @@ func init() {
 		{"reindex", "Rebuild the full-text search index", runReindex},
 		{"rebuild", "Rebuild the archive from its observation log", runRebuild},
 		{"import-legacy", "Import a Python-era archive into the observation log", runImportLegacy},
+		{"pair", "Set up sync and print a code for adding devices", runPair},
+		{"join", "Join this device to a space with a pairing code", runJoin},
+		{"sync", "Exchange observations with the relay", runSync},
+		{"devices", "List the devices in this space", runDevices},
+		{"daemon", "Collect and sync periodically", runDaemon},
+		{"relay", "Run the relay that devices sync through", runRelay},
 		{"sources", "List available source adapters", runSources},
 		{"version", "Print the version", runVersion},
 	}
@@ -108,7 +114,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	for _, c := range commands {
-		fmt.Fprintf(w, "  %-10s %s\n", c.name, c.summary)
+		fmt.Fprintf(w, "  %-14s %s\n", c.name, c.summary)
 	}
 }
 

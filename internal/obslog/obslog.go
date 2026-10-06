@@ -280,6 +280,100 @@ func (l *Log) WriteSegment(device string, obs []*Observation) error {
 	return writeFileAtomic(filepath.Join(l.Root, rel), data)
 }
 
+// ImportSegment validates a segment received from another device and stores
+// it under that device's directory. Every record must parse and pass its
+// checksum, come from that device and this space, and the first must carry
+// firstSeq. A segment that is already present is left alone.
+func (l *Log) ImportSegment(device string, firstSeq uint64, data []byte) error {
+	if device == l.Identity.Device {
+		return fmt.Errorf("refusing to import a segment as this device")
+	}
+	if !bytes.HasPrefix(data, []byte(segmentMagic)) {
+		return fmt.Errorf("%w: bad header", ErrCorrupt)
+	}
+	r := bytes.NewReader(data[len(segmentMagic):])
+	var prev uint64
+	for i := 0; ; i++ {
+		o, _, err := readRecord(r, false)
+		if err == io.EOF {
+			if i == 0 {
+				return fmt.Errorf("%w: empty segment", ErrCorrupt)
+			}
+			break
+		}
+		if err != nil {
+			return err
+		}
+		switch {
+		case o.Device != device:
+			return fmt.Errorf("segment for %s holds an observation from %s", device, o.Device)
+		case o.Space != l.Identity.Space:
+			return fmt.Errorf("segment belongs to a different space")
+		case i == 0 && o.Seq != firstSeq:
+			return fmt.Errorf("segment %d starts at sequence %d", firstSeq, o.Seq)
+		case i > 0 && o.Seq <= prev:
+			return fmt.Errorf("segment observations out of sequence order")
+		}
+		prev = o.Seq
+	}
+	path := filepath.Join(l.DeviceDir(device), fmt.Sprintf("%016d.seg", firstSeq))
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(l.DeviceDir(device), 0o700); err != nil {
+		return fmt.Errorf("create device directory: %w", err)
+	}
+	return writeFileAtomic(path, data)
+}
+
+// SegmentBytes returns a segment file's contents, for upload.
+func (l *Log) SegmentBytes(rel string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(l.Root, rel))
+}
+
+// AdoptSpace moves this device into another space, as joining one requires:
+// its own segments are rewritten with the new space id. It fails if the log
+// already holds other devices' segments, which would belong to the old space.
+func (l *Log) AdoptSpace(space string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if space == l.Identity.Space {
+		return nil
+	}
+	devices, err := l.Devices()
+	if err != nil {
+		return err
+	}
+	for _, d := range devices {
+		if d != l.Identity.Device {
+			return fmt.Errorf("this log already syncs with another space (it holds segments from device %s)", d)
+		}
+	}
+	segs, err := l.Segments(l.Identity.Device)
+	if err != nil {
+		return err
+	}
+	l.Identity.Space = space
+	for _, seg := range segs {
+		var obs []*Observation
+		if err := l.ReadSegment(seg.Path, true, func(o *Observation, _ Location) error {
+			obs = append(obs, o)
+			return nil
+		}); err != nil {
+			return err
+		}
+		data, _, err := encodeSegment(seg.Path, obs, space)
+		if err != nil {
+			return err
+		}
+		if err := writeFileAtomic(filepath.Join(l.Root, seg.Path), data); err != nil {
+			return err
+		}
+	}
+	b, _ := json.MarshalIndent(l.Identity, "", "  ")
+	return writeFileAtomic(filepath.Join(l.Root, "identity.json"), append(b, '\n'))
+}
+
 var (
 	encoderOnce sync.Once
 	encoder     *zstd.Encoder
@@ -414,6 +508,10 @@ func readRecord(r io.Reader, withContent bool) (*Observation, int64, error) {
 	}
 	headerLen := binary.BigEndian.Uint32(prefix[0:4])
 	contentLen := binary.BigEndian.Uint32(prefix[4:8])
+	// Segments can arrive from other devices; don't trust lengths blindly.
+	if headerLen > 1<<20 || contentLen > 2*MaxSegmentBytes {
+		return nil, 0, ErrCorrupt
+	}
 	body := make([]byte, int(headerLen)+int(contentLen))
 	if _, err := io.ReadFull(r, body); err != nil {
 		return nil, 0, ErrCorrupt

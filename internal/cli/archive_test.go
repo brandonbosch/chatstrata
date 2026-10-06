@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/brandonbosch/chatstrata/internal/golden"
@@ -127,5 +128,41 @@ func TestRelogAfterLostCollectorStateIsHarmless(t *testing.T) {
 	run(t, "ingest", "claude_code", "--path", root, "--db", db)
 	if got := dump(t, db); !reflect.DeepEqual(got, want) {
 		t.Fatal("re-logging the same bytes changed the archive")
+	}
+}
+
+// A search that matches nothing says so plainly; it only suggests a reindex
+// when search had to fall back to substring matching.
+func TestSearchWithNoMatches(t *testing.T) {
+	root, db := fixture(t)
+	run(t, "ingest", "claude_code", "--path", root, "--db", db)
+	const query = "qqqwwweee123"
+
+	if got := run(t, "search", query, "--json", "--db", db); strings.TrimSpace(got) != "[]" {
+		t.Errorf("--json with no matches = %q, want []", got)
+	}
+
+	fts := ftsAvailable(t, db)
+	got := run(t, "search", query, "--db", db)
+	if fts {
+		if strings.TrimSpace(got) != "No results." {
+			t.Errorf("no matches with a current index = %q, want just \"No results.\"", got)
+		}
+		// Without an index, search falls back and points at reindex.
+		s, err := store.Open(context.Background(), db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.LoadFTS(context.Background())
+		if _, err := s.Conn().ExecContext(context.Background(), "PRAGMA drop_fts_index('content_blocks')"); err != nil {
+			t.Fatal(err)
+		}
+		s.Close()
+		got = run(t, "search", query, "--db", db)
+		if !strings.Contains(got, "`chatstrata reindex`") {
+			t.Errorf("no matches without an index = %q, want a reindex hint", got)
+		}
+	} else if !strings.Contains(got, "reindex --install-fts") {
+		t.Errorf("no matches without the FTS extension = %q, want an --install-fts hint", got)
 	}
 }

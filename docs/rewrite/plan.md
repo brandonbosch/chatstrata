@@ -275,7 +275,10 @@ claude.ai export adapter.
   identical result. Killing the process between log write and projection
   update loses nothing.
 
-**M3 · Relay and sync**
+**M3 · Relay and sync**: built; see [sync.md](sync.md). The relay is a plain
+HTTP service behind `tailscale serve` rather than a `tsnet` node (reasons in
+sync.md). Tested with simulated devices and a local relay; the run on two real
+machines is still to do.
 - `chatstrata relay` (tsnet), `daemon`, `pair`, `join`, `devices`, `sync`.
 - Acceptance on two real machines: both ingest different sessions offline,
   reconnect, and end up with the same `search` and `stats` output, no
@@ -286,8 +289,15 @@ claude.ai export adapter.
 **M4 · Parity**
 - Remaining adapters, `analyze`, MCP server, `schedule` (launchd/systemd
   installing the daemon), `paths`, `sources`, `mcp config`.
+- Incremental search index. Since M3, every catch-up that changed anything
+  rebuilds the whole FTS index (about 1.5 s on the 8 MB benchmark corpus), so
+  its cost grows with the archive, not with the change. Fix before the
+  scheduled daemon runs every 5 minutes against a multi-GB archive: update
+  only the changed conversations, or debounce the rebuild. (Found in the M3
+  acceptance run, brandonbosch/chatstrata#29.)
 - Acceptance: golden fixtures pass for every adapter; MCP works from Claude
-  Code and Codex with the same queries agents use today.
+  Code and Codex with the same queries agents use today; a daemon cycle that
+  changed one conversation doesn't scale with archive size.
 
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),

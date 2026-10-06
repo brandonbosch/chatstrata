@@ -18,6 +18,8 @@ type Stats struct {
 	Removed  int
 	Unported int
 	Failed   int
+	// Reindexed is set when the full-text search index was rebuilt.
+	Reindexed bool
 }
 
 // CatchUp indexes every segment the archive hasn't seen yet, from any device,
@@ -100,6 +102,18 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 		case Unported:
 			stats.Unported++
 		}
+	}
+
+	// Keep search current: DuckDB's full-text index doesn't update itself,
+	// so content that just arrived (by ingest or sync) would otherwise be
+	// invisible to `search` until a manual reindex. Skipped when the FTS
+	// extension isn't installed; search then falls back to substring
+	// matching, which needs no index.
+	if stats.Stored+stats.Removed > 0 && p.Store.LoadFTS(ctx) {
+		if err := p.Store.RebuildFTS(ctx); err != nil {
+			return stats, fmt.Errorf("update search index: %w", err)
+		}
+		stats.Reindexed = true
 	}
 	return stats, nil
 }
