@@ -25,7 +25,7 @@ const (
 
 // hashVersion changes whenever the stored form of a conversation changes, so
 // a new version re-ingests everything once.
-const hashVersion = "go-1"
+const hashVersion = "go-2"
 
 // EnsureSource registers a source, or refreshes its version and timestamp.
 func (s *Store) EnsureSource(ctx context.Context, src model.Source) error {
@@ -41,28 +41,6 @@ func (s *Store) EnsureSource(ctx context.Context, src model.Source) error {
 		return fmt.Errorf("register source %s: %w", src.Name(), err)
 	}
 	return nil
-}
-
-// StoredMtimes returns the source file mtime recorded for each conversation
-// of a source, keyed by source-native id, for incremental ingest.
-func (s *Store) StoredMtimes(ctx context.Context, source string) (map[string]float64, error) {
-	rows, err := s.conn.QueryContext(ctx, `
-		SELECT source_native_id, source_file_mtime FROM conversations
-		WHERE source_id = ? AND source_file_mtime IS NOT NULL`, source)
-	if err != nil {
-		return nil, fmt.Errorf("read stored mtimes: %w", err)
-	}
-	defer rows.Close()
-	out := map[string]float64{}
-	for rows.Next() {
-		var id string
-		var mtime float64
-		if err := rows.Scan(&id, &mtime); err != nil {
-			return nil, err
-		}
-		out[id] = mtime
-	}
-	return out, rows.Err()
 }
 
 // Ingest stores a conversation, replacing any earlier version of it.
@@ -264,13 +242,24 @@ func appendMessages(messages, blocks *duckdb.Appender, convID string, ids []stri
 }
 
 // contentHash identifies the stored form of a conversation.
+// Raw events are hashed byte for byte: json.Marshal would compact them, and
+// differently formatted copies of an event (original bytes versus a legacy
+// re-serialization) must not count as the same stored conversation.
 func contentHash(conv *model.Conversation) (string, error) {
-	b, err := json.Marshal(conv)
+	shallow := *conv
+	shallow.RawEvents = nil
+	b, err := json.Marshal(&shallow)
 	if err != nil {
 		return "", fmt.Errorf("hash %s: %w", conv.SourceNativeID, err)
 	}
-	sum := sha256.Sum256(append([]byte(hashVersion+"\x00"), b...))
-	return hex.EncodeToString(sum[:]), nil
+	h := sha256.New()
+	h.Write([]byte(hashVersion + "\x00"))
+	h.Write(b)
+	for _, raw := range conv.RawEvents {
+		h.Write([]byte{0})
+		h.Write(raw)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // jsonValue encodes a JSON column value as raw JSON, which the appender stores

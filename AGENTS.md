@@ -78,7 +78,13 @@ python scripts/bench.py --synthetic 100 --turns 20 --binary bin/chatstrata
 ```
 
 The Go binary uses its own archive (`chatstrata-go.duckdb`, or
-`$CHATSTRATA_GO_DB`) so it never writes to the Python archive. To port an
+`$CHATSTRATA_GO_DB`) so it never writes to the Python archive. Next to it,
+`chatstrata-go.log/` is the observation log: the source of truth, from which
+`chatstrata rebuild` recreates the `.duckdb` file. Never write to the
+projection except through the projector (`internal/project`), or a rebuild
+will lose it. Format and merge rules: `docs/rewrite/observation-log.md`.
+Go-only schema migrations live in `internal/store/migrations/` and continue
+the shared numbering. To port an
 adapter: add it under `internal/sources/`, register it in `internal/cli`, and
 add its source to `ported` in `internal/golden/golden_test.go`; the existing
 golden cases then have to pass.

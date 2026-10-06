@@ -7,12 +7,10 @@
 package claudecode
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -75,41 +73,36 @@ type event struct {
 	fields map[string]any
 }
 
-func readEvents(path string) ([]event, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
+func readEvents(content []byte) []event {
 	var events []event
-	r := bufio.NewReaderSize(f, 1<<20)
-	for {
-		line, err := r.ReadBytes('\n')
-		if trimmed := bytes.TrimFunc(line, pystr.IsSpace); len(trimmed) > 0 {
-			dec := json.NewDecoder(bytes.NewReader(trimmed))
-			dec.UseNumber()
-			var fields map[string]any
-			// Malformed lines are skipped so one bad line can't sink a session.
-			if dec.Decode(&fields) == nil && fields != nil && !dec.More() {
-				events = append(events, event{raw: json.RawMessage(bytes.Clone(trimmed)), fields: fields})
-			}
+	for len(content) > 0 {
+		line := content
+		if i := bytes.IndexByte(content, '\n'); i >= 0 {
+			line, content = content[:i], content[i+1:]
+		} else {
+			content = nil
 		}
-		if err == io.EOF {
-			return events, nil
+		trimmed := bytes.TrimFunc(line, pystr.IsSpace)
+		if len(trimmed) == 0 {
+			continue
 		}
-		if err != nil {
-			return nil, err
+		dec := json.NewDecoder(bytes.NewReader(trimmed))
+		dec.UseNumber()
+		var fields map[string]any
+		// Malformed lines are skipped so one bad line can't sink a session.
+		if dec.Decode(&fields) == nil && fields != nil && !dec.More() {
+			events = append(events, event{raw: json.RawMessage(bytes.Clone(trimmed)), fields: fields})
 		}
 	}
+	return events
 }
 
+// AppendOnly is true: Claude Code only ever appends lines to a transcript.
+func (Source) AppendOnly() bool { return true }
+
 // Parse reads one transcript into a conversation.
-func (Source) Parse(h model.Handle) (*model.Conversation, error) {
-	events, err := readEvents(h.Path)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", h.Path, err)
-	}
+func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error) {
+	events := readEvents(content)
 
 	conv := &model.Conversation{
 		SourceNativeID: h.SourceNativeID,

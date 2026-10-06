@@ -1,15 +1,8 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"runtime"
 	"slices"
-	"sync"
-
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/store"
 )
 
 func runIngest(e *env, args []string) error {
@@ -62,131 +55,26 @@ func runIngest(e *env, args []string) error {
 		return nil
 	}
 
-	dbPath, err := store.ResolvePath(*db)
+	a, err := openArchive(e, *db)
 	if err != nil {
 		return err
 	}
-	s, err := store.Open(e.ctx, dbPath)
-	if err != nil {
-		return err
-	}
-	defer s.Close()
+	defer a.Close()
 
-	result, err := ingestSource(e, s, src, handles, *incremental)
+	if err := a.store.EnsureSource(e.ctx, src); err != nil {
+		return err
+	}
+	collected, err := a.proj.Collect(e.ctx, src, handles, *incremental, e.stderr)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "\nDone. Ingested: %d  Skipped: %d  Failed: %d\n", result.ingested, result.skipped, result.failed)
-	fmt.Fprintf(e.stdout, "Database: %s\n", dbPath)
+	stats, err := a.proj.CatchUp(e.ctx, false, e.stderr)
+	if err != nil {
+		return err
+	}
+	skipped := len(handles) - stats.Stored - collected.Failed - stats.Failed
+	fmt.Fprintf(e.stdout, "\nDone. Ingested: %d  Skipped: %d  Failed: %d\n",
+		stats.Stored, max(0, skipped), collected.Failed+stats.Failed)
+	fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
 	return nil
-}
-
-type ingestResult struct {
-	ingested, skipped, failed int
-}
-
-type parsed struct {
-	handle model.Handle
-	conv   *model.Conversation
-	mtime  *float64
-	err    error
-}
-
-// ingestSource parses transcripts in parallel and writes them from this
-// goroutine, the archive's only writer.
-func ingestSource(e *env, s *store.Store, src model.Source, handles []model.Handle, incremental bool) (ingestResult, error) {
-	var result ingestResult
-	if err := s.EnsureSource(e.ctx, src); err != nil {
-		return result, err
-	}
-	var stored map[string]float64
-	if incremental {
-		var err error
-		if stored, err = s.StoredMtimes(e.ctx, src.Name()); err != nil {
-			return result, err
-		}
-	}
-
-	work := make(chan model.Handle)
-	out := make(chan parsed)
-	var wg sync.WaitGroup
-	for range runtime.NumCPU() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for h := range work {
-				p := parsed{handle: h, mtime: fileMtime(h.Path)}
-				p.conv, p.err = src.Parse(h)
-				out <- p
-			}
-		}()
-	}
-
-	go func() {
-		defer close(work)
-		for _, h := range handles {
-			if incremental && h.Path != "" {
-				if mtime := fileMtime(h.Path); mtime != nil {
-					if prev, ok := stored[h.SourceNativeID]; ok && prev == *mtime {
-						out <- parsed{handle: h} // nil conv, nil err: skipped
-						continue
-					}
-				}
-			}
-			select {
-			case work <- h:
-			case <-e.ctx.Done():
-				return
-			}
-		}
-	}()
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-
-	var writeErr error
-	for p := range out {
-		if writeErr != nil {
-			continue // drain so the workers can exit
-		}
-		switch {
-		case p.err != nil:
-			result.failed++
-			fmt.Fprintf(e.stderr, "  ! failed to parse %s: %s\n", p.handle.SourceNativeID, p.err)
-		case p.conv == nil:
-			result.skipped++
-		case len(p.conv.Messages) == 0:
-			// Sessions with no messages are not stored, as in Python.
-		default:
-			action, err := s.Ingest(e.ctx, src.Name(), p.conv, p.mtime)
-			if err != nil {
-				if errors.Is(err, e.ctx.Err()) {
-					writeErr = err
-					continue
-				}
-				result.failed++
-				fmt.Fprintf(e.stderr, "  ! failed to store %s: %s\n", p.handle.SourceNativeID, err)
-				continue
-			}
-			if action == store.Unchanged {
-				result.skipped++
-			} else {
-				result.ingested++
-			}
-		}
-	}
-	return result, writeErr
-}
-
-func fileMtime(path string) *float64 {
-	if path == "" {
-		return nil
-	}
-	fi, err := os.Stat(path)
-	if err != nil {
-		return nil
-	}
-	m := float64(fi.ModTime().UnixNano()) / 1e9
-	return &m
 }
