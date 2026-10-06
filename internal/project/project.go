@@ -54,11 +54,15 @@ func (p *Projector) Project(ctx context.Context, key obslog.Key) (Outcome, error
 		return Unported, nil
 	}
 
+	latest := latestSnapshots(src, all)
 	var live []fragment
 	var cands []*candidate
 	seenLegacy := map[string]bool{}
 	for i := range all {
 		o := &all[i]
+		if latest != nil && !o.Legacy && latest[o.Device] != o.Seq {
+			continue // superseded by a later snapshot from the same device
+		}
 		rec, err := p.Log.ReadAt(o.Location)
 		if err != nil {
 			return Unchanged, err
@@ -110,6 +114,25 @@ func (p *Projector) Project(ctx context.Context, key obslog.Key) (Outcome, error
 		return Unchanged, nil
 	}
 	return Stored, nil
+}
+
+// latestSnapshots returns, for a source that is logged as whole snapshots,
+// each device's latest snapshot sequence number. A device's newer snapshot
+// replaces its older ones (an edited or rewound session drops rows), so only
+// snapshots from different devices are compared as versions. Sequence
+// numbers are per-device logical clocks, not wall clocks. It returns nil for
+// append-only sources, whose observations build on each other.
+func latestSnapshots(src model.Source, all []store.IndexedObservation) map[string]uint64 {
+	if src.AppendOnly() {
+		return nil
+	}
+	latest := map[string]uint64{}
+	for _, o := range all {
+		if !o.Legacy && o.Seq >= latest[o.Device] {
+			latest[o.Device] = o.Seq
+		}
+	}
+	return latest
 }
 
 func (p *Projector) ensureSource(ctx context.Context, src model.Source) error {

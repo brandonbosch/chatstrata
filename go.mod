@@ -6,6 +6,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/duckdb/duckdb-go/v2 v2.10506.0
 	github.com/klauspost/compress v1.18.3
+	github.com/mattn/go-sqlite3 v1.14.52
 )
 
 require (

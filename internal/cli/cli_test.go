@@ -107,10 +107,10 @@ func TestQueryOnMissingArchive(t *testing.T) {
 	}
 }
 
-func TestUnportedSourceIsExplained(t *testing.T) {
+func TestUnknownSourceIsExplained(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	code := Run(context.Background(), []string{"ingest", "codex_cli", "--db", filepath.Join(t.TempDir(), "a.duckdb")}, &stdout, &stderr)
-	if code != 1 || !strings.Contains(stderr.String(), "not in the Go version yet") {
+	code := Run(context.Background(), []string{"ingest", "chatgpt", "--db", filepath.Join(t.TempDir(), "a.duckdb")}, &stdout, &stderr)
+	if code != 1 || !strings.Contains(stderr.String(), "Unknown source: chatgpt") {
 		t.Errorf("code=%d stderr=%q", code, stderr.String())
 	}
 }

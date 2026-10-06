@@ -11,10 +11,14 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 
 	"github.com/brandonbosch/chatstrata/internal/model"
 	"github.com/brandonbosch/chatstrata/internal/sources/claudecode"
+	"github.com/brandonbosch/chatstrata/internal/sources/claudeexport"
+	"github.com/brandonbosch/chatstrata/internal/sources/codexcli"
+	"github.com/brandonbosch/chatstrata/internal/sources/hermes"
+	"github.com/brandonbosch/chatstrata/internal/sources/omp"
+	"github.com/brandonbosch/chatstrata/internal/sources/opencode"
 )
 
 // Version is set at build time with -ldflags "-X .../internal/cli.Version=...".
@@ -22,11 +26,13 @@ var Version = "dev"
 
 // sources available in the Go implementation.
 var sources = map[string]model.Source{
-	"claude_code": claudecode.Source{},
+	"claude_code":   claudecode.Source{},
+	"claude_export": claudeexport.Source{},
+	"codex_cli":     codexcli.Source{},
+	"hermes_agent":  hermes.Source{},
+	"omp":           omp.Source{},
+	"opencode":      opencode.Source{},
 }
-
-// notYetPorted are Python adapters the Go implementation doesn't have yet.
-var notYetPorted = []string{"claude_export", "codex_cli", "hermes_agent", "omp", "opencode"}
 
 type env struct {
 	ctx    context.Context
@@ -164,9 +170,6 @@ func runSources(e *env, args []string) error {
 		s := sources[name]
 		fmt.Fprintf(e.stdout, "  %-20s %-25s v%s\n", name, s.DisplayName(), s.Version())
 	}
-	fmt.Fprintln(e.stdout)
-	fmt.Fprintf(e.stdout, "Not yet in the Go version (use the Python chatstrata): %s\n",
-		strings.Join(notYetPorted, ", "))
 	return nil
 }
 

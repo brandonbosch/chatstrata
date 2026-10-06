@@ -6,6 +6,7 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -70,7 +71,17 @@ type Handle struct {
 	Path           string
 	// Project is the adapter's fallback project guess from the file location.
 	Project string
+	// Content, when set, is the conversation's bytes, for sources that don't
+	// keep one file per conversation (an export holding many conversations,
+	// a database). Path is then the shared file, and the collector logs
+	// Content instead of reading Path. Parse receives the same bytes.
+	Content []byte
 }
+
+// ErrNotFound is returned (wrapped) by Discover when the source's default
+// location doesn't exist on this machine, so periodic collection can skip it
+// quietly while an explicit ingest still reports it.
+var ErrNotFound = errors.New("not found")
 
 // Source is implemented by every adapter.
 type Source interface {

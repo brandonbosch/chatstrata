@@ -7,7 +7,6 @@
 package claudecode
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/brandonbosch/chatstrata/internal/model"
 	"github.com/brandonbosch/chatstrata/internal/pystr"
+	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
 )
 
 // DefaultRoot is where Claude Code keeps transcripts, relative to $HOME.
@@ -68,41 +68,12 @@ func decodeProjectDir(name string) string {
 	return name
 }
 
-type event struct {
-	raw    json.RawMessage
-	fields map[string]any
-}
-
-func readEvents(content []byte) []event {
-	var events []event
-	for len(content) > 0 {
-		line := content
-		if i := bytes.IndexByte(content, '\n'); i >= 0 {
-			line, content = content[:i], content[i+1:]
-		} else {
-			content = nil
-		}
-		trimmed := bytes.TrimFunc(line, pystr.IsSpace)
-		if len(trimmed) == 0 {
-			continue
-		}
-		dec := json.NewDecoder(bytes.NewReader(trimmed))
-		dec.UseNumber()
-		var fields map[string]any
-		// Malformed lines are skipped so one bad line can't sink a session.
-		if dec.Decode(&fields) == nil && fields != nil && !dec.More() {
-			events = append(events, event{raw: json.RawMessage(bytes.Clone(trimmed)), fields: fields})
-		}
-	}
-	return events
-}
-
 // AppendOnly is true: Claude Code only ever appends lines to a transcript.
 func (Source) AppendOnly() bool { return true }
 
 // Parse reads one transcript into a conversation.
 func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error) {
-	events := readEvents(content)
+	events := srcutil.ReadJSONL(content)
 
 	conv := &model.Conversation{
 		SourceNativeID: h.SourceNativeID,
@@ -111,15 +82,15 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 		RawEvents:      make([]json.RawMessage, 0, len(events)),
 	}
 	for _, ev := range events {
-		conv.RawEvents = append(conv.RawEvents, ev.raw)
+		conv.RawEvents = append(conv.RawEvents, ev.Raw)
 	}
 
 	for _, ev := range events {
-		etype, _ := ev.fields["type"].(string)
+		etype, _ := ev.Fields["type"].(string)
 		if etype == "summary" {
 			// The first summary that is a string becomes the title.
 			if conv.Title == nil {
-				if s, ok := ev.fields["summary"].(string); ok {
+				if s, ok := ev.Fields["summary"].(string); ok {
 					conv.Title = model.Ptr(pystr.Strip(s))
 				}
 			}
@@ -130,7 +101,7 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 		if !ok {
 			continue
 		}
-		message, _ := ev.fields["message"].(map[string]any)
+		message, _ := ev.Fields["message"].(map[string]any)
 		blocks := blocksFromMessage(message)
 		// Bookkeeping events without extractable content are skipped.
 		if len(blocks) == 0 {
@@ -138,7 +109,7 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 		}
 
 		var ts *time.Time
-		if s, ok := ev.fields["timestamp"].(string); ok {
+		if s, ok := ev.Fields["timestamp"].(string); ok {
 			if t, ok := pystr.ParseISOTime(s); ok {
 				ts = &t
 				if conv.StartedAt == nil || t.Before(*conv.StartedAt) {
@@ -151,22 +122,22 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 		}
 
 		conv.Messages = append(conv.Messages, model.Message{
-			SourceNativeID:       stringField(ev.fields, "uuid"),
-			ParentSourceNativeID: stringField(ev.fields, "parentUuid"),
+			SourceNativeID:       srcutil.Str(ev.Fields, "uuid"),
+			ParentSourceNativeID: srcutil.Str(ev.Fields, "parentUuid"),
 			Role:                 role,
-			Model:                stringField(message, "model"),
+			Model:                srcutil.Str(message, "model"),
 			CreatedAt:            ts,
 			Blocks:               blocks,
 			Metadata: map[string]any{
-				"request_id": ev.fields["requestId"],
-				"cwd":        ev.fields["cwd"],
+				"request_id": ev.Fields["requestId"],
+				"cwd":        ev.Fields["cwd"],
 			},
 		})
 	}
 
 	// The cwd recorded in the transcript is lossless; the folder name is not.
 	for _, ev := range events {
-		if cwd, ok := ev.fields["cwd"].(string); ok && cwd != "" {
+		if cwd, ok := ev.Fields["cwd"].(string); ok && cwd != "" {
 			conv.Project = model.Ptr(cwd)
 			break
 		}
@@ -176,7 +147,7 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 	}
 
 	if conv.Title == nil {
-		conv.Title = firstUserLine(conv.Messages)
+		conv.Title = srcutil.FirstUserLine(conv.Messages)
 	}
 	return conv, nil
 }
@@ -191,25 +162,6 @@ func roleFor(eventType string) (model.Role, bool) {
 		return model.RoleSystem, true
 	}
 	return "", false
-}
-
-// firstUserLine falls back to the first line of the first user text, capped
-// at 200 characters.
-func firstUserLine(messages []model.Message) *string {
-	for _, m := range messages {
-		if m.Role != model.RoleUser {
-			continue
-		}
-		for _, b := range m.Blocks {
-			if b.Type != model.BlockText || b.Text == nil || *b.Text == "" {
-				continue
-			}
-			if line := pystr.Prefix(pystr.FirstLine(pystr.Strip(*b.Text)), 200); line != "" {
-				return &line
-			}
-		}
-	}
-	return nil
 }
 
 // blocksFromMessage converts Anthropic-shaped message content, which is either
@@ -235,31 +187,31 @@ func blocksFromMessage(message map[string]any) []model.Block {
 func convertBlock(raw map[string]any) model.Block {
 	switch raw["type"] {
 	case "text":
-		return model.Block{Type: model.BlockText, Text: stringField(raw, "text")}
+		return model.Block{Type: model.BlockText, Text: srcutil.Str(raw, "text")}
 	case "thinking":
-		return model.Block{Type: model.BlockThinking, Text: stringField(raw, "thinking")}
+		return model.Block{Type: model.BlockThinking, Text: srcutil.Str(raw, "thinking")}
 	case "tool_use":
 		return model.Block{
 			Type:      model.BlockToolUse,
-			ToolName:  stringField(raw, "name"),
-			ToolUseID: stringField(raw, "id"),
-			Payload:   map[string]any{"input": getOr(raw, "input", map[string]any{})},
+			ToolName:  srcutil.Str(raw, "name"),
+			ToolUseID: srcutil.Str(raw, "id"),
+			Payload:   map[string]any{"input": srcutil.GetOr(raw, "input", map[string]any{})},
 		}
 	case "tool_result":
 		result := raw["content"]
 		return model.Block{
 			Type:      model.BlockToolResult,
-			ToolUseID: stringField(raw, "tool_use_id"),
+			ToolUseID: srcutil.Str(raw, "tool_use_id"),
 			Text:      toolResultText(result),
 			Payload: map[string]any{
-				"is_error":    getOr(raw, "is_error", false),
+				"is_error":    srcutil.GetOr(raw, "is_error", false),
 				"raw_content": result,
 			},
 		}
 	case "image":
 		return model.Block{
 			Type:    model.BlockImage,
-			Payload: map[string]any{"source": getOr(raw, "source", map[string]any{})},
+			Payload: map[string]any{"source": srcutil.GetOr(raw, "source", map[string]any{})},
 		}
 	}
 	// Unknown block types are kept whole for forensics.
@@ -279,7 +231,7 @@ func toolResultText(content any) *string {
 			if !ok || m["type"] != "text" {
 				continue
 			}
-			text, _ := getOr(m, "text", "").(string)
+			text, _ := srcutil.GetOr(m, "text", "").(string)
 			parts = append(parts, text)
 		}
 		if len(parts) > 0 {
@@ -287,19 +239,4 @@ func toolResultText(content any) *string {
 		}
 	}
 	return nil
-}
-
-func stringField(m map[string]any, key string) *string {
-	if s, ok := m[key].(string); ok {
-		return &s
-	}
-	return nil
-}
-
-// getOr is Python's dict.get(key, default): a present null stays null.
-func getOr(m map[string]any, key string, def any) any {
-	if v, ok := m[key]; ok {
-		return v
-	}
-	return def
 }

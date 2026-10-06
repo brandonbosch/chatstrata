@@ -124,14 +124,20 @@ func observe(src model.Source, h model.Handle, key obslog.Key, prev store.Collec
 		return c
 	}
 	mtime := float64(fi.ModTime().UnixNano()) / 1e9
-	if incremental && known && prev.Mtime != nil && *prev.Mtime == mtime {
+	// The mtime shortcut only holds for one file per conversation. A shared
+	// database's mtime can stay put while new rows sit in its write-ahead
+	// log, and its handles carry their content already, so those are
+	// compared by content.
+	if incremental && known && h.Content == nil && prev.Mtime != nil && *prev.Mtime == mtime {
 		c.skip = true
 		return c
 	}
-	data, err := os.ReadFile(h.Path)
-	if err != nil {
-		c.err = err
-		return c
+	data := h.Content
+	if data == nil {
+		if data, err = os.ReadFile(h.Path); err != nil {
+			c.err = err
+			return c
+		}
 	}
 	if src.AppendOnly() {
 		data = completeLines(data)

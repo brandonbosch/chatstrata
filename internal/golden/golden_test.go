@@ -3,6 +3,7 @@ package golden
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -29,10 +30,6 @@ type goldenCase struct {
 	Steps  []step `json:"steps"`
 }
 
-// ported lists the sources the Go implementation has so far; cases for the
-// others are skipped until their adapter lands.
-var ported = map[string]bool{"claude_code": true}
-
 func TestGolden(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(specDir, "cases.json"))
 	if err != nil {
@@ -44,9 +41,6 @@ func TestGolden(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
-			if !ported[c.Source] {
-				t.Skipf("source %s not ported yet", c.Source)
-			}
 			actual := runCase(t, c)
 			expectedRaw, err := os.ReadFile(filepath.Join(specDir, "expected", c.Name+".json"))
 			if err != nil {
@@ -63,6 +57,7 @@ func runCase(t *testing.T, c goldenCase) any {
 	if err := os.CopyFS(work, os.DirFS(filepath.Join(specDir, "inputs", c.Input))); err != nil {
 		t.Fatal(err)
 	}
+	buildDatabases(t, work)
 	originals := map[string][]byte{}
 	for _, s := range c.Steps {
 		for rel := range s.TruncateLines {
@@ -95,6 +90,31 @@ func runCase(t *testing.T, c goldenCase) any {
 		t.Fatal(err)
 	}
 	return dump
+}
+
+// buildDatabases turns each *.sql dump in the inputs into the SQLite *.db the
+// source reads, as scripts/golden.py does.
+func buildDatabases(t *testing.T, work string) {
+	t.Helper()
+	dumps, err := filepath.Glob(filepath.Join(work, "*.sql")) // inputs keep dumps at the top level
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dump := range dumps {
+		script, err := os.ReadFile(dump)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db, err := sql.Open("sqlite3", strings.TrimSuffix(dump, ".sql")+".db")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(string(script)); err != nil {
+			t.Fatalf("build %s: %v", dump, err)
+		}
+		db.Close()
+		os.Remove(dump)
+	}
 }
 
 // applyTruncation sets each listed file to its first N lines for this step and

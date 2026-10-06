@@ -1,9 +1,6 @@
 package cli
 
-import (
-	"fmt"
-	"slices"
-)
+import "fmt"
 
 func runIngest(e *env, args []string) error {
 	fs := newFlagSet(e, "ingest", "ingest SOURCE_NAME [--path PATH] [--db PATH] [--incremental] [--limit N] [--dry-run]")
@@ -23,11 +20,7 @@ func runIngest(e *env, args []string) error {
 
 	src, ok := sources[name]
 	if !ok {
-		if slices.Contains(notYetPorted, name) {
-			fmt.Fprintf(e.stderr, "Source %q is not in the Go version yet; use the Python chatstrata for it.\n", name)
-		} else {
-			fmt.Fprintf(e.stderr, "Unknown source: %s\nRun `chatstrata sources` to see available adapters.\n", name)
-		}
+		fmt.Fprintf(e.stderr, "Unknown source: %s\nRun `chatstrata sources` to see available adapters.\n", name)
 		return exitError{1}
 	}
 
