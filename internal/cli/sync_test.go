@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,9 +12,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/brandonbosch/chatstrata/internal/devsync"
 	"github.com/brandonbosch/chatstrata/internal/relay"
+	"github.com/brandonbosch/chatstrata/internal/store"
 )
 
 const projects = "../../spec/golden/inputs/claude_code/projects"
@@ -207,4 +210,110 @@ func forgeSpace(t *testing.T, attacker, victim string) string {
 		t.Fatal(err)
 	}
 	return (&devsync.Space{ID: vic.ID, Key: att.Key, Relay: vic.Relay}).PairingCode()
+}
+
+// The daemon's periodic run collects from the default transcript location and
+// syncs, so devices running only the daemon converge.
+func TestDaemonRunsCollectAndSync(t *testing.T) {
+	srv := httptest.NewServer((&relay.Server{Dir: t.TempDir()}).Handler())
+	defer srv.Close()
+
+	home := func(files map[string][]byte) (homeDir, db string) {
+		homeDir = t.TempDir()
+		for rel, content := range files {
+			path := filepath.Join(homeDir, ".claude", "projects", rel)
+			os.MkdirAll(filepath.Dir(path), 0o755)
+			if err := os.WriteFile(path, content, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return homeDir, filepath.Join(homeDir, "archive.duckdb")
+	}
+	homeA, dbA := home(map[string][]byte{sample: transcript(t, sample, 0)})
+	homeB, dbB := home(map[string][]byte{noCwd: transcript(t, noCwd, 0)})
+
+	cycle := func(homeDir, db string) {
+		t.Helper()
+		t.Setenv("HOME", homeDir)
+		var out bytes.Buffer
+		e := &env{ctx: context.Background(), stdout: &out, stderr: &out}
+		if err := daemonRun(e, db, log.New(&out, "", 0)); err != nil {
+			t.Fatalf("daemon run: %v\n%s", err, out.String())
+		}
+		if strings.Contains(out.String(), "sync skipped") {
+			t.Fatalf("daemon couldn't sync:\n%s", out.String())
+		}
+	}
+
+	t.Setenv("HOME", homeA)
+	code := pairingCode(t, run(t, "pair", "--relay", srv.URL, "--db", dbA))
+	t.Setenv("HOME", homeB)
+	run(t, "join", code, "--db", dbB)
+
+	cycle(homeA, dbA) // collects and uploads A's session
+	cycle(homeB, dbB) // collects B's, uploads it, downloads A's
+	cycle(homeA, dbA) // downloads B's
+
+	a, b := dump(t, dbA), dump(t, dbB)
+	if n := len(a.(map[string]any)["conversations"].([]any)); n != 2 {
+		t.Fatalf("A has %d conversations after daemon runs, want 2", n)
+	}
+	if !reflect.DeepEqual(withoutPaths(a), withoutPaths(b)) {
+		t.Fatal("devices disagree after daemon runs")
+	}
+}
+
+func TestDaemonStopsOnInterrupt(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int)
+	go func() {
+		var out bytes.Buffer
+		done <- Run(ctx, []string{"daemon", "--interval", "1h", "--db", filepath.Join(t.TempDir(), "a.duckdb")}, &out, &out)
+	}()
+	time.Sleep(500 * time.Millisecond)
+	cancel()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("daemon exited %d", code)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("daemon didn't stop on interrupt")
+	}
+}
+
+// Content that arrives by sync is searchable straight away, without a
+// manual reindex, when the FTS extension is installed.
+func TestSearchFindsSyncedContentWithoutReindex(t *testing.T) {
+	srv := httptest.NewServer((&relay.Server{Dir: t.TempDir()}).Handler())
+	defer srv.Close()
+	a := newDevice(t, map[string][]byte{sample: transcript(t, sample, 0)})
+	b := newDevice(t, map[string][]byte{noCwd: transcript(t, noCwd, 0)})
+
+	run(t, "ingest", "claude_code", "--path", b.root, "--db", b.db)
+	if !ftsAvailable(t, b.db) {
+		t.Skip("DuckDB FTS extension not installed (run `chatstrata reindex --install-fts` once)")
+	}
+	run(t, "reindex", "--db", b.db) // B has a search index before anything syncs
+
+	run(t, "ingest", "claude_code", "--path", a.root, "--db", a.db)
+	code := pairingCode(t, run(t, "pair", "--relay", srv.URL, "--db", a.db))
+	run(t, "sync", "--db", a.db)
+	run(t, "join", code, "--db", b.db)
+
+	out := run(t, "search", "refactor", "--db", b.db)
+	if !strings.Contains(out, "Refactor the user auth module") || strings.Contains(out, "score: 1.00") {
+		t.Errorf("synced content not found through the FTS index:\n%s", out)
+	}
+}
+
+func ftsAvailable(t *testing.T, db string) bool {
+	t.Helper()
+	s, err := store.OpenReadOnly(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	return s.LoadFTS(context.Background())
 }

@@ -71,7 +71,9 @@ func runRebuild(e *env, args []string) error {
 	}
 	fmt.Fprintf(e.stdout, "Done. Segments: %d  Conversations: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d\n",
 		stats.Segments, stats.Stored, stats.Unported, stats.Failed)
-	fmt.Fprintln(e.stdout, "Run `chatstrata reindex` to rebuild the search index.")
+	if !stats.Reindexed {
+		fmt.Fprintln(e.stdout, "Run `chatstrata reindex` to rebuild the search index.")
+	}
 	return nil
 }
 

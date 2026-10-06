@@ -136,8 +136,17 @@ binary:
    holds once every device has reindexed after its last projection.
    Pre-existing M1/M2 behaviour, not sync-specific. Candidate fix: rebuild FTS
    at the end of projection when `LOAD fts` succeeds.
+   **Fixed:** catch-up now rebuilds the FTS index whenever it stored or removed
+   conversations and the extension loads, so ingest, sync and the daemon keep
+   search current. Covered by `TestSearchFindsSyncedContentWithoutReindex`.
+   Cost: one index rebuild per run that changed something (about 1.5 s on the
+   8 MB benchmark corpus).
 2. **`daemon` loop is untested.** Only the one-shot `sync` path has coverage;
    the periodic collect+sync loop has none.
+   **Fixed:** `TestDaemonRunsCollectAndSync` runs real daemon cycles on two
+   devices (collecting from `~/.claude/projects` and syncing through a relay)
+   and checks they converge; `TestDaemonStopsOnInterrupt` checks the loop
+   exits cleanly.
 
 ### Running the cross-tailscale test
 
@@ -145,5 +154,6 @@ On the relay node: `chatstrata relay --data <dir>` behind
 `tailscale serve --bg http://127.0.0.1:8787`. On device A:
 `chatstrata pair --relay https://<host>.<tailnet>.ts.net` then `sync`. Carry
 the printed join code to B out of band, `chatstrata join <code>` there. Ingest
-on both, `sync` both, then run `chatstrata reindex` on **both** before diffing
-`search`/`stats` (see gap 1).
+on both, `sync` both, then diff `search`/`stats`. Since the gap 1 fix no
+manual `reindex` is needed, once each device has the FTS extension
+(`chatstrata reindex --install-fts` once).
