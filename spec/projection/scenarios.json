@@ -74,8 +74,8 @@
     },
     {
       "name": "divergent_snapshots",
-      "rule": "Two devices saw different continuations of the same session. Keep both; neither overwrites the other. Siblings are ordered by timestamp, then native id. Record the divergence.",
-      "decision_needed": "Is 'keep both as siblings' the right presentation, or should the projection pick one branch as the main line?",
+      "rule": "Two devices saw different continuations of the same session. Keep both; neither overwrites the other. The shared history is stored once, and the continuations become sibling branches under the message where they split, ordered by timestamp, then native id. The conversation is flagged as diverged, recording the fork point and which devices saw which branch, so queries can tell branches apart from ordinary history.",
+      "decided": "2026-10: keep both and flag them (rare for Claude Code, whose transcripts each live on one machine; more plausible for synced ~/.claude folders and claude.ai exports taken at different times).",
       "events": {
         "u1": {"type": "user", "uuid": "u1", "timestamp": "2026-10-01T10:00:00Z", "message": {"role": "user", "content": "one"}},
         "a1": {"type": "assistant", "uuid": "a1", "parentUuid": "u1", "timestamp": "2026-10-01T10:00:05Z", "message": {"role": "assistant", "content": [{"type": "text", "text": "two"}]}},
@@ -88,7 +88,7 @@
       ],
       "expected": {
         "conversations": [{"source": "claude_code", "locator": "s1", "messages": ["u1", "a1", "u2x", "u2y"], "parents": {"u2x": "a1", "u2y": "a1"}}],
-        "divergences": [{"source": "claude_code", "locator": "s1", "devices": ["linux", "mac1"]}]
+        "divergences": [{"source": "claude_code", "locator": "s1", "fork_after": "a1", "branches": {"u2x": ["linux"], "u2y": ["mac1"]}}]
       }
     },
     {

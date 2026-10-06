@@ -63,8 +63,8 @@ same transcripts with Python and Go into two databases, dump both and diff.
 `scenarios.json` describes the merge rules from ADR 0005 as cases: a set of
 events, the observations different devices made of them, and the archive every
 device must end up with. Nothing executes these yet; M2 (the observation log and
-projector) implements a runner. Status is **proposed**. One scenario
-(`divergent_snapshots`) is marked `decision_needed`.
+projector) implements a runner. Status is **proposed**; `divergent_snapshots`
+records its decision in a `decided` field.
 
 Conventions:
 
@@ -75,3 +75,6 @@ Conventions:
   observations must produce the same result.
 - `expected.conversations[].messages` lists message native ids in projected
   order. `hidden` lists conversations that exist only as tombstones.
+- `expected.divergences` lists conversations flagged as diverged: the last
+  shared message (`fork_after`) and, for each branch's first message, the
+  devices that observed it.
