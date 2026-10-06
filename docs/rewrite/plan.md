@@ -286,9 +286,16 @@ machines is still to do.
   stale snapshot; restore a third empty machine from the relay with the other
   two offline.
 
-**M4 · Parity**
-- Remaining adapters, `analyze`, MCP server, `schedule` (launchd/systemd
-  installing the daemon), `paths`, `sources`, `mcp config`.
+**M4 · Parity**, in three PRs:
+- M4a, adapters: done. `codex_cli`, `omp`, `claude_export`, `opencode` and
+  `hermes_agent` are ported and pass their golden cases; `import-legacy` of
+  a Python archive reproduces the golden output for every source. Sources
+  without one file per conversation hand the collector each conversation's
+  bytes, and for sources logged as snapshots a device's newer snapshot
+  replaces its older ones (see [observation-log.md](observation-log.md)).
+- M4b: `analyze`, MCP server, `paths`, `mcp config`.
+- M4c: `schedule` (launchd/systemd installing the daemon) and the
+  incremental search index below.
 - Incremental search index. Since M3, every catch-up that changed anything
   rebuilds the whole FTS index (about 1.5 s on the 8 MB benchmark corpus), so
   its cost grows with the archive, not with the change. Fix before the

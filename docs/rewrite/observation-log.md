@@ -55,7 +55,21 @@ last logged for that conversation (`collector_state`):
   `snapshot`
 
 For append-only sources a trailing line still being written is held back
-until it is complete. The log is written before `collector_state`; if a run
+until it is complete.
+
+Most sources keep one file per conversation. Two kinds don't, and their
+adapters hand the collector each conversation's bytes directly:
+
+- `claude_export`: one `conversations.json` holds every conversation. Each
+  conversation is its array element, exactly as exported.
+- `opencode` and `hermes_agent`: SQLite databases. Each session's rows
+  (session, messages, parts) are serialized as one JSON document. The
+  database is opened read-only. Its mtime isn't used to skip unchanged
+  sessions, because SQLite can hold new rows in its write-ahead log without
+  touching the main file, so these sessions are compared by content.
+
+These sources, and `omp` (whose title slot is rewritten in place), are logged
+as snapshots. The log is written before `collector_state`; if a run
 stops in between, the next run logs the same bytes again, which the
 projection ignores.
 
@@ -64,7 +78,11 @@ projection ignores.
 The projection of a conversation depends only on the set of its observations,
 never on arrival order or wall clocks:
 
-1. Any tombstone hides the conversation.
+1. Any tombstone hides the conversation. For sources logged as snapshots, a
+   device's latest snapshot replaces its earlier ones (an edited or rewound
+   session drops rows), so only different devices' snapshots are compared
+   as versions below. Sequence numbers are per-device logical clocks, not
+   wall clocks.
 2. Byte ranges from all devices are combined into versions of the file.
    Ranges that agree byte for byte merge, so overlapping appends, stale
    snapshots and duplicates collapse into one version. A range that
@@ -91,19 +109,26 @@ device directories.
 
 - `chatstrata ingest SOURCE`: collect, log, project.
 - `chatstrata rebuild`: build a fresh projection from the log and swap it in.
-  Run `reindex` afterwards for search.
+  The search index is rebuilt with it when the FTS extension is installed.
 - `chatstrata import-legacy PYTHON_ARCHIVE`: log each conversation of a
   Python-era archive as a legacy snapshot, so history whose transcripts are
-  gone survives. Re-running it skips what was already imported. Sources the Go
-  version can't parse yet stay in the log and appear after a later `rebuild`.
+  gone survives. Re-running it skips what was already imported. Every Python
+  adapter has a Go port, so all of it projects; OpenCode conversations
+  imported this way have no title (Python kept the session row only in its
+  `conversations` table), unless the live database supplies one. Sources the
+  Go version doesn't know stay in the log only.
 
 ## Not yet
 
 - Creating tombstones from the CLI (the projection handles them already).
-- Account scopes: conversation ids ignore `scope` until the claude.ai export
-  adapter needs it, because `conversations` is unique on
-  `(source_id, source_native_id)`. The `same_locator_different_scope`
-  scenario is skipped until then.
+- Account scopes: conversation ids ignore `scope`, because `conversations`
+  is unique on `(source_id, source_native_id)` and the claude.ai export
+  doesn't name its account in `conversations.json`. Supporting two accounts'
+  exports needs a schema change and an ADR. The
+  `same_locator_different_scope` scenario is skipped until then.
+- Snapshot sources log the whole session on every change, so an active
+  OpenCode or Hermes session grows the log by one compressed snapshot per
+  collection that saw it change. Compacting old segments would reclaim this.
 - Projection parses conversations one at a time. Full ingest is 4.8 s on the
   benchmark corpus against 3.5 s in M1; parallel parsing would recover it.
 - Compacting old segments.
