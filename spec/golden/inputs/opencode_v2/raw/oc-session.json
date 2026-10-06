@@ -1,0 +1,112 @@
+{
+  "opencode_version": "2.0.12",
+  "source": "opencode v2 throwaway session (Hello World tool round-trip)",
+  "model": "openrouter/z-ai/glm-5.3-flash",
+  "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+  "session_v2": [
+    {
+      "id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "project_id": "62be6de141bedc44a6210f1ad43b67ba5e1fcd73",
+      "workspace_id": null,
+      "parent_id": null,
+      "fork_session_id": null,
+      "fork_boundary": null,
+      "slug": "stellar-lagoon",
+      "directory": "/tmp/chatstrata-oc2-throwaway",
+      "path": "",
+      "title": "chatstrata oc2 fixture",
+      "version": "2.0.12",
+      "share_url": null,
+      "summary_additions": null,
+      "summary_deletions": null,
+      "summary_files": null,
+      "summary_diffs": null,
+      "metadata": null,
+      "cost": 0.00213123,
+      "tokens_input": 9941,
+      "tokens_output": 80,
+      "tokens_reasoning": 52,
+      "tokens_cache_read": 19136,
+      "tokens_cache_write": 0,
+      "revert": null,
+      "permission": null,
+      "agent": null,
+      "model": "{\"id\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\"}",
+      "time_created": 1791319625346,
+      "time_updated": 1791319625382,
+      "time_compacting": null,
+      "time_archived": null,
+      "time_suspended": null,
+      "resume_attempts": 0,
+      "time_idle": 1791319649882,
+      "time_viewed": null,
+      "idle_outcome": "succeeded"
+    }
+  ],
+  "session_message": [
+    {
+      "id": "msg_112f84e89001Xoi4Q9FR7Zqk4x",
+      "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "type": "user",
+      "seq": 5,
+      "time_created": 1791319625396,
+      "time_updated": 1791319625396,
+      "data": "{\"time\":{\"created\":1791319625396},\"text\":\"\\\"Create a file hello.txt containing hi, then read it back and tell me what it says\\\"\",\"files\":[]}"
+    },
+    {
+      "id": "msg_112f84eb9001VX3X0anTdlXmEf",
+      "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "type": "assistant",
+      "seq": 6,
+      "time_created": 1791319625407,
+      "time_updated": 1791319626927,
+      "data": "{\"time\":{\"created\":1791319625407,\"streamed\":1791319626922,\"completed\":1791319626927},\"agent\":\"build\",\"model\":{\"id\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\",\"variant\":\"default\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"The user wants me to create hello.txt with \\\"hi\\\", then read it back. Working directory is /tmp/chatstrata-oc2-throwaway. I'll use the write tool, then read it.\",\"state\":{\"reasoningField\":\"reasoning\",\"reasoningDetails\":[{\"type\":\"reasoning.text\",\"text\":\"The user wants me to create hello.txt with \\\"hi\\\", then read it back. Working directory is /tmp/chatstrata-oc2-throwaway. I'll use the write tool, then read it.\",\"format\":\"unknown\",\"index\":0}]},\"time\":{\"created\":1791319626206,\"completed\":1791319626918}},{\"type\":\"tool\",\"id\":\"call_01a112f853b77521a1b88575\",\"name\":\"write\",\"executed\":false,\"state\":{\"status\":\"completed\",\"input\":{\"path\":\"/tmp/chatstrata-oc2-throwaway/hello.txt\",\"content\":\"hi\"},\"content\":[{\"type\":\"text\",\"text\":\"Created file successfully: hello.txt\"}],\"metadata\":{\"truncated\":false}},\"time\":{\"created\":1791319626905,\"ran\":1791319626920,\"completed\":1791319626925}}],\"finish\":\"tool-calls\",\"rawFinish\":\"tool_calls\",\"cost\":0.001479,\"tokens\":{\"input\":9620,\"output\":29,\"reasoning\":43,\"cache\":{\"read\":0,\"write\":0}}}"
+    },
+    {
+      "id": "msg_112f854b5001mjmnEowEQE9WvY",
+      "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "type": "assistant",
+      "seq": 15,
+      "time_created": 1791319626938,
+      "time_updated": 1791319628688,
+      "data": "{\"time\":{\"created\":1791319626938,\"streamed\":1791319628683,\"completed\":1791319628687},\"agent\":\"build\",\"model\":{\"id\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\",\"variant\":\"default\"},\"content\":[{\"type\":\"tool\",\"id\":\"call_01a112f85b4e74bba54d1f51\",\"name\":\"read\",\"executed\":false,\"state\":{\"status\":\"completed\",\"input\":{\"path\":\"/tmp/chatstrata-oc2-throwaway/hello.txt\"},\"content\":[{\"type\":\"text\",\"text\":\"Read file /tmp/chatstrata-oc2-throwaway/hello.txt, lines 1-1\\n1: hi\"}],\"metadata\":{\"truncated\":false}},\"time\":{\"created\":1791319628678,\"ran\":1791319628682,\"completed\":1791319628686}}],\"finish\":\"tool-calls\",\"rawFinish\":\"tool_calls\",\"cost\":0.00032247999999999993,\"tokens\":{\"input\":166,\"output\":23,\"reasoning\":0,\"cache\":{\"read\":9536,\"write\":0}}}"
+    },
+    {
+      "id": "msg_112f85b95001UED2i7ezsgS03a",
+      "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "type": "assistant",
+      "seq": 22,
+      "time_created": 1791319628697,
+      "time_updated": 1791319649880,
+      "data": "{\"time\":{\"created\":1791319628697,\"streamed\":1791319649879,\"completed\":1791319649880},\"agent\":\"build\",\"model\":{\"id\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\",\"variant\":\"default\"},\"content\":[{\"type\":\"reasoning\",\"text\":\"The file says \\\"hi\\\". Simple confirmation.\",\"state\":{\"reasoningField\":\"reasoning\",\"reasoningDetails\":[{\"type\":\"reasoning.text\",\"text\":\"The file says \\\"hi\\\". Simple confirmation.\",\"format\":\"unknown\",\"index\":0}]},\"time\":{\"created\":1791319647929,\"completed\":1791319649876}},{\"type\":\"text\",\"text\":\"Done. I created `hello.txt` containing `hi`, read it back, and it says exactly that: **hi**.\"}],\"finish\":\"stop\",\"rawFinish\":\"stop\",\"cost\":0.00032975,\"tokens\":{\"input\":155,\"output\":28,\"reasoning\":9,\"cache\":{\"read\":9600,\"write\":0}}}"
+    },
+    {
+      "id": "msg_112f8ae5a001FdWqF58Lk0uqWg",
+      "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "type": "idle",
+      "seq": 29,
+      "time_created": 1791319649882,
+      "time_updated": 1791319649882,
+      "data": "{\"time\":{\"created\":1791319649882},\"outcome\":\"succeeded\"}"
+    }
+  ],
+  "session_inbox": [],
+  "session_pending": [],
+  "instruction_state": [
+    {
+      "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "epoch_start": 4,
+      "through_seq": 4,
+      "initial_values": "{\"core/environment\":\"60ce05a4962c1ffa629af2ce1d33e63a037e5bfd461bd533c4e65c922158210d\",\"core/date\":\"5c8dae29775784bcbe6bd4435aceb4e9ac13dd0a6662c40384efc999abc05282\",\"core/codemode\":\"4e447e8bd2f69b70062459177963ea4e7afdd536d38384fcdf822042c0a8c178\",\"core/skill-guidance\":\"c567cbd577f795deddf9bb9b978ff4922629db5540db8da69c977c3332e543e9\"}",
+      "current_values": "{\"core/environment\":\"60ce05a4962c1ffa629af2ce1d33e63a037e5bfd461bd533c4e65c922158210d\",\"core/date\":\"5c8dae29775784bcbe6bd4435aceb4e9ac13dd0a6662c40384efc999abc05282\",\"core/codemode\":\"4e447e8bd2f69b70062459177963ea4e7afdd536d38384fcdf822042c0a8c178\",\"core/skill-guidance\":\"c567cbd577f795deddf9bb9b978ff4922629db5540db8da69c977c3332e543e9\"}"
+    }
+  ],
+  "event_sequence": [
+    {
+      "aggregate_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "seq": 29,
+      "owner_id": null
+    }
+  ],
+  "event": []
+}
