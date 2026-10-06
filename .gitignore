@@ -71,3 +71,6 @@ uv.lock
 # Secrets
 .env
 .env.*
+
+# Go
+/bin/
