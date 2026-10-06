@@ -105,3 +105,45 @@ turns out to matter.
   another device's id. Per-device signing keys would close this and are a
   possible later step.
 - Local archives stay plaintext, as planned.
+
+## M3 verification notes
+
+Verified 2026-10-06 on `claude/amazing-davinci-o1nlsv` (`3ff654e`),
+linux/arm64, Go 1.27.1, against a real `chatstrata relay` process and three
+separate archives on one host (local HTTP, **not** a tailnet yet). `go test
+./...`, `go vet ./...` and `gofmt -l .` are clean. End-to-end with the built
+binary:
+
+- two devices ingest different sessions; `pair` + `sync`, then `join` on the
+  second and `sync` again → same `stats`, identical conversation ids, no
+  duplicate observations;
+- a device holding a stale (shorter) copy of another's session converges to
+  the fuller history; `divergences` stays empty;
+- relay down mid-sync: `sync` exits 1 with no partial state; once the relay
+  returns, the next `sync` uploads and the other devices catch up; an idle
+  `sync` reports `Uploaded: 0  Downloaded: 0`;
+- a third empty device restores the whole archive from the relay alone;
+- the relay stores `age` ciphertext only (plus `token.sha256`).
+
+### Known gaps found
+
+1. **`search` is stale until `reindex`.** The projector (and plain `ingest`)
+   do not update the FTS index, and the substring fallback in
+   `internal/cli/read.go` only runs when the FTS query *errors*, not when it
+   returns zero rows. A device that already has the fts extension therefore
+   returns **no** results for content that arrived through a sync until
+   `chatstrata reindex` runs. The acceptance case "same `search` output" only
+   holds once every device has reindexed after its last projection.
+   Pre-existing M1/M2 behaviour, not sync-specific. Candidate fix: rebuild FTS
+   at the end of projection when `LOAD fts` succeeds.
+2. **`daemon` loop is untested.** Only the one-shot `sync` path has coverage;
+   the periodic collect+sync loop has none.
+
+### Running the cross-tailscale test
+
+On the relay node: `chatstrata relay --data <dir>` behind
+`tailscale serve --bg http://127.0.0.1:8787`. On device A:
+`chatstrata pair --relay https://<host>.<tailnet>.ts.net` then `sync`. Carry
+the printed join code to B out of band, `chatstrata join <code>` there. Ingest
+on both, `sync` both, then run `chatstrata reindex` on **both** before diffing
+`search`/`stats` (see gap 1).
