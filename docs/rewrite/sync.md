@@ -285,3 +285,39 @@ select md5(string_agg(id, ',' order by id)) from messages;       -- 0c3da56cc21a
 
 (The earlier `ea5d2a45…` / `b8e0addc…` fingerprints are pre-probe and now
 stale.)
+
+#### Verifying 78625b3 on echo-1, and the reverse probe
+
+echo-1 rebuilt `~/.local/bin/chatstrata` at `78625b3` (checked first: a
+regular file, not a symlink to the Python tool — the earlier hazard is gone).
+Same three checks on echo-1's live archive:
+
+```text
+search qqqwwweee123        → No results.        (one line, no reindex hint)
+search qqqwwweee123 --json → []
+search refactor            → 13 results
+```
+
+echo-1 is **not** the daemon host — no `chatstrata daemon` runs there (only a
+stale Python-era `chatstrata-sync.service`, failed 2026-10-04, whose unit file
+no longer exists; the Go `schedule` installer is M4). The relay node's daemon
+restart above is the only one.
+
+The reverse probe crossed back cleanly. On echo-1, right after `sync`
+(`Downloaded: 1 segments, Conversations updated: 1`):
+
+```text
+search SYNCPROBE-OMARCHY-1791313021 → rank 1, score 8.50, no reindex
+stats → 34 conversations / 3857 messages / 3863 content blocks
+idle sync → Uploaded: 0  Downloaded: 0
+```
+
+Fingerprints on echo-1 match the relay node exactly:
+
+```sql
+select md5(string_agg(id, ',' order by id)) from conversations;  -- 2347c98d954f9897452a714a63c4f040
+select md5(string_agg(id, ',' order by id)) from messages;       -- 0c3da56cc21a9f36cb39f27180f7dd22
+```
+
+So both directions of the cross-tailscale sync now converge to identical
+conversation/message id sets, with search current on arrival and no reindex.
