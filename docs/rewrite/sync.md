@@ -249,3 +249,8 @@ rows come back with the two true matches sorted on top.
 Minor UX smell for M4: a zero-match query in text mode still prints the "run
 `chatstrata reindex`" hint, which reads as a stale index when the index is
 fine and the query simply matched nothing.
+**Fixed in this PR:** with a current index, a zero-match search prints just
+"No results."; it only suggests `chatstrata reindex` (or `reindex
+--install-fts` when the extension is missing) when search fell back to
+substring matching. `search --json` with no matches now prints `[]` instead
+of the text message. Covered by `TestSearchWithNoMatches`.

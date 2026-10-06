@@ -309,7 +309,8 @@ func runSearch(e *env, args []string) error {
 	defer s.Close()
 
 	results, err := searchFTS(e.ctx, s, query, conditions, params, *limit)
-	if err != nil {
+	substring := err != nil
+	if substring {
 		// No index or no FTS extension: fall back to substring search.
 		results, err = searchSubstring(e.ctx, s, query, conditions, params, *limit)
 		if err != nil {
@@ -317,8 +318,18 @@ func runSearch(e *env, args []string) error {
 		}
 	}
 
-	if len(results) == 0 {
-		fmt.Fprintln(e.stdout, "No results. If you recently ingested data, run `chatstrata reindex` first.")
+	if len(results) == 0 && !*asJSON {
+		// Ingest and sync keep the full-text index current, so an empty FTS
+		// result means nothing matched. Only point at a fix when search had
+		// to fall back to plain substring matching.
+		switch {
+		case !substring:
+			fmt.Fprintln(e.stdout, "No results.")
+		case s.LoadFTS(e.ctx):
+			fmt.Fprintln(e.stdout, "No results (substring match). Run `chatstrata reindex` for full-text search.")
+		default:
+			fmt.Fprintln(e.stdout, "No results (substring match). Run `chatstrata reindex --install-fts` once for full-text search.")
+		}
 		return nil
 	}
 	if *asJSON {
