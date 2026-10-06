@@ -210,8 +210,42 @@ uploads the missing segment; the peer's projection picks up exactly the delta
 **search is current with no `reindex`** — the gap 1 fix holds end-to-end here.
 The relay's per-device segment count matched local after each leg.
 
-Observations for the relay-side diff (pending): a unique-token search returns
-a **fixed 20 rows** regardless of match strength, with only the true matches
-ranked top — diffing "same `search` output" between nodes should compare the
-top-ranked rows, not the row count. The probe token above is the diff key;
-the peer should surface it at ranks 1–2 once it syncs.
+Observations for the relay-side diff: a query's sub-tokens can match many
+blocks, so `search` returns up to `LIMIT 20` ranked rows with only the true
+matches on top — diffing "same `search` output" between nodes should compare
+the top-ranked rows, not the row count. The probe token above is the diff key;
+the peer surfaces it at ranks 1–2 (see the relay-side result below).
+
+#### Relay-side result: omarchy-macbook
+
+Same run, the other end, also at `45a8e2d`.
+
+- The daemon (every 5m) picked echo-1 up with no manual step — journal at
+  12:34:40: `sync: uploaded 0, downloaded 6 segments, 30 conversations updated`.
+- Converged to the numbers echo-1 reported: `stats` → 33 conversations, 3855
+  messages, 3861 content blocks, 1225 tool calls.
+- `search refactor` → 13 results, same as echo-1. The probe token
+  `SYNCPROBE-ECHO1-1791311659` is at ranks 1–2 with scores 8.4746 / 8.3539 —
+  the same rows in the same order the peer saw.
+- One projection, no duplicates: 33 conversations, 35 observations, zero
+  duplicated `(source_id, source_native_id)` pairs, zero divergences.
+- Relay store: 7 `*.seg.age` plus `token.sha256`; every segment is X25519
+  `age` ciphertext and a grep for the probe token or source names finds
+  nothing. No warnings from either unit in the journal.
+
+Exact cross-node check (run on echo-1; must match these):
+
+```sql
+select md5(string_agg(id, ',' order by id)) from conversations;  -- ea5d2a456d9303f5db3ff0ea091951a1
+select md5(string_agg(id, ',' order by id)) from messages;       -- b8e0addc5409ee5d85d6eaa30d54291d
+```
+
+The 20 rows are `LIMIT 20` over every positive score, not a constant floor. A
+query matching nothing returns nothing (`search qqqwwweee123` → "No results"),
+and `match_bm25` is NULL for a non-matching block. The probe token's sub-token
+`echo1` matches 49 blocks (shell `echo` output in the corpus), so 20 ranked
+rows come back with the two true matches sorted on top.
+
+Minor UX smell for M4: a zero-match query in text mode still prints the "run
+`chatstrata reindex`" hint, which reads as a stale index when the index is
+fine and the query simply matched nothing.
