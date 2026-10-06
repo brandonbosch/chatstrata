@@ -227,7 +227,9 @@ def _render(data: dict) -> str:
 
 
 def _cases() -> list[dict]:
-    return json.loads((SPEC / "cases.json").read_text())
+    """The cases Python runs: those not limited to other implementations."""
+    cases = json.loads((SPEC / "cases.json").read_text())
+    return [c for c in cases if "python" in c.get("implementations", ["python", "go"])]
 
 
 def generate() -> None:

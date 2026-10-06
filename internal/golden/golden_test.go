@@ -5,9 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,11 +25,20 @@ type step struct {
 }
 
 type goldenCase struct {
-	Name   string `json:"name"`
-	Source string `json:"source"`
-	Input  string `json:"input"`
-	Path   string `json:"path"`
-	Steps  []step `json:"steps"`
+	Name string `json:"name"`
+	// Implementations lists who runs the case; empty means both. Expected
+	// output of a Go-only case comes from the Go side (-update).
+	Implementations []string `json:"implementations"`
+	Source          string   `json:"source"`
+	Input           string   `json:"input"`
+	Path            string   `json:"path"`
+	Steps           []step   `json:"steps"`
+}
+
+var update = flag.Bool("update", false, "rewrite expected output of Go-only cases")
+
+func (c goldenCase) goOnly() bool {
+	return len(c.Implementations) > 0 && !slices.Contains(c.Implementations, "python")
 }
 
 func TestGolden(t *testing.T) {
@@ -41,8 +52,24 @@ func TestGolden(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
+			if len(c.Implementations) > 0 && !slices.Contains(c.Implementations, "go") {
+				t.Skip("not a Go case")
+			}
 			actual := runCase(t, c)
-			expectedRaw, err := os.ReadFile(filepath.Join(specDir, "expected", c.Name+".json"))
+			expectedPath := filepath.Join(specDir, "expected", c.Name+".json")
+			if *update && c.goOnly() {
+				var buf bytes.Buffer
+				enc := json.NewEncoder(&buf)
+				enc.SetEscapeHTML(false)
+				enc.SetIndent("", "  ")
+				if err := enc.Encode(normalize(t, mustMarshal(t, actual))); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(expectedPath, buf.Bytes(), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			expectedRaw, err := os.ReadFile(expectedPath)
 			if err != nil {
 				t.Fatal(err)
 			}

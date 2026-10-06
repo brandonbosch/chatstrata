@@ -12,6 +12,7 @@ package opencode
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,7 +44,10 @@ type document struct {
 	Parts    []srcutil.Row `json:"parts"`
 }
 
-// Discover reads every session from the database.
+// Discover reads every session from the database. OpenCode 2.x keeps
+// sessions in session_v2 and session_message and leaves the 1.x tables
+// (session, message, part) frozen; it copies 1.x sessions into session_v2
+// under the same id, so a session found in both is read from session_v2.
 func (Source) Discover(path string) ([]model.Handle, error) {
 	path, err := srcutil.Root(path, DefaultPath)
 	if err != nil {
@@ -58,14 +62,36 @@ func (Source) Discover(path string) ([]model.Handle, error) {
 	}
 	defer db.Close()
 	ctx := context.Background()
+	tables, err := tableNames(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("read tables of %s: %w", path, err)
+	}
+
+	var handles []model.Handle
+	inV2 := map[string]bool{}
+	if tables["session_v2"] && tables["session_message"] {
+		v2, err := discoverV2(ctx, db, path)
+		if err != nil {
+			return nil, err
+		}
+		for _, h := range v2 {
+			inV2[h.SourceNativeID] = true
+		}
+		handles = append(handles, v2...)
+	}
+	if !tables["session"] {
+		return handles, nil
+	}
 	sessions, err := srcutil.QueryRows(ctx, db,
 		"SELECT id, title, directory, time_created, time_updated FROM session ORDER BY time_created")
 	if err != nil {
 		return nil, fmt.Errorf("read sessions from %s: %w", path, err)
 	}
-	handles := make([]model.Handle, 0, len(sessions))
 	for _, s := range sessions {
 		id := fmt.Sprint(s.Get("id"))
+		if inV2[id] {
+			continue
+		}
 		doc := document{Session: s}
 		if doc.Messages, err = srcutil.QueryRows(ctx, db,
 			"SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created", id); err != nil {
@@ -82,6 +108,18 @@ func (Source) Discover(path string) ([]model.Handle, error) {
 		handles = append(handles, model.Handle{SourceNativeID: id, Path: path, Content: content})
 	}
 	return handles, nil
+}
+
+func tableNames(ctx context.Context, db *sql.DB) (map[string]bool, error) {
+	rows, err := srcutil.QueryRows(ctx, db, "SELECT name FROM sqlite_master WHERE type = 'table'")
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	for _, r := range rows {
+		names[fmt.Sprint(r.Get("name"))] = true
+	}
+	return names, nil
 }
 
 type rawRow map[string]any
@@ -177,6 +215,9 @@ func asString(v any) *string {
 
 // Parse builds a conversation from a session's rows.
 func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error) {
+	if conv, ok, err := parseV2(h, content); ok {
+		return conv, err
+	}
 	doc, err := decode(content, h)
 	if err != nil {
 		return nil, err

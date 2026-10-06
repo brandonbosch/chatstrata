@@ -62,7 +62,11 @@ adapters hand the collector each conversation's bytes directly:
 
 - `claude_export`: one `conversations.json` holds every conversation. Each
   conversation is its array element, exactly as exported.
-- `opencode` and `hermes_agent`: SQLite databases. Each session's rows
+- `opencode` and `hermes_agent`: SQLite databases. OpenCode 2.x writes new
+  sessions to `session_v2`/`session_message` and copies 1.x sessions there
+  under the same id, so a session in both is read from the 2.x tables;
+  sessions only in the 1.x tables (`session`/`message`/`part`) are read from
+  those. Each session's rows
   (session, messages, parts) are serialized as one JSON document. The
   database is opened read-only. Its mtime isn't used to skip unchanged
   sessions, because SQLite can hold new rows in its write-ahead log without
