@@ -132,3 +132,88 @@ device directories.
 - Projection parses conversations one at a time. Full ingest is 4.8 s on the
   benchmark corpus against 3.5 s in M1; parallel parsing would recover it.
 - Compacting old segments.
+
+## M4a verification
+
+Checked on `0337466` from echo-1, the device that runs no daemon.
+`go test ./...`, `go vet ./...` and `gofmt -l .` are clean, and
+`~/.local/bin/chatstrata` is a regular file, not a symlink to the Python
+tool. No transcripts were copied into anything below; it is counts, ids and
+md5 fingerprints only.
+
+`chatstrata sources` lists all six adapters. On echo-1 `~/.codex/sessions`
+(66 files) and `~/.omp/agent/sessions` (76 files) exist;
+`~/.local/share/opencode/opencode.db` exists but holds no sessions;
+`~/.hermes` has no `state.db`, and there is no claude.ai export. Only
+`codex_cli` and `omp` have real data here.
+
+### Parity with Python
+
+Go ingested into the live archive, Python (`uv pip install -e .`) into
+scratch databases. Comparing conversation source ids, titles, projects and
+message counts, and every message and block field (role, sequence index,
+timestamps, block index/type/text and tool fields), the two agree:
+
+- `codex_cli`: 65 conversations, 8990 messages, identical.
+- `omp`: 70 conversations, identical except one session that was still being
+  written during the run (`01a112d0…`, two extra messages in the later Python
+  pass). Re-ingesting a frozen copy of it reproduced all 99 messages
+  identically, so the difference is the live file, not the adapter.
+
+Two fields differ by design and were excluded: the internal `conversations.id`
+and `messages.id` (Python generates random UUIDv4, Go derives deterministic
+ids), and `content_hash` (a per-implementation change detector). The
+`content_blocks.payload` JSON is byte-different for every codex payload
+(Python keeps insertion order, Go sorts keys) but value-identical when
+compared as canonical JSON.
+
+### Idempotency
+
+`ingest codex_cli` again: `Ingested: 0  Skipped: 66`. `ingest omp`:
+`Ingested: 1  Skipped: 75`, the one being the live session above; every other
+session was unchanged. `ingest opencode` finds nothing.
+
+### Sync
+
+`sync` on echo-1 uploaded 14 segments and downloaded the other device's 8,
+updating 34 conversations; a second `sync` is idle (`Uploaded: 0
+Downloaded: 0`), and `divergences` is 0. The live archive holds 203
+conversations / 30009 messages / 39241 content blocks / 13412 tool calls
+(claude_code 34, codex_cli 79, omp 90; the extra codex and omp conversations
+came from the other device). Fingerprints on echo-1:
+
+```sql
+select md5(string_agg(id, ',' order by id)) from conversations;  -- 725f22360bf9a517374553227e91df4f
+select md5(string_agg(id, ',' order by id)) from messages;       -- 7ae2938348aa01b50aa3273881fe80a7
+```
+
+### Snapshot rewrite
+
+OpenCode has no sessions on echo-1, so the revert was checked with `omp`,
+which is also a snapshot source. On a scratch database a copied session
+ingested as 166 messages; truncating its file and re-ingesting gave 138, with
+`divergences` still 0, and `rebuild` from the log reproduced 138. The newest
+snapshot replaces the older one, as intended.
+
+### import-legacy
+
+Importing the Python archive into a scratch database: `Imported: 128  Already
+imported: 0  Kept in log only: 0  Failed: 0`. Per source it matches the Python
+archive — claude_code 47, omp 13, opencode 25 — except codex_cli 43 vs 44.
+That one conversation (`01a0a7b4…`, 343 messages, ingested 2026-10-05) has no
+`raw_events` rows in the Python archive at all, so there is nothing to
+re-serialize; its transcript still exists on disk and is in the Go archive.
+Not an `import-legacy` defect.
+
+### OpenCode format
+
+The OpenCode installed on echo-1 (2.0.12) writes sessions to `session_v2` and
+`session_message`. The adapter, like the Python one it was ported from, reads
+`session`, `message` and `part`, so it finds no conversations here. Python
+gives the same zero, so parity holds; it is a pre-existing source-format gap,
+not a port defect.
+
+### Not run from echo-1
+
+The daemon pickup and the other device's half of the fingerprint comparison
+need omarchy-macbook. echo-1 runs no daemon and has no SSH access to it.
