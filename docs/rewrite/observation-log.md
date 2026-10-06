@@ -264,3 +264,41 @@ messages) is in the archive and, after sync, on both devices.
 
 Only the OpenCode revert and the legacy import were not run here, for the
 missing data above; both were covered on echo-1.
+
+## OpenCode 2.x re-check
+
+Re-checked on `1950b11`, which teaches the Go OpenCode adapter to read 2.x
+sessions from `session_v2` / `session_message` alongside the 1.x `session` /
+`message` / `part` tables, preferring 2.x when a session appears in both.
+`go test ./...` is clean on echo-1 and omarchy-macbook,
+`~/.local/bin/chatstrata` was a regular file on both, and the daemon was
+restarted on omarchy-macbook. Counts, ids and md5s only, as above.
+
+**Fixture.** On `spec/golden/inputs/opencode_v2`, whose `session` table holds a
+1.x copy of the 2.x session `ses_eed07b19…` plus a genuine 1.x `ses_test001`,
+the adapter ingests two conversations — the 2.x session once, from 2.x — not
+three. The Go-only golden case `opencode_v2` passes.
+
+**echo-1 (OpenCode 2.0.12).** `ingest opencode` went from zero to one 2.x
+session, then to two when a live `opencode run "say hi"` session appeared; a
+plain re-ingest was `Ingested: 0`, and `--incremental` picked up the new live
+session. `sync` uploaded 2 and downloaded 3 segments, then idled, and
+`divergences` stayed 0. The archive holds 2 opencode sessions / 9 messages
+(the per-session id/message_count table was not captured in the handoff).
+
+**omarchy-macbook.** No OpenCode database here, so there was nothing to
+ingest; the build, restart and sync checks above apply.
+
+**Convergence.** After both nodes synced, the per-source counts agree —
+claude_code 34/3857, codex_cli 79/10176, opencode 2/9 — `divergences` is 0,
+and the conversations md5 is identical on both
+(`17dc8a8c1e394d057db720718a17ee40`).
+
+The messages md5 differs (`d050782f…` on echo-1 against `20a46f39…` on
+omarchy-macbook) for one reason only: omarchy-macbook's live `omp`
+transcript (`1966d1ca-8225-8258-8059-00624f58d95c`, `01a112d0-3f72…`) is still
+being appended, and echo-1's copy of it lags by 28 messages. The conversation
+ids are frozen, which is why the conversations md5 matches. Excluding that one
+conversation, omarchy-macbook reports 204 conversations and 29858 messages,
+md5 `68dfcdc9b62ed5522a53741930e6367f` (conversations) and
+`7f716b37e252493451e66a6913fd91a3` (messages); nothing else differs.
