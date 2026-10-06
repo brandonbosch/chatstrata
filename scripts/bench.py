@@ -7,6 +7,9 @@
     # A synthetic Claude Code corpus, for a reproducible comparison:
     python scripts/bench.py --synthetic 500
 
+    # The same measurements for another build, e.g. the Go binary:
+    python scripts/bench.py --synthetic 500 --binary bin/chatstrata
+
 Every measurement runs the `chatstrata` CLI as a fresh process, the way users
 and agents call it, so interpreter start-up and imports are included. Results
 are printed as a table and written as JSON (--output).
@@ -132,13 +135,11 @@ def make_synthetic(root: Path, sessions: int, turns: int, seed: int = 7) -> None
                 f.write(json.dumps(line) + "\n")
 
 
-def _run(args: list[str], env: dict) -> tuple[float, float]:
+def _run(command: list[str], args: list[str], env: dict) -> tuple[float, float]:
     """Run the CLI once; return (seconds, peak RSS of that child in MiB)."""
     with tempfile.TemporaryFile() as stderr:
         started = time.perf_counter()
-        proc = subprocess.Popen(
-            CHATSTRATA + args, env=env, stdout=subprocess.DEVNULL, stderr=stderr
-        )
+        proc = subprocess.Popen(command + args, env=env, stdout=subprocess.DEVNULL, stderr=stderr)
         # wait4 gives this child's own resource usage, unlike RUSAGE_CHILDREN.
         _, status, usage = os.wait4(proc.pid, 0)
         elapsed = time.perf_counter() - started
@@ -173,18 +174,23 @@ def _dir_size(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file())
 
 
-def bench(source: str, corpus: Path, repeat: int, search_term: str) -> dict:
+def bench(command: list[str], source: str, corpus: Path, repeat: int, search_term: str) -> dict:
     results: dict = {}
     with tempfile.TemporaryDirectory(prefix="chatstrata-bench-") as tmp:
         tmp_path = Path(tmp)
         work, db, home = tmp_path / "corpus", tmp_path / "archive.duckdb", tmp_path / "home"
         shutil.copytree(corpus, work)
         home.mkdir()
-        env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config")}
+        env = dict(os.environ)
+        if command == CHATSTRATA:
+            # Keep the Python app away from the user's config. The Go binary
+            # writes no config, and needs the real HOME to find DuckDB's
+            # installed extensions.
+            env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"))
         ingest = ["ingest", source, "--path", str(work), "--db", str(db)]
 
         def measure(name: str, args: list[str], times: int = repeat) -> None:
-            runs = [_run(args, env) for _ in range(times)]
+            runs = [_run(command, args, env) for _ in range(times)]
             secs = [r[0] for r in runs]
             results[name] = {
                 "first_s": round(secs[0], 4),
@@ -220,10 +226,20 @@ def bench(source: str, corpus: Path, repeat: int, search_term: str) -> dict:
     return {"measurements": results, "corpus": corpus_info}
 
 
-def environment() -> dict:
+def environment(command: list[str]) -> dict:
     import duckdb
 
     venv = Path(sys.prefix)
+    if command != CHATSTRATA:
+        binary = Path(command[0])
+        return {
+            "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "cpus": os.cpu_count(),
+            "binary": str(binary),
+            "install_bytes": binary.stat().st_size,
+        }
     return {
         "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "platform": platform.platform(),
@@ -252,8 +268,14 @@ def main() -> None:
     parser.add_argument("--turns", type=int, default=40, help="Turns per synthetic session.")
     parser.add_argument("--repeat", type=int, default=5)
     parser.add_argument("--search", default="migration", help="Search term.")
+    parser.add_argument(
+        "--binary",
+        type=Path,
+        help="Benchmark this chatstrata executable instead of the Python app.",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    command = [str(args.binary.resolve())] if args.binary else CHATSTRATA
 
     with tempfile.TemporaryDirectory(prefix="chatstrata-corpus-") as tmp:
         if args.synthetic:
@@ -269,12 +291,12 @@ def main() -> None:
             label = f"{args.source}: {corpus}"
         result = {
             "corpus_label": label,
-            "environment": environment(),
-            **bench(args.source, corpus, args.repeat, args.search),
+            "environment": environment(command),
+            **bench(command, args.source, corpus, args.repeat, args.search),
         }
 
     corpus = result["corpus"]
-    print(f"{label}")
+    print(f"{label}  [{args.binary or 'python'}]")
     print(
         f"{corpus['files']} files, {corpus['bytes'] / 1e6:.1f} MB in, {corpus['db_bytes'] / 1e6:.1f} MB database\n"
     )
