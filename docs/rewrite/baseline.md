@@ -56,6 +56,12 @@ binary built with `-ldflags "-s -w"` (60 MB, nearly all of it DuckDB).
 - Go `search` uses the FTS index after `reindex --install-fts`; without the
   extension it falls back to substring search, like Python.
 
+M2 (ingest goes through the observation log, then the projection) on the same
+corpus: full ingest 4.8 s, incremental no-op 0.10 s, 5 appended files 0.86 s;
+read commands unchanged. The log for the 8.2 MB corpus is 1.8 MB (zstd). The
+synthetic text compresses unusually well, so real transcripts will compress
+less.
+
 ## What this shows
 
 **Every command pays about 0.3 s before doing any work.** `--help` alone takes

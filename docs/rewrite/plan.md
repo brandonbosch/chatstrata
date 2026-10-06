@@ -265,7 +265,10 @@ DuckDB's FTS extension is not bundled with the Go driver, so
 - Acceptance: matches the M0 golden output for claude_code; faster than the
   M0 baseline on the same archive; builds on Linux and macOS.
 
-**M2 · Observation log and projection**
+**M2 · Observation log and projection**: done. See
+[observation-log.md](observation-log.md) for the format and merge rules as
+built. All `spec/projection` scenarios pass except the one that needs the
+claude.ai export adapter.
 - Collector writes observations and segments; projector builds DuckDB from
   them. `rebuild` and `import-legacy`.
 - Acceptance: deleting `archive.duckdb` and running `rebuild` gives an

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -18,6 +19,7 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2" // registers the "duckdb" driver
 
 	"github.com/brandonbosch/chatstrata"
+	"github.com/brandonbosch/chatstrata/internal/store/migrations"
 )
 
 // Store is an open archive. Writes go through a single connection because
@@ -169,6 +171,8 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 type migration struct {
 	version int
 	name    string
+	fsys    fs.FS
+	path    string
 }
 
 func (s *Store) SchemaVersion(ctx context.Context) int {
@@ -180,32 +184,45 @@ func (s *Store) SchemaVersion(ctx context.Context) int {
 	return n
 }
 
-// migrate applies the migrations shared with the Python implementation and
-// records the version the same way, so either implementation can open an
-// archive the other created.
+// migrate applies the migrations shared with the Python implementation, then
+// the Go-only ones, recording the version the same way, so either
+// implementation can open an archive the other created.
 func (s *Store) migrate(ctx context.Context) error {
-	const dir = "chatstrata/core/migrations"
-	entries, err := fs.ReadDir(chatstrata.Migrations, dir)
-	if err != nil {
-		return fmt.Errorf("read migrations: %w", err)
+	type source struct {
+		fsys fs.FS
+		dir  string
 	}
-	var migrations []migration
-	for _, e := range entries {
-		prefix, _, ok := strings.Cut(e.Name(), "_")
-		v, err := strconv.Atoi(prefix)
-		if !ok || err != nil {
-			return fmt.Errorf("migration %s: name must start with a number", e.Name())
+	var all []migration
+	for _, src := range []source{{chatstrata.Migrations, "chatstrata/core/migrations"}, {migrations.FS, "."}} {
+		entries, err := fs.ReadDir(src.fsys, src.dir)
+		if err != nil {
+			return fmt.Errorf("read migrations: %w", err)
 		}
-		migrations = append(migrations, migration{version: v, name: e.Name()})
+		for _, e := range entries {
+			if !strings.HasSuffix(e.Name(), ".sql") {
+				continue
+			}
+			prefix, _, ok := strings.Cut(e.Name(), "_")
+			v, err := strconv.Atoi(prefix)
+			if !ok || err != nil {
+				return fmt.Errorf("migration %s: name must start with a number", e.Name())
+			}
+			all = append(all, migration{version: v, name: e.Name(), fsys: src.fsys, path: path.Join(src.dir, e.Name())})
+		}
 	}
-	sort.Slice(migrations, func(i, j int) bool { return migrations[i].version < migrations[j].version })
+	sort.Slice(all, func(i, j int) bool { return all[i].version < all[j].version })
+	for i := 1; i < len(all); i++ {
+		if all[i].version == all[i-1].version {
+			return fmt.Errorf("migrations %s and %s share version %d", all[i-1].name, all[i].name, all[i].version)
+		}
+	}
 
 	current := s.SchemaVersion(ctx)
-	for _, m := range migrations {
+	for _, m := range all {
 		if m.version <= current {
 			continue
 		}
-		body, err := fs.ReadFile(chatstrata.Migrations, dir+"/"+m.name)
+		body, err := fs.ReadFile(m.fsys, m.path)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", m.name, err)
 		}

@@ -60,6 +60,8 @@ func init() {
 		{"stats", "Show a summary of what's in the archive", runStats},
 		{"doctor", "Run basic sanity checks on the archive", runDoctor},
 		{"reindex", "Rebuild the full-text search index", runReindex},
+		{"rebuild", "Rebuild the archive from its observation log", runRebuild},
+		{"import-legacy", "Import a Python-era archive into the observation log", runImportLegacy},
 		{"sources", "List available source adapters", runSources},
 		{"version", "Print the version", runVersion},
 	}

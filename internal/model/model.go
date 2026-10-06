@@ -80,7 +80,13 @@ type Source interface {
 	// Discover lists conversations under root, or the source's default
 	// location when root is empty.
 	Discover(root string) ([]Handle, error)
-	Parse(h Handle) (*Conversation, error)
+	// Parse builds a conversation from the bytes of its source file. The
+	// bytes come from the observation log, not necessarily from h.Path,
+	// which may not exist on this machine.
+	Parse(h Handle, content []byte) (*Conversation, error)
+	// AppendOnly reports whether the source only ever appends to its files,
+	// which lets the collector log just the new bytes.
+	AppendOnly() bool
 }
 
 // Ptr returns a pointer to v.
