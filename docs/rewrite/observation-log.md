@@ -217,3 +217,46 @@ not a port defect.
 
 The daemon pickup and the other device's half of the fingerprint comparison
 need omarchy-macbook. echo-1 runs no daemon and has no SSH access to it.
+
+### omarchy-macbook (relay and daemon node)
+
+The same commit on the node that runs `chatstrata-relay.service` and
+`chatstrata-daemon.service`. `go test ./...` is clean and
+`~/.local/bin/chatstrata` was a regular ELF file, so `go build -o` could
+replace it safely; the daemon was restarted afterwards.
+
+`chatstrata sources` lists six. Locally present: `~/.codex/sessions` (14
+files) and `~/.omp/agent/sessions` (46 files). Missing: no `opencode.db`, no
+Hermes `state.db`, no claude.ai export and no Python `chatstrata.duckdb`, so
+the revert and `import-legacy` checks stay on echo-1.
+
+**Parity.** Ingesting the live sources into the real archive, then the same
+sources from a frozen copy into scratch Go and scratch Python databases and
+comparing with the canonical dump (`scripts/golden.py`): identical for
+`codex_cli` and `omp` — 33 conversations, 3085 messages, 4322 content blocks
+and 5992 raw_events, zero diff lines. The same two fields are excluded as on
+echo-1 (random Python UUIDs against deterministic Go ids, and `content_hash`).
+This run's own `omp` transcript is the live session and grows between passes,
+which is why the frozen copy is used; on the live archive `ingest omp` reports
+`Ingested: 1` for it and `Ingested: 0` for everything else and for
+`codex_cli`.
+
+**Sync and convergence.** `sync` uploaded 2 segments, then 0/0. The daemon's
+next cycle downloaded echo-1's 14 segments and updated 135 conversations.
+Both nodes now hold the same archive — 203 conversations, 30009 messages,
+39241 content blocks and 13412 tool calls — with `divergences` 0 and
+identical fingerprints:
+
+```sql
+select md5(string_agg(id, ',' order by id)) from conversations;  -- 725f22360bf9a517374553227e91df4f
+select md5(string_agg(id, ',' order by id)) from messages;       -- 7ae2938348aa01b50aa3273881fe80a7
+```
+
+**Daemon pickup.** `codex exec "say hi"` created
+`rollout-2026-10-06T14-08-40-01a112d5-….jsonl`. The next 5-minute cycle
+logged one changed `codex_cli` and one changed `omp` conversation, updated
+two, and uploaded two segments; the new conversation (`01a112d5…`, 3
+messages) is in the archive and, after sync, on both devices.
+
+Only the OpenCode revert and the legacy import were not run here, for the
+missing data above; both were covered on echo-1.
