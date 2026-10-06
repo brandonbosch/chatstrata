@@ -1,0 +1,382 @@
+{
+  "conversations": [
+    {
+      "ended_at": "2026-09-13T04:40:00Z",
+      "message_count": 6,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "add omp support to chatstrata please",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-09-13T04:37:40Z",
+          "metadata": {
+            "attribution": "user"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "6023a196"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Need to study the session format first.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            },
+            {
+              "block_index": 1,
+              "payload": {
+                "arguments": {
+                  "path": "/home/brandon/.omp/agent/sessions"
+                }
+              },
+              "text": null,
+              "tool_name": "read",
+              "tool_use_id": "call-001",
+              "type": "tool_use"
+            },
+            {
+              "block_index": 2,
+              "payload": null,
+              "text": "I studied the session format and will write the adapter.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-09-13T04:37:42Z",
+          "metadata": {},
+          "model": "claude-sonnet-4-5",
+          "parent_source_native_id": "6023a196",
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "8fce7202"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "details": {
+                  "matchCount": 14
+                }
+              },
+              "text": "14 session files found",
+              "tool_name": "read",
+              "tool_use_id": "call-001",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2026-09-13T04:37:42.5Z",
+          "metadata": {},
+          "model": null,
+          "parent_source_native_id": "8fce7202",
+          "role": "tool",
+          "sequence_index": 2,
+          "source_native_id": "c4191a8b"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Adapter written with fixture tests.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-09-13T04:38:00Z",
+          "metadata": {},
+          "model": "claude-sonnet-4-5",
+          "parent_source_native_id": "c4191a8b",
+          "role": "assistant",
+          "sequence_index": 3,
+          "source_native_id": "a5b6c7d8"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Injected context from extension",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-09-13T04:39:30Z",
+          "metadata": {
+            "attribution": "agent"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 4,
+          "source_native_id": "e2f3a4b5"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "plain string user turn",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-09-13T04:40:00Z",
+          "metadata": {
+            "attribution": "user"
+          },
+          "model": null,
+          "parent_source_native_id": "e2f3a4b5",
+          "role": "user",
+          "sequence_index": 5,
+          "source_native_id": "f4a5b6c7"
+        }
+      ],
+      "metadata": {
+        "event_count": 12
+      },
+      "project": "/home/example/chatstrata",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "pad": "",
+            "source": "auto",
+            "title": "Add omp source adapter",
+            "type": "title",
+            "updatedAt": "2026-09-13T05:00:00.000Z",
+            "v": 1
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "cwd": "/home/example/chatstrata",
+            "id": "01a0990e-6269-7183-b8bd-19502cf6afcd",
+            "timestamp": "2026-09-13T04:37:31.881Z",
+            "title": "Add omp source adapter",
+            "titleSource": "auto",
+            "type": "session",
+            "version": 3
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 2,
+          "payload": {
+            "id": "11111111",
+            "model": "anthropic/claude-sonnet-4-5",
+            "parentId": null,
+            "role": "default",
+            "timestamp": "2026-09-13T04:37:31.900Z",
+            "type": "model_change"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 3,
+          "payload": {
+            "id": "6023a196",
+            "message": {
+              "attribution": "user",
+              "content": [
+                {
+                  "text": "add omp support to chatstrata please",
+                  "type": "text"
+                }
+              ],
+              "role": "user",
+              "timestamp": 1789336660000
+            },
+            "parentId": null,
+            "timestamp": "2026-09-13T04:37:40.000Z",
+            "type": "message"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 4,
+          "payload": {
+            "id": "8fce7202",
+            "message": {
+              "content": [
+                {
+                  "thinking": "Need to study the session format first.",
+                  "type": "thinking"
+                },
+                {
+                  "arguments": {
+                    "path": "/home/brandon/.omp/agent/sessions"
+                  },
+                  "id": "call-001",
+                  "name": "read",
+                  "type": "toolCall"
+                },
+                {
+                  "text": "I studied the session format and will write the adapter.",
+                  "type": "text"
+                }
+              ],
+              "model": "claude-sonnet-4-5",
+              "provider": "anthropic",
+              "role": "assistant",
+              "timestamp": 1789336662000,
+              "usage": {
+                "input": 100,
+                "output": 20
+              }
+            },
+            "parentId": "6023a196",
+            "timestamp": "2026-09-13T04:37:42.000Z",
+            "type": "message"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 5,
+          "payload": {
+            "id": "c4191a8b",
+            "message": {
+              "content": [
+                {
+                  "text": "14 session files found",
+                  "type": "text"
+                }
+              ],
+              "details": {
+                "matchCount": 14
+              },
+              "isError": false,
+              "role": "toolResult",
+              "timestamp": 1789336662500,
+              "toolCallId": "call-001",
+              "toolName": "read"
+            },
+            "parentId": "8fce7202",
+            "timestamp": "2026-09-13T04:37:42.500Z",
+            "type": "message"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 6,
+          "payload": {
+            "id": "a5b6c7d8",
+            "message": {
+              "content": [
+                {
+                  "text": "Adapter written with fixture tests.",
+                  "type": "text"
+                }
+              ],
+              "model": "claude-sonnet-4-5",
+              "provider": "anthropic",
+              "role": "assistant"
+            },
+            "parentId": "c4191a8b",
+            "timestamp": "2026-09-13T04:38:00.000Z",
+            "type": "message"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 7,
+          "payload": {
+            "firstKeptEntryId": "a5b6c7d8",
+            "fromExtension": false,
+            "id": "b1c2d3e4",
+            "parentId": "a5b6c7d8",
+            "summary": "Work so far",
+            "timestamp": "2026-09-13T04:39:00.000Z",
+            "tokensBefore": 42000,
+            "type": "compaction"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 8,
+          "payload": {
+            "attribution": "agent",
+            "content": "Injected context from extension",
+            "customType": "my-extension",
+            "display": true,
+            "id": "e2f3a4b5",
+            "parentId": "b1c2d3e4",
+            "timestamp": "2026-09-13T04:39:30.000Z",
+            "type": "custom_message"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 9,
+          "payload": {
+            "id": "f4a5b6c7",
+            "message": {
+              "attribution": "user",
+              "content": "plain string user turn",
+              "role": "user",
+              "timestamp": 1789336800000
+            },
+            "parentId": "e2f3a4b5",
+            "timestamp": "2026-09-13T04:40:00.000Z",
+            "type": "message"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 10,
+          "payload": {
+            "id": "d2e3f4a5",
+            "parentId": null,
+            "systemPrompt": "...",
+            "timestamp": "2026-09-13T04:37:31.950Z",
+            "tools": [
+              "read",
+              "edit"
+            ],
+            "type": "session_init"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        },
+        {
+          "line_number": 11,
+          "payload": {
+            "customType": "tool_execution_start",
+            "data": {
+              "toolCallId": "call-001",
+              "toolName": "read"
+            },
+            "id": "f1a2b3c4",
+            "parentId": "f4a5b6c7",
+            "timestamp": "2026-09-13T04:41:00.000Z",
+            "type": "custom"
+          },
+          "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl"
+        }
+      ],
+      "raw_path": "$INPUT/sessions/-git-chatstrata/2026-09-13T04-37-31-881Z_01a0990e-6269-7183-b8bd-19502cf6afcd.jsonl",
+      "source_id": "omp",
+      "source_native_id": "01a0990e-6269-7183-b8bd-19502cf6afcd",
+      "started_at": "2026-09-13T04:37:31.881Z",
+      "title": "Add omp source adapter"
+    }
+  ]
+}

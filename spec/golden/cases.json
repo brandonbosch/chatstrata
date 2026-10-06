@@ -1,0 +1,63 @@
+[
+  {
+    "name": "claude_code",
+    "source": "claude_code",
+    "input": "claude_code",
+    "path": "projects",
+    "steps": [{}]
+  },
+  {
+    "name": "claude_code_reingest",
+    "description": "Ingesting unchanged sources twice must not duplicate anything.",
+    "source": "claude_code",
+    "input": "claude_code",
+    "path": "projects",
+    "steps": [{}, {}]
+  },
+  {
+    "name": "claude_code_appended",
+    "description": "A transcript that grows between incremental ingests ends up identical to ingesting the full file once.",
+    "source": "claude_code",
+    "input": "claude_code",
+    "path": "projects",
+    "steps": [
+      {"incremental": true, "truncate_lines": {"projects/-Users-example-myproj/sample_session.jsonl": 3}},
+      {"incremental": true}
+    ]
+  },
+  {
+    "name": "codex_cli",
+    "source": "codex_cli",
+    "input": "codex_cli",
+    "path": "sessions",
+    "steps": [{}]
+  },
+  {
+    "name": "omp",
+    "source": "omp",
+    "input": "omp",
+    "path": "sessions",
+    "steps": [{}]
+  },
+  {
+    "name": "claude_export",
+    "source": "claude_export",
+    "input": "claude_export",
+    "path": "conversations.json",
+    "steps": [{}]
+  },
+  {
+    "name": "opencode",
+    "source": "opencode",
+    "input": "opencode",
+    "path": "opencode.db",
+    "steps": [{}]
+  },
+  {
+    "name": "hermes_agent",
+    "source": "hermes_agent",
+    "input": "hermes_agent",
+    "path": "state.db",
+    "steps": [{}]
+  }
+]

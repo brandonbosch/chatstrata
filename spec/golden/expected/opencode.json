@@ -1,0 +1,341 @@
+{
+  "conversations": [
+    {
+      "ended_at": "2023-11-14T22:14:20Z",
+      "message_count": 5,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Add error handling to the database connection module",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:20Z",
+          "metadata": {
+            "agent": "build",
+            "provider_id": "llamacpp"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg_user001"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "end_ms": 1700000015000,
+                "start_ms": 1700000011000
+              },
+              "text": "I need to add try-except blocks around the database connection calls.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "I'll add error handling to the database connection module.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {
+            "agent": "build",
+            "mode": "build",
+            "provider_id": "llamacpp",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 4500,
+              "output": 500,
+              "reasoning": 0,
+              "total": 5000
+            }
+          },
+          "model": "qwen-distill",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg_asst001"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "input": {
+                  "command": "cat db.py",
+                  "description": "Read database module"
+                },
+                "status": "completed"
+              },
+              "text": null,
+              "tool_name": "bash",
+              "tool_use_id": "call_abc123",
+              "type": "tool_use"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {},
+          "model": "qwen-distill",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 2,
+          "source_native_id": "call_abc123"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "status": "completed"
+              },
+              "text": "import sqlite3\n\ndef connect():\n    return sqlite3.connect(\"app.db\")",
+              "tool_name": null,
+              "tool_use_id": "call_abc123",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {},
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "tool",
+          "sequence_index": 3,
+          "source_native_id": "call_abc123"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "I've reviewed the module. Adding try-except blocks now.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 1,
+              "payload": {
+                "files": [
+                  "/home/user/projects/myapp/db.py"
+                ],
+                "hash": "deadbeef1234567890"
+              },
+              "text": null,
+              "tool_name": "patch",
+              "tool_use_id": null,
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {
+            "agent": "build",
+            "mode": "build",
+            "provider_id": "llamacpp",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 4500,
+              "output": 500,
+              "reasoning": 0,
+              "total": 5000
+            }
+          },
+          "model": "qwen-distill",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 4,
+          "source_native_id": "msg_asst001"
+        }
+      ],
+      "metadata": {},
+      "project": "/home/user/projects/myapp",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "model": {
+                "modelID": "qwen-distill",
+                "providerID": "llamacpp"
+              },
+              "role": "user",
+              "summary": {
+                "diffs": []
+              },
+              "time": {
+                "created": 1700000000000
+              }
+            },
+            "id": "msg_user001",
+            "parts": [
+              {
+                "data": {
+                  "text": "Add error handling to the database connection module",
+                  "type": "text"
+                },
+                "id": "prt_user001"
+              }
+            ],
+            "time_created": 1700000000000
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "cost": 0,
+              "finish": "tool-calls",
+              "mode": "build",
+              "modelID": "qwen-distill",
+              "parentID": "msg_user001",
+              "path": {
+                "cwd": "/home/user/projects/myapp",
+                "root": "/"
+              },
+              "providerID": "llamacpp",
+              "role": "assistant",
+              "time": {
+                "completed": 1700000060000,
+                "created": 1700000010000
+              },
+              "tokens": {
+                "cache": {
+                  "read": 0,
+                  "write": 0
+                },
+                "input": 4500,
+                "output": 500,
+                "reasoning": 0,
+                "total": 5000
+              }
+            },
+            "id": "msg_asst001",
+            "parts": [
+              {
+                "data": {
+                  "type": "step-start"
+                },
+                "id": "prt_step001"
+              },
+              {
+                "data": {
+                  "text": "I need to add try-except blocks around the database connection calls.",
+                  "time": {
+                    "end": 1700000015000,
+                    "start": 1700000011000
+                  },
+                  "type": "reasoning"
+                },
+                "id": "prt_reason001"
+              },
+              {
+                "data": {
+                  "text": "I'll add error handling to the database connection module.",
+                  "time": {
+                    "end": 1700000015000,
+                    "start": 1700000015000
+                  },
+                  "type": "text"
+                },
+                "id": "prt_text001"
+              },
+              {
+                "data": {
+                  "callID": "call_abc123",
+                  "state": {
+                    "input": {
+                      "command": "cat db.py",
+                      "description": "Read database module"
+                    },
+                    "metadata": {
+                      "description": "Read database module",
+                      "exit": 0,
+                      "output": "import sqlite3\n\ndef connect():\n    return sqlite3.connect(\"app.db\")",
+                      "truncated": false
+                    },
+                    "output": "import sqlite3\n\ndef connect():\n    return sqlite3.connect(\"app.db\")",
+                    "status": "completed",
+                    "time": {
+                      "end": 1700000025000,
+                      "start": 1700000020000
+                    },
+                    "title": "Read database module"
+                  },
+                  "tool": "bash",
+                  "type": "tool"
+                },
+                "id": "prt_tool001"
+              },
+              {
+                "data": {
+                  "text": "I've reviewed the module. Adding try-except blocks now.",
+                  "time": {
+                    "end": 1700000030000,
+                    "start": 1700000030000
+                  },
+                  "type": "text"
+                },
+                "id": "prt_text002"
+              },
+              {
+                "data": {
+                  "cost": 0,
+                  "reason": "tool-calls",
+                  "snapshot": "abc123",
+                  "tokens": {
+                    "cache": {
+                      "read": 0,
+                      "write": 0
+                    },
+                    "input": 4500,
+                    "output": 500,
+                    "reasoning": 0,
+                    "total": 5000
+                  },
+                  "type": "step-finish"
+                },
+                "id": "prt_stepfin001"
+              },
+              {
+                "data": {
+                  "files": [
+                    "/home/user/projects/myapp/db.py"
+                  ],
+                  "hash": "deadbeef1234567890",
+                  "type": "patch"
+                },
+                "id": "prt_patch001"
+              }
+            ],
+            "time_created": 1700000010000
+          },
+          "raw_path": "$INPUT/opencode.db"
+        }
+      ],
+      "raw_path": "$INPUT/opencode.db",
+      "source_id": "opencode",
+      "source_native_id": "ses_test001",
+      "started_at": "2023-11-14T22:13:20Z",
+      "title": "Add error handling to database module"
+    }
+  ]
+}
