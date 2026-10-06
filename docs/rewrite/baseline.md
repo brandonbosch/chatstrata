@@ -27,6 +27,35 @@ benchmark on the real machines (below) before setting targets.
 | stats | 0.33 | 0.33 | 5 | 96 |
 | query (tool counts) | 0.35 | 0.33 | 5 | 97 |
 
+## Go (M1), same corpus and container
+
+`bench.py --synthetic 100 --turns 20 --binary bin/chatstrata`, the same
+generated corpus (fixed seed) on the same container. Go 1.24, DuckDB 1.5.6,
+binary built with `-ldflags "-s -w"` (60 MB, nearly all of it DuckDB).
+
+| measurement | Python median (s) | Go median (s) | speed-up | Go peak RSS (MiB) |
+|---|---:|---:|---:|---:|
+| startup (`--help`) | 0.27 | 0.008 | 33x | 50 |
+| full ingest | 94.7 | 3.48 | 27x | 200 |
+| incremental, nothing changed | 0.37 | 0.088 | 4x | 51 |
+| incremental, 5 files appended | 0.93 | 0.70 | 1.3x | 142 |
+| reindex (FTS) | 1.89 | 1.48 | 1.3x | 124 |
+| search | 0.36 | 0.13 | 2.8x | 89 |
+| stats | 0.33 | 0.077 | 4x | 51 |
+| query (tool counts) | 0.33 | 0.11 | 3x | 52 |
+
+- Commands that read the archive are now dominated by opening the DuckDB file
+  (about 70 ms here), not by the process.
+- Full ingest parses files in parallel and bulk-loads rows with DuckDB
+  appenders.
+- Re-ingesting a changed conversation costs 50 to 110 ms, almost all of it
+  commits: DuckDB checks foreign keys against committed data, so deleting a
+  conversation's old rows takes one commit per table. M2 replaces this write
+  path with the observation log and projection, so it isn't worth optimizing
+  now.
+- Go `search` uses the FTS index after `reindex --install-fts`; without the
+  extension it falls back to substring search, like Python.
+
 ## What this shows
 
 **Every command pays about 0.3 s before doing any work.** `--help` alone takes

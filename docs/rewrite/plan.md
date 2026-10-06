@@ -253,7 +253,12 @@ acceptance check gets fixed or redesigned before the next one starts.
   incremental no-op ingest, a search, a `stats`.
 - Write the projection-rule fixtures listed above as test cases.
 
-**M1 · Local Go core**
+**M1 · Local Go core**: done. Golden cases for claude_code pass, and the
+numbers are in [baseline.md](baseline.md). Decisions made along the way:
+the Go archive defaults to `chatstrata-go.duckdb` next to the Python one
+(override with `CHATSTRATA_GO_DB`) so the two never mix during parallel use;
+DuckDB's FTS extension is not bundled with the Go driver, so
+`reindex --install-fts` downloads it once on request; ids are deterministic.
 - Go module at the repo root (`cmd/chatstrata`, `internal/`). CLI with `ingest` (claude_code only),
   `query`, `search`, `stats`, `doctor`. DuckDB via `duckdb-go`, schema from
   the existing migrations.
@@ -298,8 +303,10 @@ acceptance check gets fixed or redesigned before the next one starts.
 - Can work transcripts leave the work machine? (Decides whether a work space
   ever exists.)
 - Where does the relay live long-term: Linux desktop, Pi, or VPS?
-- Does `duckdb-go` bundle the FTS extension, or does it need a one-time
-  download? The README promises no network calls.
+- `duckdb-go` does not bundle the FTS extension (M1 finding). For release
+  builds, decide between shipping the signed extension file alongside the
+  binary, building DuckDB with FTS linked in, or keeping the explicit
+  `reindex --install-fts` download.
 - MCP server inside the daemon or as a stdio proxy?
 - Segment size and how often to flush (latency vs. number of files).
 - When can old segments be compacted, given devices that stay offline for a

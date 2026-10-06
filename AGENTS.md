@@ -13,7 +13,7 @@ Until the cutover (milestone M5), both implementations live in this repo.
 | Path | What it is | Status |
 |---|---|---|
 | `chatstrata/`, `tests/`, `pyproject.toml` | Python app (published on PyPI as `chatstrata`) | **Feature-frozen** |
-| `cmd/`, `internal/`, `go.mod` | Go app (added in M1) | Active development |
+| `cmd/`, `internal/`, `go.mod`, `embed.go` | Go app | Active development |
 | `spec/` | Behaviour contract shared by both implementations | Change deliberately |
 | `scripts/golden.py`, `scripts/bench.py` | Golden-output and benchmark tooling (Python) | Active |
 | `docs/adr/` | Architecture decision records | Append-only |
@@ -68,13 +68,20 @@ python scripts/bench.py --synthetic 100 --turns 20
 Only run `ruff format` on files you change; much of the existing code isn't
 formatted and reformatting it buries real changes in the diff.
 
-Go (from M1):
+Go:
 
 ```sh
-go build ./cmd/chatstrata
-go test ./...
-go vet ./...
+go build -o bin/chatstrata ./cmd/chatstrata   # `chatstrata` alone would clash with the Python package dir
+go test ./...                                 # includes the golden tests against spec/
+go vet ./... && gofmt -l .
+python scripts/bench.py --synthetic 100 --turns 20 --binary bin/chatstrata
 ```
+
+The Go binary uses its own archive (`chatstrata-go.duckdb`, or
+`$CHATSTRATA_GO_DB`) so it never writes to the Python archive. To port an
+adapter: add it under `internal/sources/`, register it in `internal/cli`, and
+add its source to `ported` in `internal/golden/golden_test.go`; the existing
+golden cases then have to pass.
 
 DuckDB makes the Go build use CGo; build release binaries natively per OS and
 architecture rather than cross-compiling.
