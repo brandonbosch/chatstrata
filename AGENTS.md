@@ -106,7 +106,9 @@ An adapter can implement `model.Checker` so `chatstrata doctor` can say when
 the tool's storage changed under it.
 
 DuckDB makes the Go build use CGo; build release binaries natively per OS and
-architecture rather than cross-compiling.
+architecture rather than cross-compiling. Release builds (`-tags fts_embed`,
+after `go run ./internal/tools/fetchfts`) embed DuckDB's fts extension so
+search never downloads it; how releases are cut: `docs/rewrite/release.md`.
 
 ## Conventions
 

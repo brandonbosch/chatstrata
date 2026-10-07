@@ -141,12 +141,22 @@ func (s *Store) Close() error {
 // connection-local state such as loaded extensions.
 func (s *Store) Conn() *sql.Conn { return s.conn }
 
-// LoadFTS loads the full-text search extension if it is installed. It never
-// downloads anything; see InstallFTS.
+// LoadFTS loads the full-text search extension: the one embedded in release
+// builds, else one installed with InstallFTS. It never downloads anything.
 func (s *Store) LoadFTS(ctx context.Context) bool {
+	if path, err := ftsExtensionFile(); err == nil && path != "" {
+		if _, err := s.conn.ExecContext(ctx, "LOAD "+sqlString(path)); err == nil {
+			return true
+		}
+	}
 	_, err := s.conn.ExecContext(ctx, "LOAD fts")
 	return err == nil
 }
+
+// FTSEmbedded reports whether this build carries the fts extension.
+func FTSEmbedded() bool { return len(embeddedFTS) > 0 }
+
+func sqlString(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
 // InstallFTS downloads the DuckDB full-text search extension. This is the
 // one network call search needs, so it only happens when the user asks.

@@ -450,10 +450,13 @@ omarchy-macbook's live omp session (`1f40ea9f…`) the fingerprints are
 `9a9a0bd1…` and `3e8b0d3b…`; echo-1's are its half of the comparison.
 
 **M5 · Cutover**
-- Release builds per platform (CGo, so build on native runners per OS/arch),
-  published on GitHub Releases with an install script and a Homebrew tap;
-  install instructions without Python. `go install` keeps working for anyone
-  with a C toolchain.
+- M5a: release builds. Tags `v2.*` build on native runners for linux/amd64,
+  linux/arm64 and darwin/arm64 and publish to GitHub Releases with
+  checksums; `scripts/install.sh` installs the newest one without Python.
+  Release builds embed DuckDB's signed fts extension, so search needs no
+  download. See [release.md](release.md). `go install` keeps working for
+  anyone with a C toolchain. A Homebrew tap follows once a first release
+  candidate exists (it needs its own `homebrew-chatstrata` repository).
 - PyPI: one final Python release, `chatstrata 0.5.0`, that still works but
   whose README and CLI (one line on every command) point to the Go install.
   Nothing on PyPI is yanked or deleted: the name stays held, and anyone who
@@ -506,10 +509,6 @@ omarchy-macbook's live omp session (`1f40ea9f…`) the fingerprints are
 - Can work transcripts leave the work machine? (Decides whether a work space
   ever exists.)
 - Where does the relay live long-term: Linux desktop, Pi, or VPS?
-- `duckdb-go` does not bundle the FTS extension (M1 finding). For release
-  builds, decide between shipping the signed extension file alongside the
-  binary, building DuckDB with FTS linked in, or keeping the explicit
-  `reindex --install-fts` download. Decide at the start of M5.
 - MCP server inside the daemon or as a stdio proxy? M4b: neither. `serve`
   is its own process that opens the archive read-only per request, which
   works next to the daemon because the daemon holds the write lock only for
