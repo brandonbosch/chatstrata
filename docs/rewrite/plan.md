@@ -320,6 +320,42 @@ machines is still to do.
   Code and Codex with the same queries agents use today; a daemon cycle that
   changed one conversation doesn't scale with archive size.
 
+### M4b verification
+
+Checked on `cf808e0` from echo-1, the device that runs no daemon.
+`go test ./...`, `go vet ./...` and `gofmt -l .` are clean, and
+`~/.local/bin/chatstrata` is a regular file, rebuilt from this commit.
+`--help` lists `analyze`, `serve`, `mcp` and `paths`; `paths` shows the
+database, the observation log and the data dir.
+
+`doctor` reports every check passing, with no ⚠ and no ℹ. OpenCode 2.x's
+database here holds only the message types (`assistant`, `idle`, `user`) and
+content types (`reasoning`, `tool`, `text`) the adapter reads, and its two
+recent sessions both project to conversations, so the "no messages" and "not
+archived" checks correctly stay silent — not a false negative.
+
+All five `analyze` subcommands run, table and `--json` (matching row counts:
+activity 7, activity `--by day --source codex_cli` 22, tools 53,
+conversations `--longest 5` 5, models 28, projects 14). MCP from Codex over
+stdio returned the same source counts as `chatstrata query`, and `get_schema`
+lists the 14 tables plus the `tool_calls` view. MCP from Claude Code (user
+scope) reproduced `analyze models` row for row.
+
+Parity with Python on the same data — the Python archive imported into a
+scratch database (128 conversations) — matches for every variant once
+timestamps are normalized to UTC, except three differences. The one codex
+conversation with no `raw_events` (`01a0a7b4…`) is skipped by `import-legacy`,
+so codex_cli counts drop by one conversation and 240 messages (models
+`gpt-5.6-luna` −161/−1; tools `exec` −66/−1 and `wait` −7/−1; the September
+activity bucket −240/−1). Legacy imports carry no session row, so OpenCode
+conversation titles are blank, as the adapter documents. And Python prints
+timestamps in the host's local time while Go prints UTC — the same instants,
+so the byte-identical claim holds only where the host time zone is UTC.
+
+The daemon-side steps — restarting `chatstrata-daemon.service`, and `serve`
+while a writer holds the lock — belong to omarchy-macbook, the relay and
+daemon node.
+
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
   install instructions without Python.
