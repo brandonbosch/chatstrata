@@ -6,7 +6,7 @@ a read-only MCP server.
 
 **The project is moving from Python to Go.** Read
 [docs/rewrite/plan.md](docs/rewrite/plan.md) before making structural changes.
-Until the cutover (milestone M5), both implementations live in this repo.
+Until Python is removed (milestone M6), both implementations live in this repo.
 
 ## Layout
 

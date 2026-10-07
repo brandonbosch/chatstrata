@@ -1,7 +1,7 @@
 // Package chatstrata holds files shared between the Python and Go
 // implementations during the rewrite, so there is one copy of each.
 //
-// After the Python code is removed (milestone M5) these move under internal/.
+// After the Python code is removed (milestone M6) these move under internal/.
 package chatstrata
 
 import "embed"
