@@ -92,9 +92,13 @@ func runDoctor(e *env, args []string) error {
 	defer s.Close()
 
 	issues := 0
+	// A source registered without anything ever collected for it (the
+	// daemon tried it, nothing was there) isn't a problem; one with
+	// observations but no conversations is.
 	rows, err := s.Conn().QueryContext(e.ctx, `
 		SELECT s.id FROM sources s
 		LEFT JOIN conversations c ON c.source_id = s.id
+		WHERE EXISTS (SELECT 1 FROM observations o WHERE o.source_id = s.id)
 		GROUP BY s.id HAVING COUNT(c.id) = 0
 		ORDER BY s.id`)
 	if err != nil {

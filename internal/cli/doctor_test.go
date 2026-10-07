@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/brandonbosch/chatstrata/internal/store"
 )
 
 // doctor warns about sources whose storage it finds but can't make sense
@@ -36,6 +39,16 @@ func TestDoctorChecksSources(t *testing.T) {
 		t.Errorf("not-ingested source not reported:\n%s", out)
 	}
 	run(t, "ingest", "claude_code", "--db", db)
+	// A source registered with nothing ever collected (the export has no
+	// default location) is not a problem.
+	s, err := store.Open(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnsureSource(context.Background(), sources["claude_export"]); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
 	if out := run(t, "doctor", "--db", db); !strings.Contains(out, "All checks passed") {
 		t.Errorf("healthy archive:\n%s", out)
 	}

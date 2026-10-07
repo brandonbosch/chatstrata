@@ -24,6 +24,11 @@ func TestAnalyze(t *testing.T) {
 		t.Errorf("activity row = %v", rows[0])
 	}
 
+	// JSON output leaves <, > and & as written, as Python's json.dumps does.
+	if out := run(t, "query", "SELECT '<a & b>' AS t", "--json", "--db", db); !strings.Contains(out, `"t": "<a & b>"`) {
+		t.Errorf("query --json escapes HTML:\n%s", out)
+	}
+
 	if out := run(t, "analyze", "tools", "--source", "nothing", "--db", db); out != "No data.\n" {
 		t.Errorf("empty result = %q", out)
 	}

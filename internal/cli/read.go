@@ -179,8 +179,8 @@ func writeJSONRows(w io.Writer, cols []string, values [][]any) error {
 			if j > 0 {
 				b.WriteString(",")
 			}
-			key, _ := json.Marshal(col)
-			val, err := json.Marshal(jsonValue(row[j]))
+			key, _ := marshalCompact(col)
+			val, err := marshalCompact(jsonValue(row[j]))
 			if err != nil {
 				return err
 			}
@@ -347,6 +347,7 @@ func runSearch(e *env, args []string) error {
 			}
 		}
 		enc := json.NewEncoder(e.stdout)
+		enc.SetEscapeHTML(false) // as Python's json.dumps
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
 	}
