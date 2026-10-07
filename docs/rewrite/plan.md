@@ -399,6 +399,34 @@ registers `chatstrata-go` for Codex and Claude Code.
 
 ### M4c verification
 
+Checked on `90a17cb` from echo-1. `go test ./...` is clean and
+`~/.local/bin/chatstrata` is a regular file, rebuilt. `schedule status` said no
+daemon was installed — a failed Python-era `chatstrata-sync.service` still
+lingers in systemd, but no unit or timer file exists, so there was nothing to
+warn about. `schedule install` wrote `chatstrata-daemon.service`; `status`
+shows active (running), this binary and the 5m0s interval, and the journal a
+clean start and cycle. `uninstall` removed it, `status` reported "No scheduled
+daemon is installed", and a second `install` restored it; it is left running.
+`Linger=no`.
+
+The index no longer rebuilds on small changes: no cycle in the journal logs a
+rebuild, and a fresh claude_code probe (`M4CPROBE-echo-…`) was found by
+`search` at `score: 1.00` right after its collecting cycle. omarchy-macbook's
+probe (`M4CPROBE-omarchy-…`) synced in and is findable here too. Before
+`reindex`, `doctor` showed one ℹ ("1140 content blocks are newer than the
+search index") with `indexed`/text-blocks 39337/24159; `reindex` cleared the ℹ
+and the probe then scored BM25 (11–13), not 1.00.
+
+Convergence: 218 conversations / 31657 messages, `divergences` 0, and the
+conversation-id fingerprint stable across cycles. Only the two live agent
+sessions move the message fingerprint: echo-1's own (`025f96ab…`, device
+`92b529…`) and omarchy-macbook's (`1f40ea9f…`, device `919cce…`). Excluding
+both, the settled figures are 216 conversations / 30988 messages,
+conversation-id md5 `0c7b511af9407034b85822c82d7952e5`, message-id md5
+`bd104c9eea96cd55e04448068681e19a`.
+
+#### omarchy-macbook (relay and daemon node)
+
 Checked on `90a17cb` from omarchy-macbook (relay and daemon node): `go test
 ./...` clean, binary rebuilt in place. `schedule status` found the hand-made
 unit, `schedule install` announced it was replacing a unit it had not
