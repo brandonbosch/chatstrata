@@ -10,3 +10,9 @@ import "embed"
 //
 //go:embed chatstrata/core/migrations/*.sql
 var Migrations embed.FS
+
+// AnalysisQueries holds the queries behind `chatstrata analyze`, named
+// <subcommand>.sql, with Python str.format placeholders ({source_filter}, ...).
+//
+//go:embed chatstrata/analysis/queries/*.sql
+var AnalysisQueries embed.FS

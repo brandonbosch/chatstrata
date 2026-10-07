@@ -2,8 +2,11 @@ package cli
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"sort"
 
+	"github.com/brandonbosch/chatstrata/internal/model"
 	"github.com/brandonbosch/chatstrata/internal/store"
 )
 
@@ -127,6 +130,12 @@ func runDoctor(e *env, args []string) error {
 		}
 	}
 
+	n, err := checkSources(e, s)
+	if err != nil {
+		return err
+	}
+	issues += n
+
 	if issues == 0 {
 		fmt.Fprintln(e.stdout, "✓ All checks passed.")
 	} else {
@@ -173,5 +182,103 @@ func runReindex(e *env, args []string) error {
 		return fmt.Errorf("rebuild search index: %w", err)
 	}
 	fmt.Fprintln(e.stdout, "Done. Search index is up to date.")
+	return nil
+}
+
+// recentWindow is how many recently collected conversations of a source
+// checkSources looks at for ones that produced no messages.
+const recentWindow = 20
+
+// checkSources compares each source's default location on this machine with
+// the archive, to catch a source whose storage format changed under its
+// adapter: the daemon would otherwise drop new conversations without an
+// error. It returns the number of issues printed.
+func checkSources(e *env, s *store.Store) (int, error) {
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	issues := 0
+	warn := func(format string, args ...any) {
+		fmt.Fprintf(e.stdout, "  ⚠ "+format+"\n", args...)
+		issues++
+	}
+	for _, name := range names {
+		src := sources[name]
+		handles, err := src.Discover("")
+		if errors.Is(err, model.ErrNotFound) {
+			continue // not installed here
+		}
+		if err != nil {
+			warn("source '%s': can't read it on this machine: %s", name, err)
+			continue
+		}
+		if c, ok := src.(model.Checker); ok {
+			problems, notes := c.Check("")
+			for _, p := range problems {
+				warn("source '%s': %s", name, p)
+			}
+			for _, n := range notes {
+				fmt.Fprintf(e.stdout, "  ℹ source '%s' %s\n", name, n)
+			}
+		}
+
+		var archived int
+		if err := s.Conn().QueryRowContext(e.ctx,
+			`SELECT COUNT(*) FROM conversations WHERE source_id = ?`, name).Scan(&archived); err != nil {
+			return issues, err
+		}
+		if len(handles) > 0 && archived == 0 {
+			warn("source '%s': %d conversations on this machine, none in the archive (run `chatstrata ingest %s`, or start the daemon)",
+				name, len(handles), name)
+		}
+
+		// Most recently collected conversations that projected to nothing:
+		// a few are normal (empty sessions), most of them means the adapter
+		// no longer understands what the tool writes.
+		var recent, empty int
+		err = s.Conn().QueryRowContext(e.ctx, `
+			WITH latest AS (
+				SELECT locator, max(observed_at) AS seen FROM observations
+				WHERE source_id = ? AND NOT legacy
+				GROUP BY locator
+				HAVING bool_and(kind <> 'tombstone')
+				ORDER BY seen DESC LIMIT ?)
+			SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT EXISTS (
+				SELECT 1 FROM conversations c WHERE c.source_id = ? AND c.source_native_id = latest.locator))
+			FROM latest`, name, recentWindow, name).Scan(&recent, &empty)
+		if err != nil {
+			return issues, err
+		}
+		if empty >= 3 && empty*2 >= recent {
+			warn("source '%s': %d of the %d most recently collected conversations produced no messages; its format may have changed",
+				name, empty, recent)
+		}
+	}
+	return issues, nil
+}
+
+// runPaths shows where chatstrata keeps its files, like Python's `paths`,
+// plus the observation log and sync files the Go version adds.
+func runPaths(e *env, args []string) error {
+	fs := newFlagSet(e, "paths", "paths [--db PATH]")
+	db := fs.String("db", "", "Show paths for this database override.")
+	if _, err := parse(fs, args); err != nil {
+		return err
+	}
+	dbPath, err := store.ResolvePath(*db)
+	if err != nil {
+		return err
+	}
+	dataDir, err := store.DataDir()
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(e.stdout, "Database:  %s\n", dbPath)
+	fmt.Fprintf(e.stdout, "Log:       %s  (source of truth; `chatstrata rebuild` recreates the database from it)\n", logDir(dbPath))
+	fmt.Fprintf(e.stdout, "Data dir:  %s\n", dataDir)
+	fmt.Fprintln(e.stdout)
+	fmt.Fprintln(e.stdout, "Override the database with CHATSTRATA_GO_DB or per-command --db.")
 	return nil
 }
