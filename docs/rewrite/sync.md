@@ -17,8 +17,8 @@ tailscale serve --bg http://127.0.0.1:8787    # https://<machine>.<tailnet>.ts.n
 To keep the address stable if the relay moves to another machine, advertise
 it as a Tailscale Service instead (`tailscale serve --service=svc:chatstrata
 ...`); check Tailscale's documentation for the current syntax and ACLs. To
-keep it running, use a systemd unit or launchd agent; `chatstrata schedule`
-will install one in M4.
+keep the relay running, give it a systemd unit or launchd agent of its own
+(`chatstrata schedule` installs only the daemon below).
 
 **2. On your first device**, after ingesting as usual:
 
@@ -45,10 +45,20 @@ its history: its segments are moved into the shared space and uploaded.
 **4. Keep it going** on every device:
 
 ```sh
-chatstrata daemon            # collect and sync every 5 minutes; --interval to change
+chatstrata schedule install  # run the daemon in the background: collect and sync every 5 minutes
+chatstrata schedule status   # is it running, which binary, which interval
 chatstrata devices           # who is in the space, and what the relay holds
 chatstrata sync              # sync now
 ```
+
+`schedule install` installs `chatstrata daemon` as a systemd user service
+(`chatstrata-daemon.service`, logs in `journalctl --user -u
+chatstrata-daemon`) or a launchd agent (`com.chatstrata.daemon`, logs in
+`~/Library/Logs/chatstrata/`), pointing at the binary you ran it with;
+`--interval` and `--db` pass through. Run it again after moving the binary.
+On Linux the service runs while you're logged in unless you `loginctl
+enable-linger`. `chatstrata daemon` still runs in the foreground for other
+service managers.
 
 The daemon opens the archive only during each run, so `query`, `search` and
 the other commands work in between. If the relay is unreachable, devices

@@ -308,14 +308,16 @@ machines is still to do.
   optional `Check`, missing or newer storage tables (problems) and record
   types it skips (notes). OpenCode implements `Check`; the JSONL adapters
   rely on the generic checks.
-- M4c: `schedule` (launchd/systemd installing the daemon) and the
-  incremental search index below.
-- Incremental search index. Since M3, every catch-up that changed anything
-  rebuilds the whole FTS index (about 1.5 s on the 8 MB benchmark corpus), so
-  its cost grows with the archive, not with the change. Fix before the
-  scheduled daemon runs every 5 minutes against a multi-GB archive: update
-  only the changed conversations, or debounce the rebuild. (Found in the M3
-  acceptance run, brandonbosch/chatstrata#29.)
+- M4c: done. `schedule install|uninstall|status` installs `chatstrata
+  daemon` as a systemd user service or launchd agent (the Python app's
+  `schedule` ran a one-shot ingest from a timer; it is pointed out if still
+  installed). The search index is no longer rebuilt on every change:
+  DuckDB's FTS index can't be updated in place, so catch-up rebuilds it only
+  when the blocks it doesn't hold reach max(2000, 5% of those it does), which
+  keeps the cost per new block constant as the archive grows, and `search`
+  covers those blocks by substring matching. One changed conversation on a
+  240k-block archive: 16.5 s on M4b, 2.7 s now. (Found in the M3 acceptance
+  run, brandonbosch/chatstrata#29.)
 - Acceptance: golden fixtures pass for every adapter; MCP works from Claude
   Code and Codex with the same queries agents use today; a daemon cycle that
   changed one conversation doesn't scale with archive size.

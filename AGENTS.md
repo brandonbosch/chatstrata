@@ -99,6 +99,9 @@ The MCP server (`chatstrata serve`, `internal/cli/mcp.go`) and `query` share
 the read-only rules and limits in `internal/cli/read.go`; keep them in step
 with `chatstrata/mcp/safety.py` while Python still ships. `analyze` runs
 `chatstrata/analysis/queries/*.sql` unchanged (embedded through `embed.go`).
+The full-text index is rebuilt whole, so catch-up only rebuilds it once
+enough content is new (`store.FTSNeedsRebuild`) and `search` substring-matches
+the blocks it doesn't hold yet; anything that searches must cover both.
 An adapter can implement `model.Checker` so `chatstrata doctor` can say when
 the tool's storage changed under it.
 

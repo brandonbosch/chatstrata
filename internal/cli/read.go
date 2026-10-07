@@ -317,10 +317,22 @@ func runSearch(e *env, args []string) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		// The index is rebuilt only once enough content is new, so the
+		// newest blocks are matched by substring and shown after the ranked
+		// results, with at least a quarter of the slots kept for them.
+		fresh, err := searchSubstring(e.ctx, s, query,
+			append(conditions, "NOT EXISTS (SELECT 1 FROM fts_main_content_blocks.docs d WHERE d.name = cb.id)"),
+			params, *limit)
+		if err != nil {
+			return err
+		}
+		keep := min(len(fresh), max(*limit/4, *limit-len(results)))
+		results = append(results[:min(len(results), *limit-keep)], fresh[:keep]...)
 	}
 
 	if len(results) == 0 && !*asJSON {
-		// Ingest and sync keep the full-text index current, so an empty FTS
+		// Search covers content the index doesn't hold yet, so an empty
 		// result means nothing matched. Only point at a fix when search had
 		// to fall back to plain substring matching.
 		switch {

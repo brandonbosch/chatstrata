@@ -168,6 +168,40 @@ func (s *Store) RebuildFTS(ctx context.Context) error {
 	return err
 }
 
+// FTSCoverage reports how much of content_blocks the full-text index covers:
+// whether an index exists, how many blocks it holds, and how many blocks
+// with text it doesn't hold yet. LoadFTS must have succeeded.
+func (s *Store) FTSCoverage(ctx context.Context) (exists bool, indexed, pending int64, err error) {
+	var n int
+	if err := s.conn.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.tables
+		WHERE table_schema = 'fts_main_content_blocks' AND table_name = 'docs'`).Scan(&n); err != nil || n == 0 {
+		return false, 0, 0, err
+	}
+	err = s.conn.QueryRowContext(ctx, `
+		SELECT (SELECT count(*) FROM fts_main_content_blocks.docs),
+		       (SELECT count(*) FROM content_blocks cb WHERE cb.text IS NOT NULL
+		          AND NOT EXISTS (SELECT 1 FROM fts_main_content_blocks.docs d WHERE d.name = cb.id))`).Scan(&indexed, &pending)
+	return true, indexed, pending, err
+}
+
+// FTS rebuild policy. DuckDB can't update a full-text index in place, and a
+// rebuild costs time proportional to the whole archive, so it waits until
+// the blocks not yet indexed are a fair share of it: the index grows
+// geometrically and the cost per new block stays constant. Search covers
+// the blocks in between with substring matching.
+const (
+	ftsMinPending   = 2000
+	ftsPendingShare = 0.05
+)
+
+// FTSNeedsRebuild applies that policy: no index yet, or enough new blocks.
+func FTSNeedsRebuild(exists bool, indexed, pending int64) bool {
+	if !exists {
+		return true
+	}
+	return pending >= max(ftsMinPending, int64(float64(indexed)*ftsPendingShare))
+}
+
 type migration struct {
 	version int
 	name    string
