@@ -7,5 +7,5 @@ SELECT
     c.ended_at
 FROM conversations c
 JOIN sources s ON s.id = c.source_id
-ORDER BY c.message_count {order}
+ORDER BY c.message_count {order}, c.started_at, c.title
 LIMIT {limit}

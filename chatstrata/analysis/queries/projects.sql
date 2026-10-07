@@ -8,4 +8,4 @@ FROM conversations c
 WHERE c.source_id = 'claude_code'
   AND c.project IS NOT NULL
 GROUP BY c.project
-ORDER BY conversations DESC
+ORDER BY conversations DESC, c.project
