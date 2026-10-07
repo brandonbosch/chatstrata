@@ -293,12 +293,21 @@ machines is still to do.
   without one file per conversation hand the collector each conversation's
   bytes, and for sources logged as snapshots a device's newer snapshot
   replaces its older ones (see [observation-log.md](observation-log.md)).
-- M4b: `analyze`, MCP server, `paths`, `mcp config`, and a source-format
-  check in `doctor`: warn when a source is installed but parses to nothing
-  (an OpenCode database with tables but no sessions read, say), or when an
-  adapter meets message types or tables it doesn't know. Sources change
-  their storage without notice (OpenCode 2.x moved to new tables), and the
-  daemon would otherwise drop new sessions without an error.
+- M4b: done. `analyze` runs the shared `chatstrata/analysis/queries/*.sql`
+  and prints byte-identical output to Python's (the queries gained
+  tie-breakers in their ORDER BY, so neither implementation returns ties in
+  arbitrary order). `serve` is the MCP server: the `query` tool and the
+  `chatstrata://schema` resource as in Python, plus a `get_schema` tool for
+  clients that don't read resources, over stdio, streamable HTTP or SSE. It
+  opens the archive read-only per request and waits out the daemon's write
+  lock. `mcp config` prints setup for Claude Code, Claude Desktop and Codex,
+  pointing at the binary's absolute path. `paths` adds the observation log.
+  `doctor` now checks each source installed on this machine: conversations
+  there but none archived, most recently collected conversations producing
+  no messages (the signature of a format change), and, through an adapter's
+  optional `Check`, missing or newer storage tables (problems) and record
+  types it skips (notes). OpenCode implements `Check`; the JSONL adapters
+  rely on the generic checks.
 - M4c: `schedule` (launchd/systemd installing the daemon) and the
   incremental search index below.
 - Incremental search index. Since M3, every catch-up that changed anything
@@ -345,7 +354,10 @@ machines is still to do.
   builds, decide between shipping the signed extension file alongside the
   binary, building DuckDB with FTS linked in, or keeping the explicit
   `reindex --install-fts` download.
-- MCP server inside the daemon or as a stdio proxy?
+- MCP server inside the daemon or as a stdio proxy? M4b: neither. `serve`
+  is its own process that opens the archive read-only per request, which
+  works next to the daemon because the daemon holds the write lock only for
+  a few seconds per run.
 - Segment size and how often to flush (latency vs. number of files).
 - When can old segments be compacted, given devices that stay offline for a
   long time?
