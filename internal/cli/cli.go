@@ -64,6 +64,7 @@ func init() {
 		{"query", "Run a read-only SQL query against the archive", runQuery},
 		{"search", "Search conversations by keyword", runSearch},
 		{"stats", "Show a summary of what's in the archive", runStats},
+		{"analyze", "Analyze your conversation archive", runAnalyze},
 		{"doctor", "Run basic sanity checks on the archive", runDoctor},
 		{"reindex", "Rebuild the full-text search index", runReindex},
 		{"rebuild", "Rebuild the archive from its observation log", runRebuild},
@@ -74,7 +75,10 @@ func init() {
 		{"devices", "List the devices in this space", runDevices},
 		{"daemon", "Collect and sync periodically", runDaemon},
 		{"relay", "Run the relay that devices sync through", runRelay},
+		{"serve", "Start the MCP server", runServe},
+		{"mcp", "Print MCP client setup (mcp config CLIENT)", runMCP},
 		{"sources", "List available source adapters", runSources},
+		{"paths", "Show where chatstrata stores local files", runPaths},
 		{"version", "Print the version", runVersion},
 	}
 }

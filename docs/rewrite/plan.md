@@ -293,12 +293,21 @@ machines is still to do.
   without one file per conversation hand the collector each conversation's
   bytes, and for sources logged as snapshots a device's newer snapshot
   replaces its older ones (see [observation-log.md](observation-log.md)).
-- M4b: `analyze`, MCP server, `paths`, `mcp config`, and a source-format
-  check in `doctor`: warn when a source is installed but parses to nothing
-  (an OpenCode database with tables but no sessions read, say), or when an
-  adapter meets message types or tables it doesn't know. Sources change
-  their storage without notice (OpenCode 2.x moved to new tables), and the
-  daemon would otherwise drop new sessions without an error.
+- M4b: done. `analyze` runs the shared `chatstrata/analysis/queries/*.sql`
+  and prints byte-identical output to Python's (the queries gained
+  tie-breakers in their ORDER BY, so neither implementation returns ties in
+  arbitrary order). `serve` is the MCP server: the `query` tool and the
+  `chatstrata://schema` resource as in Python, plus a `get_schema` tool for
+  clients that don't read resources, over stdio, streamable HTTP or SSE. It
+  opens the archive read-only per request and waits out the daemon's write
+  lock. `mcp config` prints setup for Claude Code, Claude Desktop and Codex,
+  pointing at the binary's absolute path. `paths` adds the observation log.
+  `doctor` now checks each source installed on this machine: conversations
+  there but none archived, most recently collected conversations producing
+  no messages (the signature of a format change), and, through an adapter's
+  optional `Check`, missing or newer storage tables (problems) and record
+  types it skips (notes). OpenCode implements `Check`; the JSONL adapters
+  rely on the generic checks.
 - M4c: `schedule` (launchd/systemd installing the daemon) and the
   incremental search index below.
 - Incremental search index. Since M3, every catch-up that changed anything
@@ -310,6 +319,81 @@ machines is still to do.
 - Acceptance: golden fixtures pass for every adapter; MCP works from Claude
   Code and Codex with the same queries agents use today; a daemon cycle that
   changed one conversation doesn't scale with archive size.
+
+### M4b verification
+
+Checked on `cf808e0` from echo-1, the device that runs no daemon.
+`go test ./...`, `go vet ./...` and `gofmt -l .` are clean, and
+`~/.local/bin/chatstrata` is a regular file, rebuilt from this commit.
+`--help` lists `analyze`, `serve`, `mcp` and `paths`; `paths` shows the
+database, the observation log and the data dir.
+
+`doctor` reports every check passing, with no ⚠ and no ℹ. OpenCode 2.x's
+database here holds only the message types (`assistant`, `idle`, `user`) and
+content types (`reasoning`, `tool`, `text`) the adapter reads, and its two
+recent sessions both project to conversations, so the "no messages" and "not
+archived" checks correctly stay silent — not a false negative.
+
+All five `analyze` subcommands run, table and `--json` (matching row counts:
+activity 7, activity `--by day --source codex_cli` 22, tools 53,
+conversations `--longest 5` 5, models 28, projects 14). MCP from Codex over
+stdio returned the same source counts as `chatstrata query`, and `get_schema`
+lists the 14 tables plus the `tool_calls` view. MCP from Claude Code (user
+scope) reproduced `analyze models` row for row.
+
+Parity with Python on the same data — the Python archive imported into a
+scratch database (128 conversations) — matches for every variant once
+timestamps are normalized to UTC, except three differences. The one codex
+conversation with no `raw_events` (`01a0a7b4…`) is skipped by `import-legacy`,
+so codex_cli counts drop by one conversation and 240 messages (models
+`gpt-5.6-luna` −161/−1; tools `exec` −66/−1 and `wait` −7/−1; the September
+activity bucket −240/−1). Legacy imports carry no session row, so OpenCode
+conversation titles are blank, as the adapter documents. And Python prints
+timestamps in the host's local time while Go prints UTC — the same instants,
+so the byte-identical claim holds only where the host time zone is UTC.
+
+The daemon-side steps — restarting `chatstrata-daemon.service`, and `serve`
+while a writer holds the lock — belong to omarchy-macbook, the relay and
+daemon node.
+
+#### omarchy-macbook (relay and daemon node)
+
+The same commit, rebuilt in place with `chatstrata-daemon.service` restarted.
+`go test ./...` is clean, and `--help`, `paths` and every `analyze` variant
+match echo-1's row counts. `doctor`'s only line is one ⚠, "source
+'claude_export' has no conversations", which is a false positive:
+`claude_export` has no default location, so the ingest cycle registers its
+`sources` row with nothing to collect, while the check that calls `Discover`
+correctly stays silent.
+
+MCP from Codex (stdio) returned the same source counts as `chatstrata query`
+(claude_code 34, codex_cli 79, omp 91, opencode 2); `get_schema` lists the 14
+tables plus the `tool_calls` view. `serve` over streamable HTTP answered every
+request as a result, never a lock error, while `ingest claude_code` and `sync`
+repeatedly held the write lock (with a writer running continuously, retries
+reached about 12 s, inside the 15 s budget).
+
+Parity with Python here uses a scratch archive built with Python (this machine
+has no Python-era database): `import-legacy` reports imported 40, failed 0,
+and the per-source counts match. All 12 `analyze` variants agree with
+timestamps normalized to UTC except one — `conversations --longest 5 --json`,
+where Go HTML-escapes `<` and `>` in a title and Python does not. The
+conversation without `raw_events` (`01a0a7b4…`) is echo-1's, so no count shift
+appears here. MCP from Claude Code is echo-1's step.
+
+#### M4b re-check (`79255e5`)
+
+The findings above are fixed: `analyze` prints timestamps in the host's local
+time (byte-identical to Python for every variant, `projects` included) and
+`--json` no longer escapes `<`, `>` or `&`; `doctor` is "All checks passed" on
+echo-1 and the `claude_export` false positive is gone on omarchy-macbook; and
+`mcp config --name` picks the server name. On echo-1 parity now differs only on
+`01a0a7b4…`'s counts (no `raw_events`) and on OpenCode titles, which a legacy
+import cannot recover — its `raw_events` carry no session row. Omarchy-macbook
+concurs on its node: `go test ./...` clean, `doctor` "All checks passed", all
+12 `analyze` variants byte-identical to Python in the host time zone (including
+`conversations --longest 5 --json`), and `mcp config --name chatstrata-go`
+registers `chatstrata-go` for Codex and Claude Code.
 
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
@@ -345,7 +429,10 @@ machines is still to do.
   builds, decide between shipping the signed extension file alongside the
   binary, building DuckDB with FTS linked in, or keeping the explicit
   `reindex --install-fts` download.
-- MCP server inside the daemon or as a stdio proxy?
+- MCP server inside the daemon or as a stdio proxy? M4b: neither. `serve`
+  is its own process that opens the archive read-only per request, which
+  works next to the daemon because the daemon holds the write lock only for
+  a few seconds per run.
 - Segment size and how often to flush (latency vs. number of files).
 - When can old segments be compacted, given devices that stay offline for a
   long time?

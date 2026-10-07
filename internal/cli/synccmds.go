@@ -278,6 +278,9 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 			logger.Printf("%s: %s", name, err)
 			continue
 		}
+		if len(handles) == 0 {
+			continue // installed, or a source without a default location, with nothing to collect
+		}
 		if err := a.store.EnsureSource(e.ctx, src); err != nil {
 			return err
 		}

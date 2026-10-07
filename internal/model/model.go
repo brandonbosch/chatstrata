@@ -78,6 +78,15 @@ type Handle struct {
 	Content []byte
 }
 
+// Checker is implemented by sources that can inspect their storage for signs
+// that its format changed: `chatstrata doctor` reports what Check finds.
+// Problems mean conversations can't be read at all (an expected table is
+// missing); notes name content the adapter skips (record types it doesn't
+// know), which may be harmless or may be a new format.
+type Checker interface {
+	Check(root string) (problems, notes []string)
+}
+
 // ErrNotFound is returned (wrapped) by Discover when the source's default
 // location doesn't exist on this machine, so periodic collection can skip it
 // quietly while an explicit ingest still reports it.

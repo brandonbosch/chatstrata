@@ -95,6 +95,13 @@ the shared numbering. Adapters live under
 conversation sets `Handle.Content` in `Discover`, and the collector logs those
 bytes instead of reading the file.
 
+The MCP server (`chatstrata serve`, `internal/cli/mcp.go`) and `query` share
+the read-only rules and limits in `internal/cli/read.go`; keep them in step
+with `chatstrata/mcp/safety.py` while Python still ships. `analyze` runs
+`chatstrata/analysis/queries/*.sql` unchanged (embedded through `embed.go`).
+An adapter can implement `model.Checker` so `chatstrata doctor` can say when
+the tool's storage changed under it.
+
 DuckDB makes the Go build use CGo; build release binaries natively per OS and
 architecture rather than cross-compiling.
 

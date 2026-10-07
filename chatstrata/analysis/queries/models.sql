@@ -5,4 +5,4 @@ SELECT
 FROM messages m
 WHERE model IS NOT NULL
 GROUP BY model
-ORDER BY messages DESC
+ORDER BY messages DESC, model

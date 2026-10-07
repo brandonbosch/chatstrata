@@ -38,15 +38,15 @@ func DefaultPath() (string, error) {
 	if env := os.Getenv("CHATSTRATA_GO_DB"); env != "" {
 		return expandHome(env)
 	}
-	dir, err := dataDir()
+	dir, err := DataDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "chatstrata-go.duckdb"), nil
 }
 
-// dataDir matches platformdirs.user_data_dir("chatstrata") used by Python.
-func dataDir() (string, error) {
+// DataDir matches platformdirs.user_data_dir("chatstrata") used by Python.
+func DataDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("locate home directory: %w", err)
