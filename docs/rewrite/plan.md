@@ -356,6 +356,31 @@ The daemon-side steps — restarting `chatstrata-daemon.service`, and `serve`
 while a writer holds the lock — belong to omarchy-macbook, the relay and
 daemon node.
 
+#### omarchy-macbook (relay and daemon node)
+
+The same commit, rebuilt in place with `chatstrata-daemon.service` restarted.
+`go test ./...` is clean, and `--help`, `paths` and every `analyze` variant
+match echo-1's row counts. `doctor`'s only line is one ⚠, "source
+'claude_export' has no conversations", which is a false positive:
+`claude_export` has no default location, so the ingest cycle registers its
+`sources` row with nothing to collect, while the check that calls `Discover`
+correctly stays silent.
+
+MCP from Codex (stdio) returned the same source counts as `chatstrata query`
+(claude_code 34, codex_cli 79, omp 91, opencode 2); `get_schema` lists the 14
+tables plus the `tool_calls` view. `serve` over streamable HTTP answered every
+request as a result, never a lock error, while `ingest claude_code` and `sync`
+repeatedly held the write lock (with a writer running continuously, retries
+reached about 12 s, inside the 15 s budget).
+
+Parity with Python here uses a scratch archive built with Python (this machine
+has no Python-era database): `import-legacy` reports imported 40, failed 0,
+and the per-source counts match. All 12 `analyze` variants agree with
+timestamps normalized to UTC except one — `conversations --longest 5 --json`,
+where Go HTML-escapes `<` and `>` in a title and Python does not. The
+conversation without `raw_events` (`01a0a7b4…`) is echo-1's, so no count shift
+appears here. MCP from Claude Code is echo-1's step.
+
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
   install instructions without Python.
