@@ -74,6 +74,7 @@ func init() {
 		{"sync", "Exchange observations with the relay", runSync},
 		{"devices", "List the devices in this space", runDevices},
 		{"daemon", "Collect and sync periodically", runDaemon},
+		{"schedule", "Install the daemon as a background service (install, uninstall, status)", runSchedule},
 		{"relay", "Run the relay that devices sync through", runRelay},
 		{"serve", "Start the MCP server", runServe},
 		{"mcp", "Print MCP client setup (mcp config CLIENT)", runMCP},

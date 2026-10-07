@@ -134,6 +134,12 @@ func runDoctor(e *env, args []string) error {
 		}
 	}
 
+	if s.LoadFTS(e.ctx) {
+		if exists, indexed, pending, err := s.FTSCoverage(e.ctx); err == nil && exists && pending > 0 {
+			fmt.Fprintf(e.stdout, "  ℹ %d content blocks are newer than the search index (of %d indexed); search finds them by substring until the next rebuild, or run `chatstrata reindex`\n", pending, indexed)
+		}
+	}
+
 	n, err := checkSources(e, s)
 	if err != nil {
 		return err

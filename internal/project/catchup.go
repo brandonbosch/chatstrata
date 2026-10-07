@@ -104,16 +104,22 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 		}
 	}
 
-	// Keep search current: DuckDB's full-text index doesn't update itself,
-	// so content that just arrived (by ingest or sync) would otherwise be
-	// invisible to `search` until a manual reindex. Skipped when the FTS
-	// extension isn't installed; search then falls back to substring
-	// matching, which needs no index.
+	// Keep the search index in step. DuckDB rebuilds it whole, so it's
+	// rebuilt only when enough content is new (store.FTSNeedsRebuild);
+	// until then `search` finds the newest content by substring matching.
+	// Skipped when the FTS extension isn't installed, as search then
+	// substring-matches everything.
 	if stats.Stored+stats.Removed > 0 && p.Store.LoadFTS(ctx) {
-		if err := p.Store.RebuildFTS(ctx); err != nil {
-			return stats, fmt.Errorf("update search index: %w", err)
+		exists, indexed, pending, err := p.Store.FTSCoverage(ctx)
+		if err != nil {
+			return stats, fmt.Errorf("check search index: %w", err)
 		}
-		stats.Reindexed = true
+		if store.FTSNeedsRebuild(exists, indexed, pending) {
+			if err := p.Store.RebuildFTS(ctx); err != nil {
+				return stats, fmt.Errorf("update search index: %w", err)
+			}
+			stats.Reindexed = true
+		}
 	}
 	return stats, nil
 }

@@ -308,14 +308,16 @@ machines is still to do.
   optional `Check`, missing or newer storage tables (problems) and record
   types it skips (notes). OpenCode implements `Check`; the JSONL adapters
   rely on the generic checks.
-- M4c: `schedule` (launchd/systemd installing the daemon) and the
-  incremental search index below.
-- Incremental search index. Since M3, every catch-up that changed anything
-  rebuilds the whole FTS index (about 1.5 s on the 8 MB benchmark corpus), so
-  its cost grows with the archive, not with the change. Fix before the
-  scheduled daemon runs every 5 minutes against a multi-GB archive: update
-  only the changed conversations, or debounce the rebuild. (Found in the M3
-  acceptance run, brandonbosch/chatstrata#29.)
+- M4c: done. `schedule install|uninstall|status` installs `chatstrata
+  daemon` as a systemd user service or launchd agent (the Python app's
+  `schedule` ran a one-shot ingest from a timer; it is pointed out if still
+  installed). The search index is no longer rebuilt on every change:
+  DuckDB's FTS index can't be updated in place, so catch-up rebuilds it only
+  when the blocks it doesn't hold reach max(2000, 5% of those it does), which
+  keeps the cost per new block constant as the archive grows, and `search`
+  covers those blocks by substring matching. One changed conversation on a
+  240k-block archive: 16.5 s on M4b, 2.7 s now. (Found in the M3 acceptance
+  run, brandonbosch/chatstrata#29.)
 - Acceptance: golden fixtures pass for every adapter; MCP works from Claude
   Code and Codex with the same queries agents use today; a daemon cycle that
   changed one conversation doesn't scale with archive size.
@@ -394,6 +396,58 @@ concurs on its node: `go test ./...` clean, `doctor` "All checks passed", all
 12 `analyze` variants byte-identical to Python in the host time zone (including
 `conversations --longest 5 --json`), and `mcp config --name chatstrata-go`
 registers `chatstrata-go` for Codex and Claude Code.
+
+### M4c verification
+
+Checked on `90a17cb` from echo-1. `go test ./...` is clean and
+`~/.local/bin/chatstrata` is a regular file, rebuilt. `schedule status` said no
+daemon was installed — a failed Python-era `chatstrata-sync.service` still
+lingers in systemd, but no unit or timer file exists, so there was nothing to
+warn about. `schedule install` wrote `chatstrata-daemon.service`; `status`
+shows active (running), this binary and the 5m0s interval, and the journal a
+clean start and cycle. `uninstall` removed it, `status` reported "No scheduled
+daemon is installed", and a second `install` restored it; it is left running.
+`Linger=no`.
+
+The index no longer rebuilds on small changes: no cycle in the journal logs a
+rebuild, and a fresh claude_code probe (`M4CPROBE-echo-…`) was found by
+`search` at `score: 1.00` right after its collecting cycle. omarchy-macbook's
+probe (`M4CPROBE-omarchy-…`) synced in and is findable here too. Before
+`reindex`, `doctor` showed one ℹ ("1140 content blocks are newer than the
+search index") with `indexed`/text-blocks 39337/24159; `reindex` cleared the ℹ
+and the probe then scored BM25 (11–13), not 1.00.
+
+Convergence: 218 conversations / 31657 messages, `divergences` 0, and the
+conversation-id fingerprint stable across cycles. Only the two live agent
+sessions move the message fingerprint: echo-1's own (`025f96ab…`, device
+`92b529…`) and omarchy-macbook's (`1f40ea9f…`, device `919cce…`). Excluding
+both, the settled figures are 216 conversations / 30988 messages,
+conversation-id md5 `0c7b511af9407034b85822c82d7952e5`, message-id md5
+`bd104c9eea96cd55e04448068681e19a`.
+
+#### omarchy-macbook (relay and daemon node)
+
+Checked on `90a17cb` from omarchy-macbook (relay and daemon node): `go test
+./...` clean, binary rebuilt in place. `schedule status` found the hand-made
+unit, `schedule install` announced it was replacing a unit it had not
+installed, and status then showed active (running), this binary, 5m0s. The
+journal showed a clean cycle and `chatstrata-relay.service` stayed active;
+`Linger=no`.
+
+`doctor` reported 13 content blocks newer than the search index (of 39,879
+indexed). A fresh Codex conversation carrying `M4CPROBE-omarchy-…` was
+collected on the next cycle and `search` found it straight away with
+`score: 1.00`; the indexed count stayed at 39,879 across cycles and the
+journal never showed an index rebuild, so a small change did not rebuild it.
+echo-1's `M4CPROBE-echo-…` probe arrived by sync and was findable here too.
+`reindex` rebuilt 24,248 blocks, cleared the `doctor` note, and the probes
+then scored BM25 (11–13) instead of 1.00.
+
+Convergence: 218 conversations / 31,590 messages, divergences 0; per source
+claude_code 36/3,865, codex_cli 87/10,748, omp 93/16,968, opencode 2/9;
+conversation-id md5 `b4812de2…`, message-id md5 `04925267…`. Omitting
+omarchy-macbook's live omp session (`1f40ea9f…`) the fingerprints are
+`9a9a0bd1…` and `3e8b0d3b…`; echo-1's are its half of the comparison.
 
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),

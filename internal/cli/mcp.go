@@ -48,7 +48,9 @@ Tips:
 - tool_calls view is convenient for tool usage analysis
 - payload column is JSON -- use ->> for extraction
 - Only SELECT/WITH/DESCRIBE/SHOW/PRAGMA are allowed
-- Results limited to 500 rows / 512 KB`
+- Results limited to 500 rows / 512 KB
+- The BM25 index is rebuilt once enough content is new, so the newest
+  blocks may be missing from it; ILIKE on cb.text always sees everything`
 
 const exampleQueries = `-- Recent conversations
 SELECT title, source_id, started_at, message_count
