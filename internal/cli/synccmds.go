@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/brandonbosch/chatstrata/internal/devsync"
+	"github.com/brandonbosch/chatstrata/internal/model"
 	"github.com/brandonbosch/chatstrata/internal/relay"
 	"github.com/brandonbosch/chatstrata/internal/store"
 )
@@ -270,6 +271,9 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	for _, name := range names {
 		src := sources[name]
 		handles, err := src.Discover("")
+		if errors.Is(err, model.ErrNotFound) {
+			continue // not installed on this machine
+		}
 		if err != nil {
 			logger.Printf("%s: %s", name, err)
 			continue

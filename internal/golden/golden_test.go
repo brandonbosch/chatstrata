@@ -3,10 +3,13 @@ package golden
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -22,16 +25,21 @@ type step struct {
 }
 
 type goldenCase struct {
-	Name   string `json:"name"`
-	Source string `json:"source"`
-	Input  string `json:"input"`
-	Path   string `json:"path"`
-	Steps  []step `json:"steps"`
+	Name string `json:"name"`
+	// Implementations lists who runs the case; empty means both. Expected
+	// output of a Go-only case comes from the Go side (-update).
+	Implementations []string `json:"implementations"`
+	Source          string   `json:"source"`
+	Input           string   `json:"input"`
+	Path            string   `json:"path"`
+	Steps           []step   `json:"steps"`
 }
 
-// ported lists the sources the Go implementation has so far; cases for the
-// others are skipped until their adapter lands.
-var ported = map[string]bool{"claude_code": true}
+var update = flag.Bool("update", false, "rewrite expected output of Go-only cases")
+
+func (c goldenCase) goOnly() bool {
+	return len(c.Implementations) > 0 && !slices.Contains(c.Implementations, "python")
+}
 
 func TestGolden(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(specDir, "cases.json"))
@@ -44,11 +52,24 @@ func TestGolden(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
-			if !ported[c.Source] {
-				t.Skipf("source %s not ported yet", c.Source)
+			if len(c.Implementations) > 0 && !slices.Contains(c.Implementations, "go") {
+				t.Skip("not a Go case")
 			}
 			actual := runCase(t, c)
-			expectedRaw, err := os.ReadFile(filepath.Join(specDir, "expected", c.Name+".json"))
+			expectedPath := filepath.Join(specDir, "expected", c.Name+".json")
+			if *update && c.goOnly() {
+				var buf bytes.Buffer
+				enc := json.NewEncoder(&buf)
+				enc.SetEscapeHTML(false)
+				enc.SetIndent("", "  ")
+				if err := enc.Encode(normalize(t, mustMarshal(t, actual))); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(expectedPath, buf.Bytes(), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			expectedRaw, err := os.ReadFile(expectedPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -63,6 +84,7 @@ func runCase(t *testing.T, c goldenCase) any {
 	if err := os.CopyFS(work, os.DirFS(filepath.Join(specDir, "inputs", c.Input))); err != nil {
 		t.Fatal(err)
 	}
+	buildDatabases(t, work)
 	originals := map[string][]byte{}
 	for _, s := range c.Steps {
 		for rel := range s.TruncateLines {
@@ -95,6 +117,31 @@ func runCase(t *testing.T, c goldenCase) any {
 		t.Fatal(err)
 	}
 	return dump
+}
+
+// buildDatabases turns each *.sql dump in the inputs into the SQLite *.db the
+// source reads, as scripts/golden.py does.
+func buildDatabases(t *testing.T, work string) {
+	t.Helper()
+	dumps, err := filepath.Glob(filepath.Join(work, "*.sql")) // inputs keep dumps at the top level
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dump := range dumps {
+		script, err := os.ReadFile(dump)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db, err := sql.Open("sqlite3", strings.TrimSuffix(dump, ".sql")+".db")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(string(script)); err != nil {
+			t.Fatalf("build %s: %v", dump, err)
+		}
+		db.Close()
+		os.Remove(dump)
+	}
 }
 
 // applyTruncation sets each listed file to its first N lines for this step and

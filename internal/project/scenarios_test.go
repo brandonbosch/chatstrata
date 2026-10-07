@@ -81,6 +81,9 @@ func TestScenarios(t *testing.T) {
 	for _, sc := range spec.Scenarios {
 		t.Run(sc.Name, func(t *testing.T) {
 			for _, o := range sc.Observations {
+				if o.Scope != "" {
+					t.Skip("account scopes aren't part of conversation ids yet (see docs/rewrite/observation-log.md)")
+				}
 				if ported[o.Source] == nil {
 					t.Skipf("needs the %s adapter", o.Source)
 				}

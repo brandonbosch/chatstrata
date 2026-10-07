@@ -88,10 +88,12 @@ set it up and its security limits: `docs/rewrite/sync.md`. Never log or
 print `space.key` or pairing codes except where `pair` shows the code on
 purpose.
 Go-only schema migrations live in `internal/store/migrations/` and continue
-the shared numbering. To port an
-adapter: add it under `internal/sources/`, register it in `internal/cli`, and
-add its source to `ported` in `internal/golden/golden_test.go`; the existing
-golden cases then have to pass.
+the shared numbering. Adapters live under
+`internal/sources/` (shared helpers in `srcutil`) and are registered in
+`internal/cli`; each must reproduce its golden case and parse its Python-era
+`raw_events` (`TestLegacyImport`). A source that doesn't keep one file per
+conversation sets `Handle.Content` in `Discover`, and the collector logs those
+bytes instead of reading the file.
 
 DuckDB makes the Go build use CGo; build release binaries natively per OS and
 architecture rather than cross-compiling.

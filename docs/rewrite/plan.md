@@ -286,9 +286,21 @@ machines is still to do.
   stale snapshot; restore a third empty machine from the relay with the other
   two offline.
 
-**M4 · Parity**
-- Remaining adapters, `analyze`, MCP server, `schedule` (launchd/systemd
-  installing the daemon), `paths`, `sources`, `mcp config`.
+**M4 · Parity**, in three PRs:
+- M4a, adapters: done. `codex_cli`, `omp`, `claude_export`, `opencode` and
+  `hermes_agent` are ported and pass their golden cases; `import-legacy` of
+  a Python archive reproduces the golden output for every source. Sources
+  without one file per conversation hand the collector each conversation's
+  bytes, and for sources logged as snapshots a device's newer snapshot
+  replaces its older ones (see [observation-log.md](observation-log.md)).
+- M4b: `analyze`, MCP server, `paths`, `mcp config`, and a source-format
+  check in `doctor`: warn when a source is installed but parses to nothing
+  (an OpenCode database with tables but no sessions read, say), or when an
+  adapter meets message types or tables it doesn't know. Sources change
+  their storage without notice (OpenCode 2.x moved to new tables), and the
+  daemon would otherwise drop new sessions without an error.
+- M4c: `schedule` (launchd/systemd installing the daemon) and the
+  incremental search index below.
 - Incremental search index. Since M3, every catch-up that changed anything
   rebuilds the whole FTS index (about 1.5 s on the 8 MB benchmark corpus), so
   its cost grows with the archive, not with the change. Fix before the
@@ -307,6 +319,19 @@ machines is still to do.
   binary, or keep publishing to PyPI as platform wheels that contain the Go
   binary (the way ruff and uv ship), so `pip install` and `uvx chatstrata`
   keep working. Decide before M5.
+- Source-format drift in CI, so a tool's storage change is caught the week
+  it ships rather than on a user's machine:
+  - A scheduled job (weekly) installs the latest release of each tool
+    (OpenCode, Codex, Hermes, omp), lets it create its empty store, dumps the
+    schema and diffs it against `spec/golden/captures/<source>/`, opening an
+    issue when it changed. No API keys needed. It sees tables and columns,
+    not changes inside JSON payloads.
+  - Then real sessions against a stub model: tools that accept a custom
+    OpenAI-compatible endpoint (OpenCode, Codex) are pointed at a small stub
+    server returning canned replies with a tool call, so each writes a real
+    throwaway session in its current format. The job ingests it and fails if
+    the adapter drops or mangles messages; refreshing a golden capture
+    becomes a job run instead of a manual capture on a machine.
 - Two weeks of parallel use on all three personal machines; then make v2 the
   daily driver. Python stays installable as a fallback, and `import-legacy` is
   how anything it collected in the meantime comes back.

@@ -1,0 +1,835 @@
+{
+  "conversations": [
+    {
+      "ended_at": "2026-10-06T20:47:29.882Z",
+      "message_count": 7,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "\"Create a file hello.txt containing hi, then read it back and tell me what it says\"",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:05.396Z",
+          "metadata": {},
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg_112f84e89001Xoi4Q9FR7Zqk4x"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "end_ms": 1791319626918,
+                "start_ms": 1791319626206
+              },
+              "text": "The user wants me to create hello.txt with \"hi\", then read it back. Working directory is /tmp/chatstrata-oc2-throwaway. I'll use the write tool, then read it.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:05.407Z",
+          "metadata": {
+            "agent": "build",
+            "provider_id": "openrouter",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 9620,
+              "output": 29,
+              "reasoning": 43
+            }
+          },
+          "model": "z-ai/glm-5.3-flash",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg_112f84eb9001VX3X0anTdlXmEf"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "input": {
+                  "content": "hi",
+                  "path": "/tmp/chatstrata-oc2-throwaway/hello.txt"
+                },
+                "status": "completed"
+              },
+              "text": null,
+              "tool_name": "write",
+              "tool_use_id": "call_01a112f853b77521a1b88575",
+              "type": "tool_use"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:05.407Z",
+          "metadata": {},
+          "model": "z-ai/glm-5.3-flash",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 2,
+          "source_native_id": "call_01a112f853b77521a1b88575"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "status": "completed"
+              },
+              "text": "Created file successfully: hello.txt",
+              "tool_name": null,
+              "tool_use_id": "call_01a112f853b77521a1b88575",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:05.407Z",
+          "metadata": {},
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "tool",
+          "sequence_index": 3,
+          "source_native_id": "call_01a112f853b77521a1b88575"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "input": {
+                  "path": "/tmp/chatstrata-oc2-throwaway/hello.txt"
+                },
+                "status": "completed"
+              },
+              "text": null,
+              "tool_name": "read",
+              "tool_use_id": "call_01a112f85b4e74bba54d1f51",
+              "type": "tool_use"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:06.938Z",
+          "metadata": {},
+          "model": "z-ai/glm-5.3-flash",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 4,
+          "source_native_id": "call_01a112f85b4e74bba54d1f51"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "status": "completed"
+              },
+              "text": "Read file /tmp/chatstrata-oc2-throwaway/hello.txt, lines 1-1\n1: hi",
+              "tool_name": null,
+              "tool_use_id": "call_01a112f85b4e74bba54d1f51",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:06.938Z",
+          "metadata": {},
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "tool",
+          "sequence_index": 5,
+          "source_native_id": "call_01a112f85b4e74bba54d1f51"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "end_ms": 1791319649876,
+                "start_ms": 1791319647929
+              },
+              "text": "The file says \"hi\". Simple confirmation.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "Done. I created `hello.txt` containing `hi`, read it back, and it says exactly that: **hi**.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2026-10-06T20:47:08.697Z",
+          "metadata": {
+            "agent": "build",
+            "provider_id": "openrouter",
+            "tokens": {
+              "cache": {
+                "read": 9600,
+                "write": 0
+              },
+              "input": 155,
+              "output": 28,
+              "reasoning": 9
+            }
+          },
+          "model": "z-ai/glm-5.3-flash",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 6,
+          "source_native_id": "msg_112f85b95001UED2i7ezsgS03a"
+        }
+      ],
+      "metadata": {
+        "schema": "v2"
+      },
+      "project": "/tmp/chatstrata-oc2-throwaway",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "agent": null,
+            "cost": 0.00213123,
+            "directory": "/tmp/chatstrata-oc2-throwaway",
+            "fork_boundary": null,
+            "fork_session_id": null,
+            "id": "ses_eed07b19affeqL6wrtBlxM40fP",
+            "idle_outcome": "succeeded",
+            "metadata": null,
+            "model": "{\"id\":\"z-ai/glm-5.3-flash\",\"providerID\":\"openrouter\"}",
+            "parent_id": null,
+            "path": "",
+            "permission": null,
+            "project_id": "62be6de141bedc44a6210f1ad43b67ba5e1fcd73",
+            "resume_attempts": 0,
+            "revert": null,
+            "share_url": null,
+            "slug": "stellar-lagoon",
+            "summary_additions": null,
+            "summary_deletions": null,
+            "summary_diffs": null,
+            "summary_files": null,
+            "time_archived": null,
+            "time_compacting": null,
+            "time_created": 1791319625346,
+            "time_idle": 1791319649882,
+            "time_suspended": null,
+            "time_updated": 1791319625382,
+            "time_viewed": null,
+            "title": "chatstrata oc2 fixture",
+            "tokens_cache_read": 19136,
+            "tokens_cache_write": 0,
+            "tokens_input": 9941,
+            "tokens_output": 80,
+            "tokens_reasoning": 52,
+            "version": "2.0.12",
+            "workspace_id": null
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "data": {
+              "files": [],
+              "text": "\"Create a file hello.txt containing hi, then read it back and tell me what it says\"",
+              "time": {
+                "created": 1791319625396
+              }
+            },
+            "id": "msg_112f84e89001Xoi4Q9FR7Zqk4x",
+            "seq": 5,
+            "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+            "time_created": 1791319625396,
+            "time_updated": 1791319625396,
+            "type": "user"
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 2,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "content": [
+                {
+                  "state": {
+                    "reasoningDetails": [
+                      {
+                        "format": "unknown",
+                        "index": 0,
+                        "text": "The user wants me to create hello.txt with \"hi\", then read it back. Working directory is /tmp/chatstrata-oc2-throwaway. I'll use the write tool, then read it.",
+                        "type": "reasoning.text"
+                      }
+                    ],
+                    "reasoningField": "reasoning"
+                  },
+                  "text": "The user wants me to create hello.txt with \"hi\", then read it back. Working directory is /tmp/chatstrata-oc2-throwaway. I'll use the write tool, then read it.",
+                  "time": {
+                    "completed": 1791319626918,
+                    "created": 1791319626206
+                  },
+                  "type": "reasoning"
+                },
+                {
+                  "executed": false,
+                  "id": "call_01a112f853b77521a1b88575",
+                  "name": "write",
+                  "state": {
+                    "content": [
+                      {
+                        "text": "Created file successfully: hello.txt",
+                        "type": "text"
+                      }
+                    ],
+                    "input": {
+                      "content": "hi",
+                      "path": "/tmp/chatstrata-oc2-throwaway/hello.txt"
+                    },
+                    "metadata": {
+                      "truncated": false
+                    },
+                    "status": "completed"
+                  },
+                  "time": {
+                    "completed": 1791319626925,
+                    "created": 1791319626905,
+                    "ran": 1791319626920
+                  },
+                  "type": "tool"
+                }
+              ],
+              "cost": 0.001479,
+              "finish": "tool-calls",
+              "model": {
+                "id": "z-ai/glm-5.3-flash",
+                "providerID": "openrouter",
+                "variant": "default"
+              },
+              "rawFinish": "tool_calls",
+              "time": {
+                "completed": 1791319626927,
+                "created": 1791319625407,
+                "streamed": 1791319626922
+              },
+              "tokens": {
+                "cache": {
+                  "read": 0,
+                  "write": 0
+                },
+                "input": 9620,
+                "output": 29,
+                "reasoning": 43
+              }
+            },
+            "id": "msg_112f84eb9001VX3X0anTdlXmEf",
+            "seq": 6,
+            "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+            "time_created": 1791319625407,
+            "time_updated": 1791319626927,
+            "type": "assistant"
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 3,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "content": [
+                {
+                  "executed": false,
+                  "id": "call_01a112f85b4e74bba54d1f51",
+                  "name": "read",
+                  "state": {
+                    "content": [
+                      {
+                        "text": "Read file /tmp/chatstrata-oc2-throwaway/hello.txt, lines 1-1\n1: hi",
+                        "type": "text"
+                      }
+                    ],
+                    "input": {
+                      "path": "/tmp/chatstrata-oc2-throwaway/hello.txt"
+                    },
+                    "metadata": {
+                      "truncated": false
+                    },
+                    "status": "completed"
+                  },
+                  "time": {
+                    "completed": 1791319628686,
+                    "created": 1791319628678,
+                    "ran": 1791319628682
+                  },
+                  "type": "tool"
+                }
+              ],
+              "cost": 0.00032247999999999993,
+              "finish": "tool-calls",
+              "model": {
+                "id": "z-ai/glm-5.3-flash",
+                "providerID": "openrouter",
+                "variant": "default"
+              },
+              "rawFinish": "tool_calls",
+              "time": {
+                "completed": 1791319628687,
+                "created": 1791319626938,
+                "streamed": 1791319628683
+              },
+              "tokens": {
+                "cache": {
+                  "read": 9536,
+                  "write": 0
+                },
+                "input": 166,
+                "output": 23,
+                "reasoning": 0
+              }
+            },
+            "id": "msg_112f854b5001mjmnEowEQE9WvY",
+            "seq": 15,
+            "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+            "time_created": 1791319626938,
+            "time_updated": 1791319628688,
+            "type": "assistant"
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 4,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "content": [
+                {
+                  "state": {
+                    "reasoningDetails": [
+                      {
+                        "format": "unknown",
+                        "index": 0,
+                        "text": "The file says \"hi\". Simple confirmation.",
+                        "type": "reasoning.text"
+                      }
+                    ],
+                    "reasoningField": "reasoning"
+                  },
+                  "text": "The file says \"hi\". Simple confirmation.",
+                  "time": {
+                    "completed": 1791319649876,
+                    "created": 1791319647929
+                  },
+                  "type": "reasoning"
+                },
+                {
+                  "text": "Done. I created `hello.txt` containing `hi`, read it back, and it says exactly that: **hi**.",
+                  "type": "text"
+                }
+              ],
+              "cost": 0.00032975,
+              "finish": "stop",
+              "model": {
+                "id": "z-ai/glm-5.3-flash",
+                "providerID": "openrouter",
+                "variant": "default"
+              },
+              "rawFinish": "stop",
+              "time": {
+                "completed": 1791319649880,
+                "created": 1791319628697,
+                "streamed": 1791319649879
+              },
+              "tokens": {
+                "cache": {
+                  "read": 9600,
+                  "write": 0
+                },
+                "input": 155,
+                "output": 28,
+                "reasoning": 9
+              }
+            },
+            "id": "msg_112f85b95001UED2i7ezsgS03a",
+            "seq": 22,
+            "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+            "time_created": 1791319628697,
+            "time_updated": 1791319649880,
+            "type": "assistant"
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 5,
+          "payload": {
+            "data": {
+              "outcome": "succeeded",
+              "time": {
+                "created": 1791319649882
+              }
+            },
+            "id": "msg_112f8ae5a001FdWqF58Lk0uqWg",
+            "seq": 29,
+            "session_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+            "time_created": 1791319649882,
+            "time_updated": 1791319649882,
+            "type": "idle"
+          },
+          "raw_path": "$INPUT/opencode.db"
+        }
+      ],
+      "raw_path": "$INPUT/opencode.db",
+      "source_id": "opencode",
+      "source_native_id": "ses_eed07b19affeqL6wrtBlxM40fP",
+      "started_at": "2026-10-06T20:47:05.396Z",
+      "title": "chatstrata oc2 fixture"
+    },
+    {
+      "ended_at": "2023-11-14T22:14:20Z",
+      "message_count": 5,
+      "messages": [
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "Add error handling to the database connection module",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:20Z",
+          "metadata": {
+            "agent": "build",
+            "provider_id": "llamacpp"
+          },
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "user",
+          "sequence_index": 0,
+          "source_native_id": "msg_user001"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "end_ms": 1700000015000,
+                "start_ms": 1700000011000
+              },
+              "text": "I need to add try-except blocks around the database connection calls.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "thinking"
+            },
+            {
+              "block_index": 1,
+              "payload": null,
+              "text": "I'll add error handling to the database connection module.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {
+            "agent": "build",
+            "mode": "build",
+            "provider_id": "llamacpp",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 4500,
+              "output": 500,
+              "reasoning": 0,
+              "total": 5000
+            }
+          },
+          "model": "qwen-distill",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 1,
+          "source_native_id": "msg_asst001"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "input": {
+                  "command": "cat db.py",
+                  "description": "Read database module"
+                },
+                "status": "completed"
+              },
+              "text": null,
+              "tool_name": "bash",
+              "tool_use_id": "call_abc123",
+              "type": "tool_use"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {},
+          "model": "qwen-distill",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 2,
+          "source_native_id": "call_abc123"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": {
+                "status": "completed"
+              },
+              "text": "import sqlite3\n\ndef connect():\n    return sqlite3.connect(\"app.db\")",
+              "tool_name": null,
+              "tool_use_id": "call_abc123",
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {},
+          "model": null,
+          "parent_source_native_id": null,
+          "role": "tool",
+          "sequence_index": 3,
+          "source_native_id": "call_abc123"
+        },
+        {
+          "blocks": [
+            {
+              "block_index": 0,
+              "payload": null,
+              "text": "I've reviewed the module. Adding try-except blocks now.",
+              "tool_name": null,
+              "tool_use_id": null,
+              "type": "text"
+            },
+            {
+              "block_index": 1,
+              "payload": {
+                "files": [
+                  "/home/user/projects/myapp/db.py"
+                ],
+                "hash": "deadbeef1234567890"
+              },
+              "text": null,
+              "tool_name": "patch",
+              "tool_use_id": null,
+              "type": "tool_result"
+            }
+          ],
+          "created_at": "2023-11-14T22:13:30Z",
+          "metadata": {
+            "agent": "build",
+            "mode": "build",
+            "provider_id": "llamacpp",
+            "tokens": {
+              "cache": {
+                "read": 0,
+                "write": 0
+              },
+              "input": 4500,
+              "output": 500,
+              "reasoning": 0,
+              "total": 5000
+            }
+          },
+          "model": "qwen-distill",
+          "parent_source_native_id": null,
+          "role": "assistant",
+          "sequence_index": 4,
+          "source_native_id": "msg_asst001"
+        }
+      ],
+      "metadata": {},
+      "project": "/home/user/projects/myapp",
+      "raw_events": [
+        {
+          "line_number": 0,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "model": {
+                "modelID": "qwen-distill",
+                "providerID": "llamacpp"
+              },
+              "role": "user",
+              "summary": {
+                "diffs": []
+              },
+              "time": {
+                "created": 1700000000000
+              }
+            },
+            "id": "msg_user001",
+            "parts": [
+              {
+                "data": {
+                  "text": "Add error handling to the database connection module",
+                  "type": "text"
+                },
+                "id": "prt_user001"
+              }
+            ],
+            "time_created": 1700000000000
+          },
+          "raw_path": "$INPUT/opencode.db"
+        },
+        {
+          "line_number": 1,
+          "payload": {
+            "data": {
+              "agent": "build",
+              "cost": 0,
+              "finish": "tool-calls",
+              "mode": "build",
+              "modelID": "qwen-distill",
+              "parentID": "msg_user001",
+              "path": {
+                "cwd": "/home/user/projects/myapp",
+                "root": "/"
+              },
+              "providerID": "llamacpp",
+              "role": "assistant",
+              "time": {
+                "completed": 1700000060000,
+                "created": 1700000010000
+              },
+              "tokens": {
+                "cache": {
+                  "read": 0,
+                  "write": 0
+                },
+                "input": 4500,
+                "output": 500,
+                "reasoning": 0,
+                "total": 5000
+              }
+            },
+            "id": "msg_asst001",
+            "parts": [
+              {
+                "data": {
+                  "type": "step-start"
+                },
+                "id": "prt_step001"
+              },
+              {
+                "data": {
+                  "text": "I need to add try-except blocks around the database connection calls.",
+                  "time": {
+                    "end": 1700000015000,
+                    "start": 1700000011000
+                  },
+                  "type": "reasoning"
+                },
+                "id": "prt_reason001"
+              },
+              {
+                "data": {
+                  "text": "I'll add error handling to the database connection module.",
+                  "time": {
+                    "end": 1700000015000,
+                    "start": 1700000015000
+                  },
+                  "type": "text"
+                },
+                "id": "prt_text001"
+              },
+              {
+                "data": {
+                  "callID": "call_abc123",
+                  "state": {
+                    "input": {
+                      "command": "cat db.py",
+                      "description": "Read database module"
+                    },
+                    "metadata": {
+                      "description": "Read database module",
+                      "exit": 0,
+                      "output": "import sqlite3\n\ndef connect():\n    return sqlite3.connect(\"app.db\")",
+                      "truncated": false
+                    },
+                    "output": "import sqlite3\n\ndef connect():\n    return sqlite3.connect(\"app.db\")",
+                    "status": "completed",
+                    "time": {
+                      "end": 1700000025000,
+                      "start": 1700000020000
+                    },
+                    "title": "Read database module"
+                  },
+                  "tool": "bash",
+                  "type": "tool"
+                },
+                "id": "prt_tool001"
+              },
+              {
+                "data": {
+                  "text": "I've reviewed the module. Adding try-except blocks now.",
+                  "time": {
+                    "end": 1700000030000,
+                    "start": 1700000030000
+                  },
+                  "type": "text"
+                },
+                "id": "prt_text002"
+              },
+              {
+                "data": {
+                  "cost": 0,
+                  "reason": "tool-calls",
+                  "snapshot": "abc123",
+                  "tokens": {
+                    "cache": {
+                      "read": 0,
+                      "write": 0
+                    },
+                    "input": 4500,
+                    "output": 500,
+                    "reasoning": 0,
+                    "total": 5000
+                  },
+                  "type": "step-finish"
+                },
+                "id": "prt_stepfin001"
+              },
+              {
+                "data": {
+                  "files": [
+                    "/home/user/projects/myapp/db.py"
+                  ],
+                  "hash": "deadbeef1234567890",
+                  "type": "patch"
+                },
+                "id": "prt_patch001"
+              }
+            ],
+            "time_created": 1700000010000
+          },
+          "raw_path": "$INPUT/opencode.db"
+        }
+      ],
+      "raw_path": "$INPUT/opencode.db",
+      "source_id": "opencode",
+      "source_native_id": "ses_test001",
+      "started_at": "2023-11-14T22:13:20Z",
+      "title": "Add error handling to database module"
+    }
+  ]
+}

@@ -15,6 +15,8 @@ files.
   sources (OpenCode, Hermes) are stored as SQL dumps; build each `*.sql` into a
   `*.db` next to it before ingesting.
 - `expected/<case>.json`: the resulting archive in canonical form.
+- `captures/<case>/`: raw captures from real tools (synthetic throwaway
+  sessions only) that an input was built from, kept for provenance.
 
 Running a case:
 
@@ -25,6 +27,13 @@ Running a case:
    `chatstrata ingest <source> --path $INPUT/<path> --db <db>`, adding
    `--incremental` when the step says so. All steps use the same database.
 3. Dump the database in canonical form and compare with `expected/<case>.json`.
+
+A case with `"implementations": ["go"]` runs in Go only, for source formats
+the feature-frozen Python app doesn't read (OpenCode 2.x). Its expected output
+is generated from Go with `go test ./internal/golden -run TestGolden/<case>
+-update` and reviewed like any other; `-update` never touches cases Python
+generates. The real data such a fixture was built from lives in
+`captures/<case>/`.
 
 Three cases exist to pin behaviour rather than parsing:
 `claude_code_reingest` (re-ingesting changes nothing) and
