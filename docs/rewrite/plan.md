@@ -389,7 +389,11 @@ time (byte-identical to Python for every variant, `projects` included) and
 echo-1 and the `claude_export` false positive is gone on omarchy-macbook; and
 `mcp config --name` picks the server name. On echo-1 parity now differs only on
 `01a0a7b4…`'s counts (no `raw_events`) and on OpenCode titles, which a legacy
-import cannot recover — its `raw_events` carry no session row.
+import cannot recover — its `raw_events` carry no session row. Omarchy-macbook
+concurs on its node: `go test ./...` clean, `doctor` "All checks passed", all
+12 `analyze` variants byte-identical to Python in the host time zone (including
+`conversations --longest 5 --json`), and `mcp config --name chatstrata-go`
+registers `chatstrata-go` for Codex and Claude Code.
 
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
