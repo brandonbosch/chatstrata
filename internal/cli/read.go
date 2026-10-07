@@ -235,14 +235,15 @@ func formatValue(v any) string {
 	return fmt.Sprint(v)
 }
 
-// pyTime formats like str(datetime) for a UTC timestamp.
+// pyTime formats like str(datetime) for a TIMESTAMPTZ value, which Python's
+// DuckDB client returns in the session time zone, the machine's local zone.
 func pyTime(t time.Time) string {
-	t = t.UTC()
+	t = t.In(time.Local)
 	s := t.Format("2006-01-02 15:04:05")
 	if us := t.Nanosecond() / 1000; us != 0 {
 		s += fmt.Sprintf(".%06d", us)
 	}
-	return s + "+00:00"
+	return s + t.Format("-07:00")
 }
 
 // pyFloat formats like repr(float).

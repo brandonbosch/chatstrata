@@ -23,7 +23,8 @@ func runMCP(e *env, args []string) error {
 // installed script: the server is this binary, named by its absolute path so
 // clients that don't search PATH (Claude Desktop) find it.
 func runMCPConfig(e *env, args []string) error {
-	fs := newFlagSet(e, "mcp config", "mcp config claude-code|claude-desktop|codex [--db PATH] [--scope local|project|user] [--command PATH]")
+	fs := newFlagSet(e, "mcp config", "mcp config claude-code|claude-desktop|codex [--name NAME] [--db PATH] [--scope local|project|user] [--command PATH]")
+	name := fs.String("name", "chatstrata", "Server name in the client's config. The Python app registers \"chatstrata\" too: remove that entry first, or pick another name to keep both.")
 	db := fs.String("db", "", "Set CHATSTRATA_GO_DB for the MCP server.")
 	scope := fs.String("scope", "user", "Claude Code MCP scope: local, project or user.")
 	command := fs.String("command", "", "Command that runs chatstrata (default: this binary).")
@@ -33,6 +34,9 @@ func runMCPConfig(e *env, args []string) error {
 	}
 	if len(positional) != 1 {
 		return usageError{"expected one CLIENT: claude-code, claude-desktop or codex"}
+	}
+	if !serverName.MatchString(*name) {
+		return usageError{"--name may only use letters, digits, '-' and '_'"}
 	}
 	switch *scope {
 	case "local", "project", "user":
@@ -66,7 +70,7 @@ func runMCPConfig(e *env, args []string) error {
 		if env != nil {
 			spec["env"] = env
 		}
-		b, err := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{"chatstrata": spec}}, "", "  ")
+		b, err := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{*name: spec}}, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -76,11 +80,11 @@ func runMCPConfig(e *env, args []string) error {
 		if env != nil {
 			parts = append(parts, "--env", "CHATSTRATA_GO_DB="+env["CHATSTRATA_GO_DB"])
 		}
-		parts = append(parts, "chatstrata", "--", cmd, "serve")
+		parts = append(parts, *name, "--", cmd, "serve")
 		fmt.Fprintln(e.stdout, shellJoin(parts))
 	case "codex":
 		fmt.Fprintln(e.stdout, "# Add to ~/.codex/config.toml")
-		fmt.Fprintln(e.stdout, "[mcp_servers.chatstrata]")
+		fmt.Fprintf(e.stdout, "[mcp_servers.%s]\n", *name)
 		fmt.Fprintf(e.stdout, "command = %s\n", tomlString(cmd))
 		fmt.Fprintln(e.stdout, `args = ["serve"]`)
 		if env != nil {
@@ -91,6 +95,10 @@ func runMCPConfig(e *env, args []string) error {
 	}
 	return nil
 }
+
+// serverName is what all three clients accept as a server name (and what a
+// bare TOML key allows).
+var serverName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 var shellSafe = regexp.MustCompile(`^[A-Za-z0-9@%+=:,./_-]+$`)
 

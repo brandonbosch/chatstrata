@@ -80,10 +80,23 @@ func TestFormatValueMatchesPython(t *testing.T) {
 		{time.Date(2026, 3, 14, 10, 0, 5, 0, time.UTC), "2026-03-14 10:00:05+00:00"},
 		{time.Date(2026, 3, 14, 10, 0, 5, 120_000_000, time.UTC), "2026-03-14 10:00:05.120000+00:00"},
 	}
+	t.Cleanup(func(l *time.Location) func() { return func() { time.Local = l } }(time.Local))
+	time.Local = time.UTC
 	for _, c := range cases {
 		if got := formatValue(c.in); got != c.want {
 			t.Errorf("formatValue(%#v) = %q, want %q", c.in, got, c.want)
 		}
+	}
+
+	// Timestamps are shown in the local zone, as Python's DuckDB client
+	// returns them.
+	denver, err := time.LoadLocation("America/Denver")
+	if err != nil {
+		t.Skip("no time zone database")
+	}
+	time.Local = denver
+	if got := formatValue(time.Date(2026, 3, 14, 10, 0, 5, 0, time.UTC)); got != "2026-03-14 04:00:05-06:00" {
+		t.Errorf("local time = %q", got)
 	}
 }
 

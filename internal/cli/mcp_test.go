@@ -134,6 +134,15 @@ func TestMCPConfig(t *testing.T) {
 	if out := run(t, "mcp", "config", "codex", "--command", "/opt/chatstrata"); !strings.Contains(out, "[mcp_servers.chatstrata]\ncommand = \"/opt/chatstrata\"\nargs = [\"serve\"]\n") {
 		t.Errorf("codex:\n%s", out)
 	}
+	if out := run(t, "mcp", "config", "codex", "--name", "chatstrata-go", "--command", "/opt/chatstrata"); !strings.Contains(out, "[mcp_servers.chatstrata-go]\n") {
+		t.Errorf("codex --name:\n%s", out)
+	}
+	if out := run(t, "mcp", "config", "claude-code", "--name", "chatstrata-go", "--command", "/opt/chatstrata"); !strings.Contains(out, " chatstrata-go -- /opt/chatstrata serve") {
+		t.Errorf("claude-code --name:\n%s", out)
+	}
+	if _, err := runErr("mcp", "config", "codex", "--name", "bad name"); err == nil {
+		t.Error("invalid --name accepted")
+	}
 	if _, err := runErr("mcp", "config", "vscode"); err == nil {
 		t.Error("unknown client accepted")
 	}
