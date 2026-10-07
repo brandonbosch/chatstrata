@@ -381,6 +381,16 @@ where Go HTML-escapes `<` and `>` in a title and Python does not. The
 conversation without `raw_events` (`01a0a7b4…`) is echo-1's, so no count shift
 appears here. MCP from Claude Code is echo-1's step.
 
+#### M4b re-check (`79255e5`)
+
+The findings above are fixed: `analyze` prints timestamps in the host's local
+time (byte-identical to Python for every variant, `projects` included) and
+`--json` no longer escapes `<`, `>` or `&`; `doctor` is "All checks passed" on
+echo-1 and the `claude_export` false positive is gone on omarchy-macbook; and
+`mcp config --name` picks the server name. On echo-1 parity now differs only on
+`01a0a7b4…`'s counts (no `raw_events`) and on OpenCode titles, which a legacy
+import cannot recover — its `raw_events` carry no session row.
+
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
   install instructions without Python.
