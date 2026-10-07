@@ -397,6 +397,30 @@ concurs on its node: `go test ./...` clean, `doctor` "All checks passed", all
 `conversations --longest 5 --json`), and `mcp config --name chatstrata-go`
 registers `chatstrata-go` for Codex and Claude Code.
 
+### M4c verification
+
+Checked on `90a17cb` from omarchy-macbook (relay and daemon node): `go test
+./...` clean, binary rebuilt in place. `schedule status` found the hand-made
+unit, `schedule install` announced it was replacing a unit it had not
+installed, and status then showed active (running), this binary, 5m0s. The
+journal showed a clean cycle and `chatstrata-relay.service` stayed active;
+`Linger=no`.
+
+`doctor` reported 13 content blocks newer than the search index (of 39,879
+indexed). A fresh Codex conversation carrying `M4CPROBE-omarchy-…` was
+collected on the next cycle and `search` found it straight away with
+`score: 1.00`; the indexed count stayed at 39,879 across cycles and the
+journal never showed an index rebuild, so a small change did not rebuild it.
+echo-1's `M4CPROBE-echo-…` probe arrived by sync and was findable here too.
+`reindex` rebuilt 24,248 blocks, cleared the `doctor` note, and the probes
+then scored BM25 (11–13) instead of 1.00.
+
+Convergence: 218 conversations / 31,590 messages, divergences 0; per source
+claude_code 36/3,865, codex_cli 87/10,748, omp 93/16,968, opencode 2/9;
+conversation-id md5 `b4812de2…`, message-id md5 `04925267…`. Omitting
+omarchy-macbook's live omp session (`1f40ea9f…`) the fingerprints are
+`9a9a0bd1…` and `3e8b0d3b…`; echo-1's are its half of the comparison.
+
 **M5 · Cutover**
 - Release builds per platform (CGo, so build on native runners per OS/arch),
   install instructions without Python.
