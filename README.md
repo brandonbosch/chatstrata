@@ -32,13 +32,59 @@ Concretely, with chatstrata you can:
 
 ## Status
 
-**Alpha.** Published on [PyPI](https://pypi.org/project/chatstrata/). Includes
-adapters for Claude Code, claude.ai exports, Codex CLI, and OpenCode, plus
-scheduled background sync so your archive stays current without manual runs. The
-architecture is built so that adding more sources (ChatGPT exports, Cursor, etc.)
-is the work of one adapter — see [docs/adapter-guide.md](docs/adapter-guide.md).
+**chatstrata 2 is a single binary written in Go** and replaces the Python app.
+It needs no Python, starts in milliseconds, keeps the same tables and SQL, and
+adds sync between your own machines (end-to-end encrypted, over your tailnet).
+It reads Claude Code, Codex CLI, OpenCode (1.x and 2.x), Oh My Pi, Hermes Agent
+and claude.ai exports.
 
-## Quickstart
+The Python package on PyPI stops at **0.5**, which still works and points here.
+It is no longer developed; the rest of this README after
+[Python version](#python-version-05-frozen) describes it.
+
+## Install
+
+Linux (x86-64, arm64) and macOS (Apple silicon):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/brandonbosch/chatstrata/main/scripts/install.sh | sh
+```
+
+It downloads the newest release from
+[GitHub Releases](https://github.com/brandonbosch/chatstrata/releases), checks
+its checksum and installs `chatstrata` to `~/.local/bin`. Elsewhere, build it
+from source with Go and a C compiler: `go install
+github.com/brandonbosch/chatstrata/cmd/chatstrata@main`.
+
+```bash
+chatstrata ingest --auto        # collect every installed source once
+chatstrata schedule install     # keep collecting in the background
+chatstrata search "auth refactor"
+chatstrata mcp config           # set up Claude Code, Claude Desktop or Codex
+```
+
+`chatstrata --help` lists the rest: `query`, `stats`, `analyze`, `serve` (the
+MCP server), `doctor`, and `pair`/`join`/`sync` for syncing machines
+([how sync works](https://github.com/brandonbosch/chatstrata/blob/main/docs/rewrite/sync.md)).
+
+### Coming from the Python version
+
+1. Remove the Python app's scheduled ingest while its command still runs
+   Python: `chatstrata schedule uninstall`.
+2. Install chatstrata 2 as above. If `~/.local/bin/chatstrata` was the Python
+   app's link (uv or pipx), the installer replaces the link and leaves the
+   Python install alone.
+3. Bring your history over: `chatstrata import-legacy` reads the Python archive
+   (`$CHATSTRATA_DB`, or `chatstrata.duckdb` in the data directory) into the
+   new one, `chatstrata-go.duckdb` next to it. The old file is left untouched;
+   keep it as a backup. This matters because Claude Code deletes transcripts
+   after 30 days, so the old archive may hold sessions no longer on disk.
+4. `chatstrata schedule install`.
+
+Not carried over: embeddings and semantic search, `redact` and `label`. If you
+need them, stay on `uv tool install "chatstrata==0.5.*"`.
+
+## Python version (0.5, frozen)
 
 Requires Python 3.10+. We recommend [uv](https://docs.astral.sh/uv/) — it's the
 fastest way to get started (no virtualenv wrangling, no dependency conflicts).

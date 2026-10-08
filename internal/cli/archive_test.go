@@ -166,3 +166,29 @@ func TestSearchWithNoMatches(t *testing.T) {
 		t.Errorf("no matches without the FTS extension = %q, want an --install-fts hint", got)
 	}
 }
+
+// ingest --auto, which the Python app's scheduled ingest runs, collects every
+// installed source like the daemon does: here only Claude Code is installed.
+func TestIngestAutoCollectsInstalledSources(t *testing.T) {
+	root, db := fixture(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, "data"))
+	t.Setenv("HERMES_HOME", filepath.Join(home, "no-hermes"))
+	if err := os.CopyFS(filepath.Join(home, ".claude", "projects"), os.DirFS(root)); err != nil {
+		t.Fatal(err)
+	}
+
+	out := run(t, "ingest", "--auto", "--no-embed", "--db", db)
+	if !strings.Contains(out, "claude_code") || !strings.Contains(out, "Ingested: 2") {
+		t.Fatalf("ingest --auto:\n%s", out)
+	}
+	want := filepath.Join(t.TempDir(), "want.duckdb")
+	run(t, "ingest", "claude_code", "--path", filepath.Join(home, ".claude", "projects"), "--db", want)
+	if !reflect.DeepEqual(dump(t, want), dump(t, db)) {
+		t.Fatal("ingest --auto differs from ingesting the source directly")
+	}
+	if out := run(t, "ingest", "--auto", "--db", db); !strings.Contains(out, "Ingested: 0") {
+		t.Fatalf("second ingest --auto changed something:\n%s", out)
+	}
+}

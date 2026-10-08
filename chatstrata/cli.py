@@ -38,11 +38,40 @@ from chatstrata.redact.cli import redact
 from chatstrata.schedule.cli import schedule
 from chatstrata.sources import load_adapters
 
+GO_NOTICE = (
+    "chatstrata 0.5 is the last Python release. chatstrata 2 is a single binary "
+    "(no Python) with sync between your machines; your archive comes along with "
+    "`chatstrata import-legacy`. Install: "
+    "https://github.com/brandonbosch/chatstrata#install "
+    "(hide this note: CHATSTRATA_NO_GO_NOTICE=1)"
+)
+
+
+def _go_notice() -> None:
+    """Point people at the Go app, once per command, on a terminal only.
+
+    Scripts, scheduled runs and agents reading stdout never see it.
+    """
+    if os.environ.get("CHATSTRATA_NO_GO_NOTICE"):
+        return
+    if not _stderr_is_terminal():
+        return
+    click.echo(GO_NOTICE, err=True)
+
+
+def _stderr_is_terminal() -> bool:
+    return sys.stderr.isatty()
+
 
 @click.group()
 @click.version_option(__version__, prog_name="chatstrata")
 def cli() -> None:
-    """chatstrata: a personal, queryable archive of your AI conversations."""
+    """chatstrata: a personal, queryable archive of your AI conversations.
+
+    This is the last Python release (0.5). chatstrata 2 is a single binary;
+    see https://github.com/brandonbosch/chatstrata#install
+    """
+    _go_notice()
 
 
 @cli.command("sources")

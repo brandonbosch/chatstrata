@@ -34,8 +34,14 @@ func TestLegacyImport(t *testing.T) {
 			legacy := filepath.Join(dir, "chatstrata.duckdb")
 			writeLegacyArchive(t, legacy, expected.Conversations)
 			db := filepath.Join(dir, "chatstrata-go.duckdb")
+			args := []string{"import-legacy", legacy, "--db", db}
+			if name == "claude_code" {
+				// Without a path it reads the Python app's archive.
+				t.Setenv("CHATSTRATA_DB", legacy)
+				args = []string{"import-legacy", "--db", db}
+			}
 			var stdout, stderr bytes.Buffer
-			if code := cli.Run(context.Background(), []string{"import-legacy", legacy, "--db", db}, &stdout, &stderr); code != 0 || stderr.Len() > 0 {
+			if code := cli.Run(context.Background(), args, &stdout, &stderr); code != 0 || stderr.Len() > 0 {
 				t.Fatalf("import-legacy: exit %d\n%s%s", code, stdout.String(), stderr.String())
 			}
 

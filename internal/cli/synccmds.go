@@ -13,6 +13,7 @@ import (
 
 	"github.com/brandonbosch/chatstrata/internal/devsync"
 	"github.com/brandonbosch/chatstrata/internal/model"
+	"github.com/brandonbosch/chatstrata/internal/project"
 	"github.com/brandonbosch/chatstrata/internal/relay"
 	"github.com/brandonbosch/chatstrata/internal/store"
 )
@@ -263,34 +264,15 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 		return err
 	}
 	defer a.Close()
-	names := make([]string, 0, len(sources))
-	for name := range sources {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		src := sources[name]
-		handles, err := src.Discover("")
-		if errors.Is(err, model.ErrNotFound) {
-			continue // not installed on this machine
+	err = collectInstalled(e, a, func(name string, err error) {
+		logger.Printf("%s: %s", name, err)
+	}, func(name string, c project.CollectResult) {
+		if c.Logged > 0 {
+			logger.Printf("%s: logged %d changed conversations", name, c.Logged)
 		}
-		if err != nil {
-			logger.Printf("%s: %s", name, err)
-			continue
-		}
-		if len(handles) == 0 {
-			continue // installed, or a source without a default location, with nothing to collect
-		}
-		if err := a.store.EnsureSource(e.ctx, src); err != nil {
-			return err
-		}
-		collected, err := a.proj.Collect(e.ctx, src, handles, true, e.stderr)
-		if err != nil {
-			return err
-		}
-		if collected.Logged > 0 {
-			logger.Printf("%s: logged %d changed conversations", name, collected.Logged)
-		}
+	})
+	if err != nil {
+		return err
 	}
 	stats, err := a.proj.CatchUp(e.ctx, false, e.stderr)
 	if err != nil {
@@ -320,6 +302,41 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	if res.Uploaded+res.Downloaded > 0 {
 		logger.Printf("sync: uploaded %d, downloaded %d segments, %d conversations updated",
 			res.Uploaded, res.Downloaded, stats.Stored+stats.Removed)
+	}
+	return nil
+}
+
+// collectInstalled logs what changed in every source installed on this
+// machine, skipping sources that aren't installed or have nothing to collect
+// (a source without a default location). A source that fails to discover is
+// reported to skip and doesn't stop the others.
+func collectInstalled(e *env, a *archive, skip func(string, error), done func(string, project.CollectResult)) error {
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		src := sources[name]
+		handles, err := src.Discover("")
+		if errors.Is(err, model.ErrNotFound) {
+			continue // not installed on this machine
+		}
+		if err != nil {
+			skip(name, err)
+			continue
+		}
+		if len(handles) == 0 {
+			continue
+		}
+		if err := a.store.EnsureSource(e.ctx, src); err != nil {
+			return err
+		}
+		collected, err := a.proj.Collect(e.ctx, src, handles, true, e.stderr)
+		if err != nil {
+			return err
+		}
+		done(name, collected)
 	}
 	return nil
 }

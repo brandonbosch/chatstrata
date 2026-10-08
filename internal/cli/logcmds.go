@@ -78,18 +78,27 @@ func runRebuild(e *env, args []string) error {
 }
 
 func runImportLegacy(e *env, args []string) error {
-	fs := newFlagSet(e, "import-legacy", "import-legacy PYTHON_ARCHIVE [--db PATH]")
+	fs := newFlagSet(e, "import-legacy", "import-legacy [PYTHON_ARCHIVE] [--db PATH]\n\nPYTHON_ARCHIVE defaults to the Python app's archive: $CHATSTRATA_DB, else chatstrata.duckdb in the data directory.")
 	db := fs.String("db", "", "Override the database path.")
 	positional, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
-	if len(positional) != 1 {
-		return usageError{"expected the path of a Python-era chatstrata.duckdb"}
+	if len(positional) > 1 {
+		return usageError{"expected at most one path, the Python-era chatstrata.duckdb"}
 	}
-	legacyPath, err := filepath.Abs(positional[0])
+	var legacyPath string
+	if len(positional) == 1 {
+		legacyPath = positional[0]
+	} else if legacyPath, err = pythonArchivePath(); err != nil {
+		return err
+	}
+	legacyPath, err = filepath.Abs(legacyPath)
 	if err != nil {
 		return err
+	}
+	if _, err := os.Stat(legacyPath); err != nil {
+		return fmt.Errorf("Python archive: %w", err)
 	}
 
 	a, err := openArchive(e, *db)
@@ -199,4 +208,25 @@ func readLegacy(ctx context.Context, a *archive, path string) ([]*obslog.Observa
 		})
 	}
 	return out, already, nil
+}
+
+// pythonArchivePath is where the Python app keeps its archive by default
+// (chatstrata/core/db.py): $CHATSTRATA_DB, else chatstrata.duckdb in the same
+// data directory the Go app uses.
+func pythonArchivePath() (string, error) {
+	if p := os.Getenv("CHATSTRATA_DB"); p != "" {
+		if rest, ok := strings.CutPrefix(p, "~/"); ok {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			p = filepath.Join(home, rest)
+		}
+		return p, nil
+	}
+	dir, err := store.DataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "chatstrata.duckdb"), nil
 }
