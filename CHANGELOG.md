@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 - unreleased
+
+The last release of the Python app. chatstrata 2 is a single Go binary that
+replaces it; see the README's [Install](README.md#install) section.
+
+- Every command run in a terminal prints one line on stderr pointing to
+  chatstrata 2 (`CHATSTRATA_NO_GO_NOTICE=1` hides it). Scripts, scheduled
+  runs and agents reading the output see nothing new.
+- The README now leads with chatstrata 2 and how to move over: remove the
+  scheduled ingest, install, then `chatstrata import-legacy`.
+- No other changes. The package stays on PyPI; nothing is yanked.
+
 ## 0.4.0 - 2026-10-04
 
 - Add Linux support to `chatstrata schedule`: `install`, `uninstall`, and `status` now manage a systemd user timer (`chatstrata-sync.timer` / `chatstrata-sync.service`) that runs `chatstrata ingest --auto` on the configured interval, with logs in the journal.

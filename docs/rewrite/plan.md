@@ -457,8 +457,12 @@ omarchy-macbook's live omp session (`1f40ea9f…`) the fingerprints are
   download. See [release.md](release.md). `go install` keeps working for
   anyone with a C toolchain. A Homebrew tap follows once a first release
   candidate exists (it needs its own `homebrew-chatstrata` repository).
-- PyPI: one final Python release, `chatstrata 0.5.0`, that still works but
-  whose README and CLI (one line on every command) point to the Go install.
+- M5b: PyPI. One final Python release, `chatstrata 0.5.0`, that still works
+  but whose README and CLI (one line on stderr, on a terminal only) point to
+  the Go install. The Go binary takes over where the Python one was:
+  `ingest --auto` (what the Python app's scheduled ingest runs) collects every
+  installed source, and `import-legacy` with no argument reads the Python
+  archive from its default location.
   Nothing on PyPI is yanked or deleted: the name stays held, and anyone who
   needs what v2 drops (`embed`, `redact`, `label`) pins
   `chatstrata==0.5.*`. This doesn't close the wheel route: platform wheels
