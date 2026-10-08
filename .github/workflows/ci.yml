@@ -59,3 +59,9 @@ jobs:
         run: go test ./...
       - name: Build
         run: go build -o bin/chatstrata ./cmd/chatstrata && ./bin/chatstrata version
+      - name: Release build (embedded fts extension)
+        run: |
+          go run ./internal/tools/fetchfts
+          go test -tags fts_embed ./internal/store/ ./internal/cli/
+          go build -tags fts_embed -o bin/chatstrata-release ./cmd/chatstrata
+          scripts/smoke-release.sh bin/chatstrata-release

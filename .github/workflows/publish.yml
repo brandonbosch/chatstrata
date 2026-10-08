@@ -8,6 +8,9 @@ on:
 jobs:
   publish:
     name: Build and publish to PyPI
+    # Only the Python app's releases (v0.x). Go releases (v2.x) are built by
+    # release.yml and never go to PyPI.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v0.')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

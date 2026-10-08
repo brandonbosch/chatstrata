@@ -74,3 +74,6 @@ uv.lock
 
 # Go
 /bin/
+
+# Go release builds: DuckDB extension fetched by internal/tools/fetchfts
+internal/store/fts/*.gz

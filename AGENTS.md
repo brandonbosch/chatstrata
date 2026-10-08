@@ -6,7 +6,7 @@ a read-only MCP server.
 
 **The project is moving from Python to Go.** Read
 [docs/rewrite/plan.md](docs/rewrite/plan.md) before making structural changes.
-Until the cutover (milestone M5), both implementations live in this repo.
+Until Python is removed (milestone M6), both implementations live in this repo.
 
 ## Layout
 
@@ -106,7 +106,9 @@ An adapter can implement `model.Checker` so `chatstrata doctor` can say when
 the tool's storage changed under it.
 
 DuckDB makes the Go build use CGo; build release binaries natively per OS and
-architecture rather than cross-compiling.
+architecture rather than cross-compiling. Release builds (`-tags fts_embed`,
+after `go run ./internal/tools/fetchfts`) embed DuckDB's fts extension so
+search never downloads it; how releases are cut: `docs/rewrite/release.md`.
 
 ## Conventions
 
