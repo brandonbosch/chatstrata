@@ -5,8 +5,17 @@ on:
     branches: [main]
     paths:
       - "docs-site/**"
+      - "site/**"
       - ".github/workflows/docs.yml"
       - "scripts/install.sh"
+      - "scripts/build-site.sh"
+  pull_request:
+    paths:
+      - "docs-site/**"
+      - "site/**"
+      - ".github/workflows/docs.yml"
+      - "scripts/install.sh"
+      - "scripts/build-site.sh"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +24,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -27,12 +36,11 @@ jobs:
 
       - uses: astral-sh/setup-uv@v5
 
+      - name: Check landing page JavaScript
+        run: for file in site/*.mjs; do node --check "$file"; done
+
       - name: Build docs
-        working-directory: docs-site
-        run: |
-          uv run --group dev zensical build --clean
-          cp ../scripts/install.sh site/install.sh
-          cmp ../scripts/install.sh site/install.sh
+        run: sh scripts/build-site.sh
 
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -40,6 +48,7 @@ jobs:
 
   deploy:
     name: Deploy docs
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:
