@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chatstrata — your conversations, in layers</title>
+<meta name="description" content="Your AI conversations, archived locally and queryable by your agents. One Go binary. DuckDB, search, and MCP.">
+<meta name="theme-color" content="#060c0c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='%2327463b' stroke='%239fcab7' stroke-width='1'%3E%3Cpath d='m3 21 13-7 13 7-13 7Z'/%3E%3Cpath d='m3 16 13-7 13 7-13 7Z'/%3E%3Cpath d='m3 11 13-7 13 7-13 7Z' fill='%23719484'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preload" href="/mono.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="/landing.css">
+<script type="module" src="/strata.mjs"></script>
+</head>
+<body>
+<canvas id="background" aria-hidden="true"></canvas>
+<canvas id="strata" aria-hidden="true"></canvas>
+<canvas id="bloom" aria-hidden="true"></canvas>
+<svg class="fallback" viewBox="0 0 180 180" aria-hidden="true">
+  <defs><linearGradient id="slab" x2="1" y2="1"><stop style="stop-color:var(--slab-top,#b9e9d4)"/><stop offset=".5" style="stop-color:var(--slab-mid,#719484)"/><stop offset="1" style="stop-color:var(--slab-base,#304c43)"/></linearGradient></defs>
+  <g fill="url(#slab)" style="stroke:var(--accent)" stroke-width=".7">
+    <path d="m25 106 65-34 65 34v5l-65 34-65-34Z"/>
+    <path d="m25 89 65-34 65 34v5l-65 34-65-34Z"/>
+    <path d="m25 72 65-34 65 34v5l-65 34-65-34Z"/>
+    <path d="m25 55 65-34 65 34v5l-65 34-65-34Z"/>
+  </g>
+</svg>
+<div class="atmosphere" aria-hidden="true"></div>
+<div class="page">
+  <header class="bar">
+    <a class="brand" href="https://sprawlcommons.com" aria-label="Sprawl Commons home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m3 21 13-7 13 7-13 7Zm0-5 13-7 13 7-13 7Zm0-5 13-7 13 7-13 7Z"/></svg><span>sprawl<span class="slash">//</span>commons</span></a>
+    <nav aria-label="Main navigation"><a href="/getting-started/">docs</a><a href="https://github.com/brandonbosch/chatstrata">github <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main class="hero">
+    <p class="kicker">AI conversations // locally archived</p>
+    <h1>chatstrata</h1>
+    <p class="lede">Every conversation leaves a layer.<br><b>Keep yours.</b> Collect across tools, search your history, and let your agents explore it.</p>
+    <div class="install"><span class="prompt" aria-hidden="true">$</span><code id="command">curl -fsSL https://chatstrata.sprawlcommons.com/install.sh | sh</code><button id="copy" type="button" hidden>copy</button></div>
+    <p id="copy-status" class="sr-only" role="status" aria-live="polite"></p>
+    <div class="install-links"><a href="/install.sh">read the installer</a><a href="https://github.com/brandonbosch/chatstrata/releases/latest">download manually</a></div>
+    <p class="platforms">Linux x86-64 / arm64 · macOS Apple silicon</p>
+    <ul class="specs"><li><span>01</span>one binary, no runtime</li><li><span>02</span>your conversations, on disk</li><li><span>03</span>DuckDB + full-text search</li><li><span>04</span>MCP for your agents</li></ul>
+    <p class="sources">Claude Code · Codex · OpenCode · Oh My Pi · Hermes · claude.ai <a href="/sources/" aria-label="See supported sources">↗</a></p>
+  </main>
+  <footer class="footer"><a href="/privacy/">Local by default. Yours to keep.</a><button id="motion" type="button" aria-pressed="false" hidden>pause motion</button></footer>
+</div>
+<div class="scene-control" hidden><span class="scene-label" aria-hidden="true">conversation strata / 004</span><button id="separate" type="button" aria-pressed="false">separate the layers <span aria-hidden="true">↕</span></button></div>
+<div class="palettes" role="group" aria-label="Scene palette" hidden><button data-palette="mint" style="--swatch:#9fcab7" aria-label="Mint palette" aria-pressed="true"></button><button data-palette="lavender" style="--swatch:#b9aff5" aria-label="Lavender palette" aria-pressed="false"></button><button data-palette="ice" style="--swatch:#8cc8ff" aria-label="Ice palette" aria-pressed="false"></button></div>
+<dl class="hud" aria-hidden="true"><dt>layers</dt><dd>004</dd><dt>state</dt><dd id="state">aligned</dd><dt>archive</dt><dd>local</dd></dl>
+</body>
+</html>

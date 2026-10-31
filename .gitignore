@@ -63,6 +63,7 @@ docs-site/.cache/
 docs-site/.venv/
 docs-site/docs_site.egg-info/
 docs-site/main.py
+docs-site/.wrangler/
 .zensical-venv/
 
 # uv lockfiles are optional for this library repo
