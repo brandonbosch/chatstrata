@@ -39,6 +39,6 @@ if [ -d "$home/.duckdb" ]; then
 fi
 (
 	cd "$repo"
-	go run ./internal/tools/smokemcp "$bin" "$home/data/chatstrata/chatstrata-go.duckdb" "$home"
+	go run ./internal/tools/smokemcp "$bin" "$home"
 )
 echo "smoke: ok"

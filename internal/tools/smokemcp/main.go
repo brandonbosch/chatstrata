@@ -22,13 +22,15 @@ func main() {
 }
 
 func run() error {
-	if len(os.Args) != 4 {
-		return fmt.Errorf("usage: smokemcp BINARY DATABASE ISOLATED_HOME")
+	if len(os.Args) != 3 {
+		return fmt.Errorf("usage: smokemcp BINARY ISOLATED_HOME")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.Command(os.Args[1], "serve", "--db", os.Args[2])
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Args[3], "XDG_DATA_HOME=" + filepath.Join(os.Args[3], "data")}
+	// Use the same environment/default path as the CLI smoke commands.
+	// macOS intentionally uses Library/Application Support rather than XDG.
+	cmd := exec.Command(os.Args[1], "serve")
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Args[2], "XDG_DATA_HOME=" + filepath.Join(os.Args[2], "data")}
 	cmd.Stderr = os.Stderr
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "release-smoke", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
@@ -62,7 +64,7 @@ func run() error {
 	}
 	schema, err := call("get_schema", map[string]any{})
 	if err != nil || !strings.Contains(schema, "TABLE conversations:") {
-		return fmt.Errorf("schema discovery failed: %v", err)
+		return fmt.Errorf("schema discovery failed: %v: %s", err, schema)
 	}
 	resource, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "chatstrata://schema"})
 	if err != nil || len(resource.Contents) != 1 || resource.Contents[0].Text != schema {
@@ -77,7 +79,7 @@ func run() error {
 	if err != nil || json.Unmarshal([]byte(out), &result) != nil || len(result.Rows) != 1 || result.Rows[0].N != 2 {
 		return fmt.Errorf("archive query failed: %v, %s", err, out)
 	}
-	sentinel := filepath.Join(os.Args[3], "synthetic-private.txt")
+	sentinel := filepath.Join(os.Args[2], "synthetic-private.txt")
 	if err := os.WriteFile(sentinel, []byte("SYNTHETIC_PRIVATE_FILE"), 0o600); err != nil {
 		return err
 	}
