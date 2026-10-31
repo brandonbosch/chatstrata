@@ -4,323 +4,159 @@
   <img src="docs/images/chatstrata.png" alt="chatstrata" width="360">
 </p>
 
-A personal, queryable archive of your AI conversations across providers.
+**Your AI conversations, archived locally and queryable by your agents.**
 
-Every conversation you've had with Claude, ChatGPT, or any other LLM is a record of
-how you think, what you're working on, and how that's changed over time. Most of
-that record lives scattered across browser exports, hidden JSONL files, and SaaS
-dashboards you don't fully control. chatstrata pulls it into one place, normalizes
-it, and lets you actually query and analyze it.
-
-The name is from "strata" — layers of conversation deposited over time, with the
-deeper layers telling you who you were.
-
-## Why this exists
-
-LLM providers collect rich data about how you interact with their models and use
-it (in aggregate) to improve the experience for everyone. chatstrata is the same
-idea, but for an audience of one: **you**. Your conversations, on your machine,
-queryable on your terms.
-
-Concretely, with chatstrata you can:
-
-- Find every conversation where you discussed a topic, across providers.
-- See how your prompting has changed over months or years.
-- Audit every bash command you ran through Claude Code, grouped by project.
-- Build a corpus that helps you brief a new model on who you are and what you care about.
-- Identify abandoned projects, dropped threads, recurring patterns.
-
-## Status
-
-**chatstrata 2 is a single binary written in Go** and replaces the Python app.
-It needs no Python, starts in milliseconds, keeps the same tables and SQL, and
-adds sync between your own machines (end-to-end encrypted, over your tailnet).
-It reads Claude Code, Codex CLI, OpenCode (1.x and 2.x), Oh My Pi, Hermes Agent
-and claude.ai exports.
-
-The Python package on PyPI stops at **0.5**, which still works and points here.
-It is no longer developed; the rest of this README after
-[Python version](#python-version-05-frozen) describes it.
+chatstrata collects conversations from Claude Code, Codex CLI, OpenCode,
+Oh My Pi, Hermes Agent, and claude.ai exports into a local DuckDB archive.
+Search across tools, run SQL, or let an MCP-connected agent analyze your
+history. It is a single Go binary; no Python runtime or API key is required.
 
 ## Install
 
-Linux (x86-64, arm64) and macOS (Apple silicon):
+Linux (x86-64 and arm64) and macOS (Apple silicon):
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/brandonbosch/chatstrata/main/scripts/install.sh | sh
+```sh
+curl -fsSL https://chatstrata.sprawlcommons.com/install.sh | sh
 ```
 
-It downloads the newest release from
-[GitHub Releases](https://github.com/brandonbosch/chatstrata/releases), checks
-its checksum and installs `chatstrata` to `~/.local/bin`. Elsewhere, build it
-from source with Go and a C compiler: `go install
-github.com/brandonbosch/chatstrata/cmd/chatstrata@main`.
+The installer downloads a [GitHub release](https://github.com/brandonbosch/chatstrata/releases),
+checks its SHA-256 checksum, and installs to `~/.local/bin` without sudo.
+Add that directory to your PATH if the installer asks you to.
+Set `CHATSTRATA_VERSION=v2.0.0` to pin a release, or
+`CHATSTRATA_INSTALL_DIR` to choose another installation directory.
+Re-run the installer to upgrade; then restart an installed daemon with
+`chatstrata schedule install`.
 
-```bash
-chatstrata ingest --auto        # collect every installed source once
-chatstrata schedule install     # keep collecting in the background
+Intel Macs and Windows currently build from source with Go and a C compiler:
+
+```sh
+go install github.com/brandonbosch/chatstrata/v2/cmd/chatstrata@latest
+```
+
+Source builds use substring search until you explicitly install the FTS extension
+with `chatstrata reindex --install-fts`. Downloadable releases bundle it.
+
+## Collect, search, connect an agent
+
+```sh
+chatstrata ingest --auto           # collect installed sources once
+chatstrata schedule install        # collect in the background every 5 minutes
 chatstrata search "auth refactor"
-chatstrata mcp config           # set up Claude Code, Claude Desktop or Codex
-```
-
-`chatstrata --help` lists the rest: `query`, `stats`, `analyze`, `serve` (the
-MCP server), `doctor`, and `pair`/`join`/`sync` for syncing machines
-([how sync works](https://github.com/brandonbosch/chatstrata/blob/main/docs/rewrite/sync.md)).
-
-### Coming from the Python version
-
-1. Remove the Python app's scheduled ingest while its command still runs
-   Python: `chatstrata schedule uninstall`.
-2. Install chatstrata 2 as above. If `~/.local/bin/chatstrata` was the Python
-   app's link (uv or pipx), the installer replaces the link and leaves the
-   Python install alone.
-3. Bring your history over: `chatstrata import-legacy` reads the Python archive
-   (`$CHATSTRATA_DB`, or `chatstrata.duckdb` in the data directory) into the
-   new one, `chatstrata-go.duckdb` next to it. The old file is left untouched;
-   keep it as a backup. This matters because Claude Code deletes transcripts
-   after 30 days, so the old archive may hold sessions no longer on disk.
-4. `chatstrata schedule install`.
-
-Not carried over: embeddings and semantic search, `redact` and `label`. If you
-need them, stay on `uv tool install "chatstrata==0.5.*"`.
-
-## Python version (0.5, frozen)
-
-Requires Python 3.10+. We recommend [uv](https://docs.astral.sh/uv/) — it's the
-fastest way to get started (no virtualenv wrangling, no dependency conflicts).
-
-### 1. Install
-
-```bash
-uv tool install "chatstrata[embeddings]"
-```
-
-<details>
-<summary>Alternative: pipx</summary>
-
-```bash
-pipx install "chatstrata[embeddings]"
-```
-</details>
-
-### 2. Initialize and ingest
-
-```bash
-chatstrata init                  # create the local DuckDB archive
-chatstrata ingest --auto         # auto-detect transcripts and generate embeddings
-```
-
-### 3. Set up background sync
-
-Never think about syncing again — chatstrata can keep your archive up to date
-automatically in the background:
-
-```bash
-chatstrata schedule install              # sync every 15 minutes (default)
-chatstrata schedule install --interval 1h   # or pick your own interval
-chatstrata schedule status               # check that it's running
-```
-
-On macOS this installs a launchd agent that runs `chatstrata ingest --auto`
-on the configured interval. Logs go to `~/Library/Logs/chatstrata/`. On Linux it
-installs a systemd user timer (`chatstrata-sync.timer`); logs go to the journal
-(`journalctl --user -u chatstrata-sync.service`), and
-`loginctl enable-linger` keeps it running while you are logged out. To stop
-background sync:
-
-```bash
-chatstrata schedule uninstall
-```
-
-### 4. Query your archive
-
-```bash
 chatstrata stats
-chatstrata query "SELECT model, COUNT(*) FROM messages GROUP BY model"
+chatstrata doctor
 ```
 
-The default database lives at a platform-appropriate user data directory
-(e.g. `~/.local/share/chatstrata/chatstrata.duckdb` on Linux). Override with
-`CHATSTRATA_DB` or `--db`. Run `chatstrata paths` to see the exact paths for
-your machine.
+To connect an agent, print the setup for your client:
 
-## MCP server
-
-chatstrata ships an [MCP](https://modelcontextprotocol.io) server that exposes
-your archive to MCP-aware clients (Claude Desktop, etc.) through a single
-read-only `query` tool plus a `chatstrata://schema` resource. The client can
-then write and run SQL against your conversations directly.
-
-### 1. Install with MCP support
-
-```bash
-uv tool install "chatstrata[embeddings,mcp]"
-# or: pipx install "chatstrata[embeddings,mcp]"
+```sh
+chatstrata mcp config claude-code   # prints a command to run
+chatstrata mcp config codex         # prints TOML to add to ~/.codex/config.toml
+chatstrata mcp config claude-desktop # prints JSON to merge into the desktop config
 ```
 
-### 2. Create and populate the archive
+`mcp config` prints instructions; it does not edit another application's config.
+The MCP server runs as `chatstrata serve` and exposes `get_schema`, `query`,
+and the `chatstrata://schema` resource. Agents can use ordinary DuckDB SQL:
 
-The MCP server reads an existing database; make sure you've ingested something
-first:
-
-```bash
-chatstrata init
-chatstrata ingest --auto
-chatstrata paths               # note the database path for the next step
+```sql
+SELECT model, count(*) AS messages
+FROM messages
+WHERE model IS NOT NULL
+GROUP BY model
+ORDER BY messages DESC;
 ```
 
-If you installed without the `embeddings` extra, use `chatstrata ingest --auto --no-embed`
-or install the extra before running auto mode.
+The CLI supports the same queries:
 
-### 3. Point your MCP client at chatstrata
-
-The installed `chatstrata-mcp` executable speaks MCP over stdio. If you use
-`uvx`, clients can run the published package without needing the absolute path
-to that executable.
-
-For Claude Code, run:
-
-```bash
-claude mcp add --transport stdio --scope user chatstrata -- uvx --from "chatstrata[mcp]" chatstrata-mcp
+```sh
+chatstrata query "SELECT source_id, count(*) FROM conversations GROUP BY source_id" --json
+chatstrata analyze models
+chatstrata analyze tools
+chatstrata analyze activity --by month
 ```
 
-Or ask chatstrata to print the command:
+Query access is read-only and restricted to the archive. External file reads,
+network access, extension installation, database writes, and changes to query
+settings are disabled. Results are limited to 500 rows and 512 KB, with a
+30-second query timeout. Query calls close their database connection after
+responding so background collection can continue.
 
-```bash
-chatstrata mcp config claude-code
+## Sources
+
+| Source | Command / input |
+|---|---|
+| Claude Code | `chatstrata ingest claude_code` |
+| Codex CLI | `chatstrata ingest codex_cli` |
+| OpenCode 1.x and 2.x | `chatstrata ingest opencode` |
+| Oh My Pi | `chatstrata ingest omp` |
+| Hermes Agent | `chatstrata ingest hermes_agent` |
+| claude.ai export | `chatstrata ingest claude_export --path conversations.json` |
+
+`ingest --auto` discovers installed sources. For a different location, use
+`ingest SOURCE --path PATH`. Repeated collection skips unchanged content.
+Generic ChatGPT web exports are not supported yet.
+
+## Your data
+
+The archive stays on your machine. Normal collection, search, SQL, and MCP make
+no network requests. Optional [device sync](docs/rewrite/sync.md) sends encrypted
+observation-log segments to a relay you configure; no hosted account is needed.
+
+Local transcripts, the observation log, and DuckDB are **plaintext**. Automatic
+PII sanitization, classifier/Jev labeling, embeddings, and semantic search are
+not included in v2. Choose which archive you expose to an agent, whose provider
+may receive the query results. The HTTP MCP transports are intended for local
+use; use the default stdio transport for agent setup.
+
+```sh
+chatstrata paths                   # archive and observation-log locations
+chatstrata rebuild                 # recreate DuckDB from the observation log
+chatstrata schedule status
 ```
 
-For Claude Desktop, add an entry to its `mcpServers` config (Settings →
-Developer → Edit Config):
+The database remains named `chatstrata-go.duckdb` for upgrade compatibility;
+`CHATSTRATA_GO_DB` or `--db` overrides it. Back up the adjacent
+`chatstrata-go.log/` directory: it is the source of truth. Rebuilds preserve
+stored conversations even after the original tool deletes its transcripts.
 
-```json
-{
-  "mcpServers": {
-    "chatstrata": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["--from", "chatstrata[mcp]", "chatstrata-mcp"]
-    }
-  }
-}
+If collection stalls, run `doctor` and check daemon logs. An idle notebook or
+Python scratchpad holding DuckDB open can block collection even with a read-only
+connection. Use MCP or the CLI for live archive analysis, or close the direct
+connection promptly.
+
+## Coming from Python
+
+1. Before replacing the old command, remove its scheduled ingest with
+   `chatstrata schedule uninstall`.
+2. Run the installer. It replaces a Python-installed symlink without writing
+   through it or deleting the Python environment.
+3. Run `chatstrata import-legacy` to import your old archive's raw events into
+   the Go observation log. You can also pass the old database path explicitly.
+   The old archive is left intact; keep it as a backup.
+4. Run `chatstrata ingest --auto` and `chatstrata schedule install`.
+5. Update MCP clients to run the Go binary using `mcp config CLIENT`.
+
+Legacy import works without Python. Labels and embeddings are not migrated;
+archives without raw events cannot recover those conversations through import.
+The old application is preserved at the `python-final` Git tag. Existing PyPI
+releases remain available, but new application development and releases are Go-only.
+
+## Development
+
+```sh
+go build -o bin/chatstrata ./cmd/chatstrata
+go test ./...
+go vet ./...
+go test ./internal/project -run '^$' -bench . -benchmem
 ```
 
-You can generate that JSON with:
+For a release-style build with full-text search:
 
-```bash
-chatstrata mcp config claude-desktop
+```sh
+go run ./internal/tools/fetchfts
+go build -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
+scripts/smoke-release.sh bin/chatstrata
 ```
 
-If `CHATSTRATA_DB` is omitted, the server falls back to the default platform
-path. To pin the MCP server to a specific database, pass `--db` when generating
-the setup snippet:
-
-```bash
-chatstrata mcp config claude-desktop --db /absolute/path/to/chatstrata.duckdb
-```
-
-Restart the client. The `chatstrata` server should appear with a `query` tool
-available; ask it something like "what topics have I discussed most this month?"
-and it will query your archive.
-
-## Data model
-
-chatstrata normalizes every conversation into the same shape regardless of source:
-
-- **conversations** — one per session/thread
-- **messages** — one per turn (user, assistant, system)
-- **content_blocks** — one per content unit within a message (text, tool_use, tool_result, thinking, attachment)
-- **tool_calls** — denormalized view of tool_use blocks for easy querying
-- **raw_events** — the source data, line-for-line, for re-parsing without re-ingestion
-
-See [docs/schema.md](docs/schema.md) for the full schema.
-
-## Auto ingest
-
-`chatstrata ingest --auto` scans every installed adapter's default location,
-ingests the sources it finds, and then generates missing message embeddings.
-For each source, the first auto run does a full ingest; later auto runs switch
-that source to incremental mode and skip unchanged files.
-
-Embedding uses a local sentence-transformers model. The first embedding run may
-download the model if it is not already cached; transcript content is not sent
-to chatstrata or a hosted inference API.
-
-Use explicit source commands when you need a custom path or a provider export
-that has no default location:
-
-```bash
-chatstrata ingest claude_export --path ~/Downloads/claude-export/
-chatstrata ingest claude_code --path ~/alternate/.claude/projects --incremental
-```
-
-## Database maintenance
-
-Repeated updates and deletes can leave unused space inside a DuckDB file. Rewrite
-the live data into a compact database with:
-
-```bash
-chatstrata compact
-```
-
-Stop scheduled ingestion, MCP servers, and other chatstrata processes first.
-The command verifies core table counts, rebuilds the full-text index, atomically
-swaps the compacted database into place, and retains the original as a timestamped
-backup. After checking the compacted database, delete that backup to release the
-disk space. Pass `--no-backup` to remove it automatically after verification.
-
-## Labelling with a classifier (optional)
-
-`chatstrata label` runs [TypeSafe](https://docs.typesafe.ai/introduction)'s Jev
-classifier over your archive and stores typed answers in a `labels` table. The
-built-in packs classify every tool call's failure mode (compare harnesses and
-tools, e.g. omp `edit` vs Claude Code `Edit`) and every message you wrote
-(corrections, frustration, whether you said what "done" looks like).
-
-```bash
-uv tool install "chatstrata[jev]"
-export TYPESAFE_API_KEY=...
-chatstrata label run tool-failures --source omp --dry-run --show-state
-chatstrata label run tool-failures --source omp --limit 200
-chatstrata label summary tool-failures --by tool
-```
-
-This sends the selected content to the TypeSafe API, so it always shows an
-estimate and asks first. You can write your own packs as TOML files (no code)
-and drop them in your packs directory; the bundled `cyber` pack is a worked
-example that flags security-related tool calls so you can filter them out. See
-[docs/labeling.md](docs/labeling.md).
-
-## Adding a source
-
-Each source (Claude Code, ChatGPT export, etc.) is an adapter that implements a
-small protocol: `discover()` finds available conversations, `parse()` turns them
-into the canonical record types. See [docs/adapter-guide.md](docs/adapter-guide.md)
-for the worked example using Claude Code.
-
-Adapters can be contributed as PRs to this repo or as standalone pip packages
-that register via entry points.
-
-## Privacy
-
-Your transcript content stays on your machine. Standard ingestion and querying
-make no network calls. The one exception is the opt-in `chatstrata label`
-command, which sends the items you select to the TypeSafe API after showing an
-estimate and asking for confirmation. Semantic search uses local embeddings; the first run may
-download the configured sentence-transformers model if it is not already cached.
-DuckDB's VSS extension is optional, and chatstrata only installs that extension
-when `CHATSTRATA_INSTALL_DUCKDB_VSS=1` is set.
-
-If you want to share queries or notebooks publicly, an optional redaction layer
-(`uv tool install "chatstrata[redact]"`) wraps Microsoft Presidio with
-chatstrata-specific recognizers for API keys, file paths, and other things that
-commonly appear in LLM transcripts. See [docs/redaction.md](docs/redaction.md).
-
-## Contributing
-
-Contributions welcome. Especially valuable: new source adapters. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-Apache 2.0. See [LICENSE](LICENSE).
+See [schema](docs/schema.md), [adapter guide](docs/adapter-guide.md),
+[release instructions](docs/rewrite/release.md), and [regression fixtures](spec/README.md).

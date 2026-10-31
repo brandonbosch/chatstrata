@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 // Kinds the adapter reads or deliberately skips; anything else is new.

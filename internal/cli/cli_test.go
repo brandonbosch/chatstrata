@@ -42,6 +42,13 @@ func TestValidateReadOnly(t *testing.T) {
 		"  with x as (select 1) select * from x;",
 		"-- comment\nSELECT 1",
 		"DESCRIBE messages",
+		"SELECT(1)",
+		"SELECT 'a; -- not a comment /* either */' AS text; -- trailing comment",
+		"SELECT 'it''s a semicolon; value'",
+		"SELECT $$a; -- string$$",
+		"SELECT $tag$a; string$tag$",
+		"/* outer /* nested */ comment */ SELECT 1",
+		"PRAGMA table_info('messages')",
 	}
 	for _, q := range allowed {
 		if err := validateReadOnly(q); err != nil {
@@ -55,6 +62,13 @@ func TestValidateReadOnly(t *testing.T) {
 		"/* sneaky */ drop table messages",
 		"SELECT 1; DROP TABLE messages",
 		"install fts",
+		"CALL checkpoint()",
+		"PRAGMA enable_profiling",
+		"PRAGMA enable_external_access = true",
+		"SELECT 1; /* comment */ SELECT 2",
+		"SELECT 'unterminated",
+		"/* unterminated",
+		"SELECT $tag$unterminated",
 	}
 	for _, q := range rejected {
 		if err := validateReadOnly(q); err == nil {

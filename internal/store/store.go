@@ -15,19 +15,20 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	_ "github.com/duckdb/duckdb-go/v2" // registers the "duckdb" driver
 
-	"github.com/brandonbosch/chatstrata"
-	"github.com/brandonbosch/chatstrata/internal/store/migrations"
+	"github.com/brandonbosch/chatstrata/v2/internal/store/migrations"
 )
 
 // Store is an open archive. Writes go through a single connection because
 // explicit transactions and appenders are tied to one connection.
 type Store struct {
-	DB   *sql.DB
-	conn *sql.Conn
-	Path string
+	DB        *sql.DB
+	conn      *sql.Conn
+	Path      string
+	ftsLoaded bool
 }
 
 // DefaultPath returns the Go implementation's archive location. During the
@@ -106,8 +107,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 // ErrNoArchive is returned by OpenReadOnly when the archive doesn't exist yet.
 var ErrNoArchive = errors.New("no archive")
 
+// DuckDB can share an engine instance between read-only connections in one
+// process. Configure it once, before concurrent MCP requests can use it.
+var readOnlyMu sync.Mutex
+
 // OpenReadOnly opens an existing archive without taking the write lock.
 func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
+	readOnlyMu.Lock()
+	defer readOnlyMu.Unlock()
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%w at %s", ErrNoArchive, path)
 	}
@@ -116,6 +123,34 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	s.LoadFTS(ctx)
+	// Read-only database mode does not prevent SELECT from reading arbitrary
+	// files or installing an extension. Load our trusted FTS first, then
+	// restrict and lock the engine before accepting any agent/user SQL.
+	var locked, external, autoinstall, autoload bool
+	if err := s.conn.QueryRowContext(ctx, `SELECT current_setting('lock_configuration'),
+		current_setting('enable_external_access'), current_setting('autoinstall_known_extensions'),
+		current_setting('autoload_known_extensions')`).Scan(&locked, &external, &autoinstall, &autoload); err != nil {
+		s.Close()
+		return nil, fmt.Errorf("check archive query restrictions: %w", err)
+	}
+	if locked {
+		if external || autoinstall || autoload {
+			s.Close()
+			return nil, errors.New("archive query configuration is locked without required restrictions")
+		}
+		return s, nil
+	}
+	for _, setting := range []string{
+		"SET autoinstall_known_extensions = false",
+		"SET autoload_known_extensions = false",
+		"SET enable_external_access = false",
+		"SET lock_configuration = true",
+	} {
+		if _, err := s.conn.ExecContext(ctx, setting); err != nil {
+			s.Close()
+			return nil, fmt.Errorf("restrict archive query access: %w", err)
+		}
+	}
 	return s, nil
 }
 
@@ -144,12 +179,22 @@ func (s *Store) Conn() *sql.Conn { return s.conn }
 // LoadFTS loads the full-text search extension: the one embedded in release
 // builds, else one installed with InstallFTS. It never downloads anything.
 func (s *Store) LoadFTS(ctx context.Context) bool {
+	if s.ftsLoaded {
+		return true
+	}
+	// Another read connection may already have loaded FTS and locked this
+	// shared engine. Reuse it without another LOAD or filesystem operation.
+	if err := s.conn.QueryRowContext(ctx, "SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'fts'").Scan(&s.ftsLoaded); err == nil && s.ftsLoaded {
+		return true
+	}
 	if path, err := ftsExtensionFile(); err == nil && path != "" {
 		if _, err := s.conn.ExecContext(ctx, "LOAD "+sqlString(path)); err == nil {
+			s.ftsLoaded = true
 			return true
 		}
 	}
 	_, err := s.conn.ExecContext(ctx, "LOAD fts")
+	s.ftsLoaded = err == nil
 	return err == nil
 }
 
@@ -228,16 +273,15 @@ func (s *Store) SchemaVersion(ctx context.Context) int {
 	return n
 }
 
-// migrate applies the migrations shared with the Python implementation, then
-// the Go-only ones, recording the version the same way, so either
-// implementation can open an archive the other created.
+// migrate applies the numbered embedded migrations, preserving the original
+// version numbering for existing Go installations and legacy SQL compatibility.
 func (s *Store) migrate(ctx context.Context) error {
 	type source struct {
 		fsys fs.FS
 		dir  string
 	}
 	var all []migration
-	for _, src := range []source{{chatstrata.Migrations, "chatstrata/core/migrations"}, {migrations.FS, "."}} {
+	for _, src := range []source{{migrations.FS, "."}} {
 		entries, err := fs.ReadDir(src.fsys, src.dir)
 		if err != nil {
 			return fmt.Errorf("read migrations: %w", err)

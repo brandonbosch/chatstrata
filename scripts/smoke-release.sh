@@ -16,7 +16,16 @@ run() {
 }
 
 run version
-run ingest claude_code --path "$repo/spec/golden/inputs/claude_code/projects"
+mkdir -p "$home/.claude"
+cp -R "$repo/spec/golden/inputs/claude_code/projects" "$home/.claude/projects"
+run ingest --auto
+run ingest --auto
+run mcp config codex
+counts="SELECT (SELECT count(*) FROM conversations) AS conversations, (SELECT count(*) FROM messages) AS messages, (SELECT count(*) FROM content_blocks) AS blocks"
+before=$(run query "$counts" --json)
+run rebuild
+after=$(run query "$counts" --json)
+[ "$before" = "$after" ] || { echo "smoke: rebuild changed archive counts" >&2; exit 1; }
 run reindex
 out=$(run search refactor)
 echo "$out"
@@ -28,4 +37,8 @@ if [ -d "$home/.duckdb" ]; then
 	echo "smoke: the fts extension was installed into ~/.duckdb instead of loaded from the binary" >&2
 	exit 1
 fi
+(
+	cd "$repo"
+	go run ./internal/tools/smokemcp "$bin" "$home/data/chatstrata/chatstrata-go.duckdb" "$home"
+)
 echo "smoke: ok"

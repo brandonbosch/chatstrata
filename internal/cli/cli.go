@@ -12,13 +12,13 @@ import (
 	"io"
 	"sort"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/sources/claudecode"
-	"github.com/brandonbosch/chatstrata/internal/sources/claudeexport"
-	"github.com/brandonbosch/chatstrata/internal/sources/codexcli"
-	"github.com/brandonbosch/chatstrata/internal/sources/hermes"
-	"github.com/brandonbosch/chatstrata/internal/sources/omp"
-	"github.com/brandonbosch/chatstrata/internal/sources/opencode"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/claudecode"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/claudeexport"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/codexcli"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/hermes"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/omp"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/opencode"
 )
 
 // Version is set at build time with -ldflags "-X .../internal/cli.Version=...".

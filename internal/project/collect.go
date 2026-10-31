@@ -12,9 +12,9 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/obslog"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // CollectResult counts what the collector did.

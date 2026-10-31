@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brandonbosch/chatstrata/internal/golden"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/golden"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // fixture copies the Claude Code golden inputs to a temp dir and returns the

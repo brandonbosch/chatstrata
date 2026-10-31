@@ -42,7 +42,7 @@ jobs:
       - name: Build
         run: |
           go build -trimpath -tags fts_embed \
-            -ldflags "-s -w -X github.com/brandonbosch/chatstrata/internal/cli.Version=${TAG#v}" \
+            -ldflags "-s -w -X github.com/brandonbosch/chatstrata/v2/internal/cli.Version=${TAG#v}" \
             -o dist/chatstrata ./cmd/chatstrata
       - name: Smoke test
         run: scripts/smoke-release.sh dist/chatstrata

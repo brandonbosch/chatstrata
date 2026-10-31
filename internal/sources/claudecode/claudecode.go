@@ -2,7 +2,7 @@
 //
 // Claude Code writes one JSONL file per session to
 // ~/.claude/projects/<encoded-cwd>/<session-uuid>.jsonl. This is a port of
-// chatstrata/sources/claude_code/adapter.py and must produce the same archive
+// python-final:chatstrata/sources/claude_code/adapter.py and must produce the same archive
 // (see spec/golden).
 package claudecode
 
@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/pystr"
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/pystr"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 // DefaultRoot is where Claude Code keeps transcripts, relative to $HOME.

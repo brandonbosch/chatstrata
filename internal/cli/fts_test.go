@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 func TestFTSRebuildPolicy(t *testing.T) {

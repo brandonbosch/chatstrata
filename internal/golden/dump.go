@@ -2,7 +2,7 @@
 // spec/README.md, so the Go implementation can be checked against the output
 // the Python implementation recorded in spec/golden/expected.
 //
-// It is the Go twin of scripts/golden.py's dump.
+// Golden expectations are maintained by TestGolden with -update.
 package golden
 
 import (
@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // Dump returns the canonical projection of the archive at path. Each

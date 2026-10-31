@@ -4,7 +4,7 @@
 // ~/.codex/sessions/YYYY/MM/DD/rollout-<timestamp>-<session-uuid>.jsonl. Each
 // line is an envelope {timestamp, type, payload}; the conversation is in the
 // response_item and event_msg.user_message records. This is a port of
-// chatstrata/sources/codex_cli/adapter.py and must produce the same archive
+// python-final:chatstrata/sources/codex_cli/adapter.py and must produce the same archive
 // (see spec/golden).
 package codexcli
 
@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 // DefaultRoot is where Codex keeps rollouts, relative to $HOME.

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/brandonbosch/chatstrata/internal/cli"
+	"github.com/brandonbosch/chatstrata/v2/internal/cli"
 )
 
 // TestLegacyImport checks that import-legacy of a Python-era archive gives

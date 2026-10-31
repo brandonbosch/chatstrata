@@ -1,124 +1,143 @@
----
-title: The Canonical Schema
-description: How chatstrata normalizes conversations from multiple AI providers into a single source-agnostic DuckDB schema.
----
+# Schema
 
-# The Canonical Schema
+**Schema version:** 5
 
-chatstrata ingests conversations from Claude Code, claude.ai, ChatGPT, Codex CLI, and other sources into a single DuckDB database. The canonical schema is what makes this possible: a set of tables designed so that **adding a new source never requires a schema change**. Every adapter translates its provider-specific format into the same Pydantic record types, and the ingester writes those records into the same tables regardless of where the data came from.
+chatstrata stores conversations in a normalized form designed to be source-agnostic.
+The same tables hold a Claude Code session, a claude.ai export, and a ChatGPT export.
 
-## Why DuckDB
+## Versioning
 
-The storage engine is DuckDB, chosen because chatstrata's workload is analytical, not transactional ([ADR-0001](https://github.com/brandonbosch/chatstrata/blob/main/docs/adr/0001-use-duckdb.md)). Queries like "tool call frequencies by project" or "messages per week across all sources" involve joins, aggregations, and window functions over large result sets -- exactly where a columnar engine outperforms SQLite. DuckDB also provides first-class JSON support, which means the `metadata` and `payload` JSON columns are not opaque blobs; you can query into them with standard SQL (e.g., `payload->>'command'`). The entire archive lives in a single `.duckdb` file -- easy to back up, easy to delete.
+`meta.schema_version` records the current version. Schema changes require:
+1. An ADR in `docs/adr/` explaining the change.
+2. A migration script.
+3. A version bump.
 
-## Table structure
+Adapters implement `model.Source`; migrations are embedded from `internal/store/migrations/`. Existing table and column names remain compatible with saved SQL.
 
-The schema is defined in `chatstrata/core/migrations/0001_initial.sql` and follows a normalized hierarchy:
+## Tables
 
-```mermaid
-erDiagram
-    sources ||--o{ conversations : "has"
-    conversations ||--o{ messages : "contains"
-    messages ||--o{ content_blocks : "contains"
-    messages ||--o{ attachments : "references"
-    sources ||--o{ raw_events : "preserves"
-```
+### `sources`
+One row per ingested source.
 
-**`sources`** -- One row per ingested provider. The `id` is a stable adapter name like `claude_code` or `chatgpt_export`. The `config` JSON column captures the adapter configuration used at ingest time, so you can always trace how data arrived.
+| column          | type          | notes                                          |
+|-----------------|---------------|------------------------------------------------|
+| id              | VARCHAR PK    | stable adapter name (e.g. `claude_code`)       |
+| name            | VARCHAR       | display name                                   |
+| adapter_version | VARCHAR       | version of the adapter that ingested data      |
+| first_seen      | TIMESTAMPTZ   |                                                |
+| last_ingested   | TIMESTAMPTZ   |                                                |
+| config          | JSON          | snapshot of adapter config used                |
 
-**`conversations`** -- One row per session or thread. The `UNIQUE (source_id, source_native_id)` constraint is the idempotency mechanism: re-ingesting the same conversation replaces its rows rather than duplicating them. The `project` column captures the working directory or workspace, making it possible to filter conversations by codebase.
+### `conversations`
+One row per conversation/session/thread.
 
-**`messages`** -- One row per turn. The `parent_message_id` column supports tree-shaped histories (ChatGPT branches), while `sequence_index` provides linear ordering for sources like Claude Code where conversations are strictly sequential.
+| column            | type        | notes                                                       |
+|-------------------|-------------|-------------------------------------------------------------|
+| id                | VARCHAR PK  | chatstrata-internal UUID                                    |
+| source_id         | VARCHAR FK  | -> sources.id                                               |
+| source_native_id  | VARCHAR     | id from the source (filename, ChatGPT id, etc.)             |
+| title             | VARCHAR     | summary or fallback to first user turn                      |
+| project           | VARCHAR     | cwd / workspace / project, if applicable                    |
+| started_at        | TIMESTAMPTZ |                                                             |
+| ended_at          | TIMESTAMPTZ |                                                             |
+| message_count     | INTEGER     |                                                             |
+| content_hash      | VARCHAR     | sha256 of concatenated content, for dedup                   |
+| raw_path          | VARCHAR     | where the source data lives on disk                         |
+| metadata          | JSON        | source-specific extras                                      |
+| ingested_at       | TIMESTAMPTZ |                                                             |
 
-**`content_blocks`** -- This is where the actual data lives. A single assistant message may contain multiple blocks: a `thinking` block, a `text` block, a `tool_use` block, and a `tool_result` block. The `type` discriminator column takes one of six values: `text`, `tool_use`, `tool_result`, `thinking`, `image`, or `attachment`. The `text` column holds the content for text and thinking blocks; the `payload` JSON column holds structured data for everything else (tool inputs, image metadata, etc.).
+`UNIQUE (source_id, source_native_id)` enforces idempotency.
 
-**`attachments`** -- File attachments referenced from messages, with optional local storage paths and content hashes.
+### `messages`
+One row per turn.
 
-**`message_embeddings`** -- Reserved for semantic search. Embeddings are generated lazily via the embeddings module, not during standard ingest. The composite primary key `(message_id, model)` allows storing vectors from different embedding models side by side.
+| column                 | type        | notes                                                |
+|------------------------|-------------|------------------------------------------------------|
+| id                     | VARCHAR PK  | chatstrata-internal UUID                             |
+| conversation_id        | VARCHAR FK  |                                                      |
+| source_native_id       | VARCHAR     | source-assigned id (uuid for Claude Code)            |
+| parent_message_id      | VARCHAR     | for tree-shaped histories (ChatGPT branches)         |
+| role                   | VARCHAR     | user / assistant / system / tool                     |
+| model                  | VARCHAR     | model name when present                              |
+| created_at             | TIMESTAMPTZ |                                                      |
+| sequence_index         | INTEGER     | order within the conversation                        |
+| metadata               | JSON        |                                                      |
 
-## The raw_events table
+### `content_blocks`
+One row per content unit inside a message. This is where the data lives.
 
-The `raw_events` table preserves source data line-for-line alongside the normalized tables. This is a deliberate design choice, not an implementation detail ([ADR-0002](https://github.com/brandonbosch/chatstrata/blob/main/docs/adr/0002-store-raw-alongside-normalized.md)).
+| column         | type    | notes                                                                  |
+|----------------|---------|------------------------------------------------------------------------|
+| id             | VARCHAR |                                                                        |
+| message_id     | VARCHAR |                                                                        |
+| block_index    | INTEGER | order within message                                                   |
+| type           | VARCHAR | text / tool_use / tool_result / thinking / image / attachment          |
+| text           | TEXT    | populated for text and thinking                                        |
+| tool_name      | VARCHAR | for tool_use                                                           |
+| tool_use_id    | VARCHAR | ties tool_use to its tool_result                                       |
+| payload        | JSON    | type-specific structured data (tool input, image source, etc.)         |
 
-Normalization is lossy. Adapters discard fields they don't understand, collapse structure, and make best-effort mapping decisions. When an adapter author later improves their parser -- extracting a field that was previously ignored -- users need the raw source data to re-derive. The problem is that some sources don't keep data around: Claude Code's default retention is 30 days. Without `raw_events`, users who improved their parsers after that window would have no recourse.
+### `tool_calls` (view)
+Convenience view exposing every `tool_use` block as a row with its conversation
+and project context. Use this for "every bash command I ran via Claude Code" queries.
 
-Each raw event stores the original JSON payload, linked back to its source and conversation:
+### `attachments`
+File attachments referenced from messages.
 
-```sql title="chatstrata/core/migrations/0001_initial.sql"
-CREATE TABLE IF NOT EXISTS raw_events (
-    id VARCHAR PRIMARY KEY,
-    source_id VARCHAR NOT NULL REFERENCES sources(id),
-    source_native_conversation_id VARCHAR,
-    raw_path VARCHAR,
-    line_number INTEGER,
-    payload JSON NOT NULL,
-    ingested_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
-);
-```
+### `raw_events`
+The source data preserved line-for-line. Lets us re-parse without re-ingesting
+when normalization logic changes. **This is critical** — never assume the
+normalized data is the only copy.
 
-The storage overhead is roughly 2-3x, but for a personal archive even 100,000 messages with raw data stays well under 10 GB.
+### `labels`
+Legacy classifier answer tables retained for SQL compatibility (schema v4).
+The Go application does not populate or migrate labels. One row
+per target × question; see [labeling.md](labeling.md) and
+[ADR 0004](https://github.com/brandonbosch/chatstrata/blob/main/docs/adr/0004-classifier-labels.md).
 
-## The tool_calls view
+| column         | type        | notes                                                    |
+|----------------|-------------|----------------------------------------------------------|
+| pack           | VARCHAR     | question pack name (e.g. `tool-failures`)                |
+| target_kind    | VARCHAR     | `tool_call` / `message`                                  |
+| target_id      | VARCHAR     | `content_blocks.id` for tool calls, `messages.id` for messages |
+| question       | VARCHAR     | question id within the pack                              |
+| answer_type    | VARCHAR     | `noul` / `choice` / `score`                              |
+| value          | DOUBLE      | noul probability or score expectation                   |
+| choice         | VARCHAR     | chosen option for choice answers                         |
+| confidence     | DOUBLE      | choice/score confidence; NULL for noul                   |
+| probabilities  | JSON        | full distribution for choice/score                       |
+| pack_version   | VARCHAR     | hash of the pack's questions; stale labels are re-run    |
+| model          | VARCHAR     | versioned model id that answered                        |
+| run_id         | VARCHAR     | -> label_runs.id                                         |
 
-The `tool_calls` view is a convenience layer that flattens `tool_use` content blocks into a single queryable surface with conversation and project context pre-joined:
+Primary key `(pack, target_id, question)`.
 
-```sql title="chatstrata/core/migrations/0001_initial.sql"
-CREATE VIEW IF NOT EXISTS tool_calls AS
-SELECT
-    cb.id AS call_id,
-    cb.tool_use_id,
-    cb.tool_name,
-    cb.payload AS input,
-    m.id AS message_id,
-    m.conversation_id,
-    m.created_at,
-    c.project,
-    c.source_id
-FROM content_blocks cb
-JOIN messages m ON m.id = cb.message_id
-JOIN conversations c ON c.id = m.conversation_id
-WHERE cb.type = 'tool_use';
-```
+### `label_runs`
+Legacy labeling-run metadata: pack, pack version, backend, model,
+start/finish time, items labelled, failures, and input tokens used.
 
-This makes analytical queries straightforward -- "every Bash command Claude ran in my project" is a single `SELECT` from `tool_calls` with a `WHERE project = ...` filter. Because DuckDB handles the joins efficiently, there is no materialization cost.
+### `message_embeddings`
+Retained for compatibility. Go does not generate or migrate embeddings.
 
-## How source-agnosticism works
+## Observation-log projection tables (v5)
 
-The separation between source-specific and source-agnostic code happens at the Pydantic model layer. Every adapter's `parse()` method returns a `ParsedConversation`, which contains `ParsedMessage` objects, which contain `ContentBlock` objects. These types are defined in `chatstrata/core/models.py` and are the only types the ingester knows about:
+- `observations`: source/scope/locator, device sequence, kind and byte range,
+  content hash, path/project hints, legacy flag, and segment/position provenance.
+- `indexed_segments`: segments already projected; rebuild derives this again.
+- `collector_state`: this device's last logged length, hash, and mtime per
+  source/scope/locator. A rebuild can reconstruct content without this cache.
+- `divergences`: fork and branch message IDs plus device provenance when
+  observations disagree.
+- `tool_calls` is a view over `content_blocks` of type `tool_use`, joining
+  message and conversation information for analysis.
 
-```python title="chatstrata/core/models.py"
-class ParsedConversation(BaseModel):
-    source_native_id: str
-    title: str | None = None
-    project: str | None = None
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
-    messages: list[ParsedMessage] = Field(default_factory=list)
-    raw_events: list[dict[str, Any]] = Field(default_factory=list)
-```
-
-The ingester in `chatstrata/core/ingest.py` takes this model and writes it to the database without any knowledge of whether the data came from Claude Code JSONL files, a ChatGPT export ZIP, or a claude.ai JSON export. Source-specific details live in `metadata` JSON columns, queryable but never blocking ingestion.
+The observation log is the source of truth. Do not edit the DuckDB projection
+as a way to change archived content: `rebuild` will overwrite those edits.
 
 ## Design principles
 
-1. **Source-agnostic.** Adding a source means writing an adapter, not altering tables.
-2. **Preserve the raw.** Normalization is lossy; `raw_events` ensures you can always re-derive.
-3. **Idempotent ingest.** Re-running ingest replaces rather than duplicates, keyed on `(source_id, source_native_id)`.
-4. **UTC timestamps.** Adapters normalize timezone-aware datetimes at parse time; the ingester enforces UTC via `_as_utc()`.
-5. **Versioned.** `meta.schema_version` tracks the current version. Changes require an ADR and a migration script.
-
-## Key entry points
-
-- **`chatstrata/core/migrations/0001_initial.sql`** -- The DDL that creates all tables, indexes, and views.
-- **`chatstrata/core/models.py`** -- Pydantic types (`ParsedConversation`, `ParsedMessage`, `ContentBlock`) that define the adapter-to-ingester contract.
-- **`chatstrata/core/ingest.py`** -- The `ingest_conversation()` function that persists canonical records to DuckDB.
-- **`docs/adr/0001-use-duckdb.md`** -- Design rationale for the storage engine choice.
-- **`docs/adr/0002-store-raw-alongside-normalized.md`** -- Design rationale for raw data preservation.
-
-## Related
-
-- [Ingestion Pipeline](ingestion.md) -- How conversations flow from source files through adapters into the schema.
-- [Source Adapters](adapters.md) -- How to write an adapter that produces canonical records.
-- [Schema Migrations](migrations.md) -- How schema versions are tracked and upgraded.
-- [Querying and Analysis](querying.md) -- Patterns for querying the canonical schema.
-- [Built-in Sources](sources.md) -- Details on the Claude Code, claude.ai, ChatGPT, and Codex CLI adapters.
+1. **Source-agnostic.** Adding a source should not require schema changes.
+2. **Preserve the raw.** Normalization is lossy; raw is durable.
+3. **Idempotent ingest.** Re-running an ingest is safe.
+4. **Timestamps are UTC.** Adapters normalize on parse.
+5. **Versioned.** Schema changes are ADRs with migrations.

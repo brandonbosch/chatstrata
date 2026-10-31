@@ -14,10 +14,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/obslog"
-	"github.com/brandonbosch/chatstrata/internal/sources/claudecode"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/claudecode"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // The merge rules in spec/projection/scenarios.json, run against the

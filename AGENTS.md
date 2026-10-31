@@ -1,124 +1,98 @@
 # Working in this repository
 
-chatstrata is a personal, queryable archive of AI conversations (Claude Code,
-Codex, OpenCode, claude.ai exports and others) stored in DuckDB, with a CLI and
-a read-only MCP server.
-
-**The project is moving from Python to Go.** Read
-[docs/rewrite/plan.md](docs/rewrite/plan.md) before making structural changes.
-Until Python is removed (milestone M6), both implementations live in this repo.
+chatstrata is a Go application that archives AI conversations in DuckDB and
+exposes read-only SQL to agents through MCP. The Python application is retired;
+`python-final` preserves its final source. Read `docs/rewrite/plan.md` for the
+history and `docs/rewrite/observation-log.md` for the storage rules.
 
 ## Layout
 
-| Path | What it is | Status |
-|---|---|---|
-| `chatstrata/`, `tests/`, `pyproject.toml` | Python app (published on PyPI as `chatstrata`) | **Feature-frozen** |
-| `cmd/`, `internal/`, `go.mod`, `embed.go` | Go app | Active development |
-| `spec/` | Behaviour contract shared by both implementations | Change deliberately |
-| `scripts/golden.py`, `scripts/bench.py` | Golden-output and benchmark tooling (Python) | Active |
-| `docs/adr/` | Architecture decision records | Append-only |
-| `docs/rewrite/` | Rewrite plan and Python baseline numbers | Active |
-| `docs-site/` | Published documentation site | Python-era |
+| Path | Purpose |
+|---|---|
+| `cmd/chatstrata/` | Binary entry point |
+| `internal/cli/` | CLI, MCP, scheduling |
+| `internal/sources/` | Source adapters; shared helpers in `srcutil` |
+| `internal/store/migrations/` | All SQL migrations, embedded in the binary |
+| `internal/analysis/queries/` | Embedded analysis SQL |
+| `internal/obslog/`, `internal/project/` | Observation log and DuckDB projection |
+| `internal/devsync/`, `internal/relay/` | Optional encrypted device sync |
+| `spec/` | Golden-output and projection regression fixtures |
+| `docs/adr/` | Architecture decisions (append-only) |
+| `docs-site/` | Published Go application documentation |
+
+## Build and verify
+
+```sh
+go build -o bin/chatstrata ./cmd/chatstrata
+go test ./...
+go vet ./...
+gofmt -l .
+go test ./internal/project -run '^$' -bench . -benchmem
+```
+
+DuckDB uses CGo: install Go and a C compiler, and build releases natively for
+each OS/architecture. Release binaries embed DuckDB's signed full-text search
+extension so search never needs a download:
+
+```sh
+go run ./internal/tools/fetchfts
+go test -tags fts_embed ./...
+go build -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
+scripts/smoke-release.sh bin/chatstrata
+```
+
+See `docs/rewrite/release.md` for release packaging and installer checks.
+Zensical is optional documentation tooling; the application and its tests do
+not need Python.
 
 ## Rules
 
-**Python is feature-frozen.** Only bug fixes and performance work go into
-`chatstrata/`. New features, commands and adapters go into the Go app only. If a
-request asks for a new feature in Python, say so and confirm before doing it.
+- Keep PRs to one milestone step or focused fix. Go code lands on `main` in
+  small pieces; there is no long-lived rewrite branch.
+- Standard library first, non-public code under `internal/`, contextual errors,
+  tests next to code. Commit summaries are imperative; explain why in the body.
+- Golden JSON is generated, never hand-edited. Run
+  `go test ./internal/golden -run TestGolden -update` only for an intentional
+  behaviour change, and explain the fixture diff. Ordinary changes must pass
+  `go test ./...` without changing expected output.
+- Keep SQL table and column names compatible with `docs/schema.md` and saved
+  agent queries. Schema/storage changes need the next ADR and a migration.
+  Never renumber existing migrations. Do not change projection expectations
+  without an ADR or an explicit explanation in the PR.
+- Never commit real transcripts. Fixtures must be synthetic or sanitized.
+- No network calls by default. Only explicitly configured sync and the user's
+  `reindex --install-fts` request may access the network at runtime. Fetching
+  release dependencies at build/install time is separate.
+- Never log keys, `space.key`, or pairing codes. Only `pair` intentionally
+  displays its pairing code.
+- Use MCP or `chatstrata query` for analysis. Never leave a direct DuckDB
+  connection to the live archive open in a Python/notebook scratchpad: even
+  a read-only connection prevents collection. Close direct connections
+  promptly in a `finally` block if they are unavoidable.
 
-**`spec/` is the contract between the two implementations.**
-- `spec/golden/expected/*.json` is generated, never hand-edited. If a Python
-  change alters ingest output on purpose, run `python scripts/golden.py generate`
-  and explain the diff in the PR. If it changes unexpectedly, fix the code.
-- The Go implementation must reproduce `spec/golden/expected/` for every case in
-  `spec/golden/cases.json`, comparing JSON values rather than text.
-- `spec/projection/scenarios.json` is a proposal. Don't change expected results
-  there without an ADR or a note in the PR explaining the new rule.
+## Storage and adapters
 
-**Schema compatibility.** Users and agents write SQL against the existing tables
-(`docs/schema.md`), and `chatstrata/analysis/queries/*.sql` is reused unchanged
-by Go. Keep table and column names compatible. Schema or storage changes need an
-ADR (`docs/adr/`, next number) and a migration.
+`chatstrata-go.duckdb` (or `$CHATSTRATA_GO_DB`) is a rebuildable projection.
+The adjacent `chatstrata-go.log/` is the source of truth. Never write archive
+content except through `internal/project`, or `rebuild` will lose the change.
+Keep this existing filename and environment variable compatible for upgrades.
 
-**Privacy.** The archive holds people's private conversations.
-- Use the read-only MCP tools or `chatstrata query` for analysis. Never leave
-  a DuckDB connection to the live archive open in a Python/notebook scratchpad:
-  even a read-only connection prevents the daemon from collecting. If direct
-  access is necessary, close it promptly in a `finally` block.
-- Never commit real transcripts. Fixtures are synthetic or sanitized.
-- No network calls by default (a promise in the README). The exceptions are
-  explicitly opt-in: `chatstrata label`, the DuckDB `vss` install behind
-  `CHATSTRATA_INSTALL_DUCKDB_VSS=1`, and (in Go) sync to a relay the user
-  configured.
-- Never print keys or space secrets in logs or error messages.
+Sync follows ADR 0005: each device writes its own log, IDs are deterministic
+and include source identity/position rather than content alone, and merge
+ordering never depends on wall clocks. Sync moves encrypted immutable segments.
+The daemon closes DuckDB before waiting for the relay. Details and security
+limits: `docs/rewrite/sync.md`.
 
-**Sync design** follows [ADR 0005](docs/adr/0005-sync-device-logs.md): the
-observation log is the source of truth, DuckDB is a rebuildable projection, each
-device writes only its own log, IDs are deterministic (never random, never from
-content alone), and ordering never depends on wall clocks.
+Adapters implement `model.Source` and register in `internal/cli`. Each needs a
+golden case and legacy `raw_events` import coverage. Sources without one file
+per conversation set `Handle.Content` in `Discover`; the collector logs those
+bytes. `model.Checker` lets `doctor` detect source-format changes.
 
-## Commands
+MCP and `query` share validation and response limits in `internal/cli/read.go`.
+Read connections load the bundled search extension before disabling external
+file/network access and locking DuckDB settings. Test this boundary through
+real SQL, not just keyword validation.
 
-Python:
-
-```sh
-uv venv && uv pip install -e ".[dev,mcp]"
-.venv/bin/python -m pytest              # includes tests/test_golden.py
-.venv/bin/ruff check .
-python scripts/golden.py check          # Python still matches spec/golden/expected
-python scripts/bench.py --synthetic 100 --turns 20
-```
-
-Only run `ruff format` on files you change; much of the existing code isn't
-formatted and reformatting it buries real changes in the diff.
-
-Go:
-
-```sh
-go build -o bin/chatstrata ./cmd/chatstrata   # `chatstrata` alone would clash with the Python package dir
-go test ./...                                 # includes the golden tests against spec/
-go vet ./... && gofmt -l .
-python scripts/bench.py --synthetic 100 --turns 20 --binary bin/chatstrata
-```
-
-The Go binary uses its own archive (`chatstrata-go.duckdb`, or
-`$CHATSTRATA_GO_DB`) so it never writes to the Python archive. Next to it,
-`chatstrata-go.log/` is the observation log: the source of truth, from which
-`chatstrata rebuild` recreates the `.duckdb` file. Never write to the
-projection except through the projector (`internal/project`), or a rebuild
-will lose it. Format and merge rules: `docs/rewrite/observation-log.md`. Sync between devices
-(`internal/devsync`, `internal/relay`) only moves encrypted segments; how to
-set it up and its security limits: `docs/rewrite/sync.md`. Never log or
-print `space.key` or pairing codes except where `pair` shows the code on
-purpose.
-Go-only schema migrations live in `internal/store/migrations/` and continue
-the shared numbering. Adapters live under
-`internal/sources/` (shared helpers in `srcutil`) and are registered in
-`internal/cli`; each must reproduce its golden case and parse its Python-era
-`raw_events` (`TestLegacyImport`). A source that doesn't keep one file per
-conversation sets `Handle.Content` in `Discover`, and the collector logs those
-bytes instead of reading the file.
-
-The MCP server (`chatstrata serve`, `internal/cli/mcp.go`) and `query` share
-the read-only rules and limits in `internal/cli/read.go`; keep them in step
-with `chatstrata/mcp/safety.py` while Python still ships. `analyze` runs
-`chatstrata/analysis/queries/*.sql` unchanged (embedded through `embed.go`).
-The full-text index is rebuilt whole, so catch-up only rebuilds it once
-enough content is new (`store.FTSNeedsRebuild`) and `search` substring-matches
-the blocks it doesn't hold yet; anything that searches must cover both.
-An adapter can implement `model.Checker` so `chatstrata doctor` can say when
-the tool's storage changed under it.
-
-DuckDB makes the Go build use CGo; build release binaries natively per OS and
-architecture rather than cross-compiling. Release builds (`-tags fts_embed`,
-after `go run ./internal/tools/fetchfts`) embed DuckDB's fts extension so
-search never downloads it; how releases are cut: `docs/rewrite/release.md`.
-
-## Conventions
-
-- Keep PRs to one milestone step. Go code lands on `main` in small pieces; there
-  is no long-lived rewrite branch.
-- Go: standard library first, `internal/` for everything not meant as a public
-  API, errors wrapped with context, tests next to the code. Golden tests read
-  `spec/` directly.
-- Commit messages: imperative summary line, body explaining why.
+The FTS index rebuilds in batches (`store.FTSNeedsRebuild`). `search` must cover
+both indexed blocks and new blocks awaiting indexing. `analyze` uses the SQL
+under `internal/analysis/queries/`.

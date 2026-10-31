@@ -1,7 +1,7 @@
 // Package model defines the canonical records every source adapter produces.
 //
-// It mirrors chatstrata/core/models.py. Optional fields are pointers so that
-// "absent" (stored as NULL) and "empty" stay distinct, as they are in Python.
+// Optional fields are pointers so "absent" (stored as NULL) and "empty"
+// stay distinct, preserving the original archive schema.
 package model
 
 import (

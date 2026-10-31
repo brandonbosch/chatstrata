@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,7 +15,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // openForReading opens the archive read-only. A missing archive is reported
@@ -32,31 +33,115 @@ func openForReading(e *env, db string) (*store.Store, error) {
 	return s, err
 }
 
-// Read-only enforcement, ported from chatstrata/mcp/safety.py.
-var (
-	mutatingKeywords = map[string]bool{
-		"INSERT": true, "UPDATE": true, "DELETE": true, "DROP": true, "ALTER": true,
-		"CREATE": true, "TRUNCATE": true, "COPY": true, "EXPORT": true, "ATTACH": true,
-		"DETACH": true, "LOAD": true, "INSTALL": true, "SET": true, "GRANT": true,
-		"REVOKE": true, "BEGIN": true, "COMMIT": true, "ROLLBACK": true, "VACUUM": true,
-		"CHECKPOINT": true,
-	}
-	sqlComment = regexp.MustCompile(`(?s)--[^\n]*|/\*.*?\*/`)
-)
+// Validation is a statement/metadata allowlist, backed by DuckDB read-only
+// mode and disabled external access. Mask strings and comments first so SQL
+// punctuation inside a search term is not mistaken for another statement.
+var dollarQuote = regexp.MustCompile(`^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$`)
 
 func validateReadOnly(query string) error {
-	stripped := strings.TrimSpace(sqlComment.ReplaceAllString(query, " "))
-	if stripped == "" {
+	clean, err := statementText(query)
+	if err != nil {
+		return err
+	}
+	if clean == "" {
 		return errors.New("Empty query.")
 	}
-	if strings.Contains(strings.TrimRight(stripped, ";"), ";") {
-		return errors.New("Multi-statement queries are not allowed.")
+	keyword := func(s string) string {
+		i := 0
+		for i < len(s) && (s[i] >= 'a' && s[i] <= 'z' || s[i] >= 'A' && s[i] <= 'Z' || s[i] == '_') {
+			i++
+		}
+		return strings.ToUpper(s[:i])
 	}
-	first := strings.ToUpper(strings.Fields(stripped)[0])
-	if mutatingKeywords[first] {
+	first := keyword(clean)
+	switch first {
+	case "SELECT", "WITH", "DESCRIBE", "SHOW":
+		return nil
+	case "PRAGMA":
+		switch keyword(strings.TrimSpace(clean[len(first):])) {
+		case "TABLE_INFO", "SHOW_TABLES", "DATABASE_LIST", "VERSION", "FUNCTIONS", "COLLATIONS", "STORAGE_INFO":
+			return nil
+		}
+		return errors.New("Only read-only metadata PRAGMAs are permitted (table_info, show_tables, database_list, version, functions, collations, storage_info).")
+	default:
 		return fmt.Errorf("%s queries are not allowed. Only SELECT/WITH/DESCRIBE/SHOW/PRAGMA are permitted.", first)
 	}
-	return nil
+}
+
+func statementText(query string) (string, error) {
+	var clean strings.Builder
+	ended := false
+	for i := 0; i < len(query); {
+		switch {
+		case strings.HasPrefix(query[i:], "--"):
+			end := strings.IndexByte(query[i:], '\n')
+			if end < 0 {
+				i = len(query)
+			} else {
+				i += end + 1
+			}
+			clean.WriteByte(' ')
+		case strings.HasPrefix(query[i:], "/*"):
+			i += 2
+			depth := 1
+			for i < len(query) && depth > 0 {
+				switch {
+				case strings.HasPrefix(query[i:], "/*"):
+					depth++
+					i += 2
+				case strings.HasPrefix(query[i:], "*/"):
+					depth--
+					i += 2
+				default:
+					i++
+				}
+			}
+			if depth != 0 {
+				return "", errors.New("Unterminated SQL comment.")
+			}
+			clean.WriteByte(' ')
+		case query[i] == ' ' || query[i] == '\t' || query[i] == '\n' || query[i] == '\r':
+			clean.WriteByte(' ')
+			i++
+		case ended:
+			return "", errors.New("Multi-statement queries are not allowed.")
+		case query[i] == ';':
+			ended = true
+			i++
+		case query[i] == '\'' || query[i] == '"':
+			quote := query[i]
+			i++
+			closed := false
+			for i < len(query) {
+				if query[i] != quote {
+					i++
+				} else if i+1 < len(query) && query[i+1] == quote {
+					i += 2
+				} else {
+					i++
+					closed = true
+					break
+				}
+			}
+			if !closed {
+				return "", errors.New("Unterminated SQL string or identifier.")
+			}
+			clean.WriteString(" ? ")
+		default:
+			if tag := dollarQuote.FindString(query[i:]); tag != "" {
+				end := strings.Index(query[i+len(tag):], tag)
+				if end < 0 {
+					return "", errors.New("Unterminated SQL string.")
+				}
+				i += len(tag)*2 + end
+				clean.WriteString(" ? ")
+			} else {
+				clean.WriteByte(query[i])
+				i++
+			}
+		}
+	}
+	return strings.TrimSpace(clean.String()), nil
 }
 
 const (
@@ -131,6 +216,17 @@ func collect(rows *sql.Rows) ([]string, [][]any, bool, error) {
 	if err != nil {
 		return nil, nil, false, err
 	}
+	// Reserve space for the MCP envelope and column names. Count escaped,
+	// indented JSON bytes while reading; a huge single row must not bypass
+	// the cap, and collecting must stop before retaining hundreds of them.
+	header, err := marshalReadable(cols)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	size := len(header)*2 + 2048
+	if size > maxResultBytes {
+		return nil, nil, false, errors.New("Query column names exceed the result limit; use shorter aliases.")
+	}
 	var values [][]any
 	truncated := false
 	for rows.Next() {
@@ -146,22 +242,24 @@ func collect(rows *sql.Rows) ([]string, [][]any, bool, error) {
 		if err := rows.Scan(ptrs...); err != nil {
 			return nil, nil, false, err
 		}
+		obj, err := orderedRow(cols, row)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		encoded, err := marshalReadable(obj)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		rowSize := len(encoded) + 4*(bytes.Count(encoded, []byte("\n"))+1) + 2
+		if size+rowSize > maxResultBytes {
+			truncated = true
+			break
+		}
+		size += rowSize
 		values = append(values, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, false, err
-	}
-
-	size := 0
-	for _, row := range values {
-		for _, v := range row {
-			size += len(formatValue(v)) + 4
-		}
-	}
-	if size > maxResultBytes {
-		keep := max(1, int(float64(len(values))*float64(maxResultBytes)/float64(size)*0.9))
-		values = values[:keep]
-		truncated = true
 	}
 	return cols, values, truncated, nil
 }

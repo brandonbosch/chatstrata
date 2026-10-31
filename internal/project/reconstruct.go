@@ -9,8 +9,8 @@ import (
 	"bytes"
 	"sort"
 
-	"github.com/brandonbosch/chatstrata/internal/obslog"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // fragment is a byte range of a source file, from one observation.

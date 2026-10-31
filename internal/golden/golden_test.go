@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/cli"
+	"github.com/brandonbosch/chatstrata/v2/internal/cli"
 )
 
 const specDir = "../../spec/golden"
@@ -26,8 +26,8 @@ type step struct {
 
 type goldenCase struct {
 	Name string `json:"name"`
-	// Implementations lists who runs the case; empty means both. Expected
-	// output of a Go-only case comes from the Go side (-update).
+	// Implementations is retained for compatibility with the original fixture
+	// format. All current cases run in Go.
 	Implementations []string `json:"implementations"`
 	Source          string   `json:"source"`
 	Input           string   `json:"input"`
@@ -35,11 +35,7 @@ type goldenCase struct {
 	Steps           []step   `json:"steps"`
 }
 
-var update = flag.Bool("update", false, "rewrite expected output of Go-only cases")
-
-func (c goldenCase) goOnly() bool {
-	return len(c.Implementations) > 0 && !slices.Contains(c.Implementations, "python")
-}
+var update = flag.Bool("update", false, "rewrite expected output; review all fixture changes")
 
 func TestGolden(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(specDir, "cases.json"))
@@ -57,7 +53,7 @@ func TestGolden(t *testing.T) {
 			}
 			actual := runCase(t, c)
 			expectedPath := filepath.Join(specDir, "expected", c.Name+".json")
-			if *update && c.goOnly() {
+			if *update {
 				var buf bytes.Buffer
 				enc := json.NewEncoder(&buf)
 				enc.SetEscapeHTML(false)
@@ -120,7 +116,7 @@ func runCase(t *testing.T, c goldenCase) any {
 }
 
 // buildDatabases turns each *.sql dump in the inputs into the SQLite *.db the
-// source reads, as scripts/golden.py does.
+// source reads.
 func buildDatabases(t *testing.T, work string) {
 	t.Helper()
 	dumps, err := filepath.Glob(filepath.Join(work, "*.sql")) // inputs keep dumps at the top level

@@ -6,6 +6,7 @@ on:
     paths:
       - "docs-site/**"
       - ".github/workflows/docs.yml"
+      - "scripts/install.sh"
   workflow_dispatch:
 
 permissions:
@@ -28,7 +29,10 @@ jobs:
 
       - name: Build docs
         working-directory: docs-site
-        run: uv run --group dev zensical build --clean
+        run: |
+          uv run --group dev zensical build --clean
+          cp ../scripts/install.sh site/install.sh
+          cmp ../scripts/install.sh site/install.sh
 
       - uses: actions/upload-pages-artifact@v3
         with:

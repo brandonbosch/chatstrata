@@ -1,6 +1,6 @@
 # chatstrata v2: Go rewrite with multi-device sync
 
-**Status:** Draft
+**Status:** Go-only (M6); current release procedure in [release.md](release.md)
 **Date:** 2026-10
 **Supersedes:** the earlier "language, sync, and rewrite decision plan" draft
 
@@ -42,8 +42,8 @@ between my own machines. Nothing else is in scope.
 - Full local encryption of the archive.
 - Public relay endpoint. Tailnet only for now.
 
-The Python app stays installed and remains the daily driver until v2 is clearly
-better. Nothing in this plan requires turning it off early.
+The Python application has been retired. The sections below preserve the rewrite
+design and milestone history; current usage is in the README and documentation site.
 
 ## Scope
 
@@ -486,7 +486,11 @@ omarchy-macbook's live omp session (`1f40ea9f…`) the fingerprints are
   daily driver. Python stays installable as a fallback, and `import-legacy` is
   how anything it collected in the meantime comes back.
 
-**M6 · Remove Python**, one PR after the parallel-use period:
+**M6 · Remove Python**: implemented after the parallel-use period. The owner
+confirmed that labeling, redaction and semantic search do not block release.
+The application, tests and golden updater are Go-only; SQL assets moved under
+`internal/`, the module uses `/v2`, and Python publishing has been removed.
+`python-final` preserves the previous application. Original checklist:
 - Tag the last commit that has the Python app (`python-final`) so it stays
   one checkout away, then delete `chatstrata/`, `tests/` and `pyproject.toml`.
 - Move the schema migrations and `analysis/queries/*.sql` from `chatstrata/`

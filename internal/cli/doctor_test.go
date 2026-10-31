@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // doctor warns about sources whose storage it finds but can't make sense
