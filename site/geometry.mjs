@@ -30,6 +30,6 @@ export function rotation(pitch,yaw) {
 
 export function layout(width,height) {
   return width>=1120
-    ? {x:width*.74,y:height*.43,scale:Math.min(width*.14,height*.21)}
+    ? {x:width*.74,y:height*.43,scale:Math.min(width*.125,height*.21)}
     : {x:width*.5,y:height*.24,scale:Math.min(width*.235,height*.115)};
 }
