@@ -13,7 +13,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/brandonbosch/chatstrata/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
 )
 
 // Client talks to a relay for one space.

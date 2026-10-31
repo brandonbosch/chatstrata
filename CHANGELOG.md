@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.0 - 2026-10-30
+
+- Ship a single Go binary for local chat archiving, keyword search, DuckDB SQL,
+  built-in analysis, MCP, background collection, and optional encrypted sync.
+- Support Claude Code, Codex CLI, OpenCode 1.x/2.x, Oh My Pi, Hermes Agent, and
+  claude.ai exports; retain Python archive import without a Python runtime.
+- Retire the Python app, tests, benchmark harness and publishing workflow.
+  Preserve its source at `python-final` and retain the existing SQL schema,
+  migration numbering, archive locations and golden expectations.
+- Restrict MCP/CLI queries to the archive, disable external access and extension
+  auto-install/loading, lock query settings, and enforce bounded responses.
+- Detect uncollected local changes and explain persistent-reader locks. Release
+  DuckDB before relay waits so an unavailable relay does not block local reads.
+- Publish checksum-verified native releases with bundled full-text search. Test
+  auto-ingest, rebuild, stdio MCP and installer failure/upgrade paths.
+- Labeling/Jev, automatic PII sanitization, embeddings and semantic search are
+  outside this release. Local archives and observation logs remain plaintext.
+
 ## 0.5.0 - unreleased
 
 The last release of the Python app. chatstrata 2 is a single Go binary that

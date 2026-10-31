@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/pystr"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/pystr"
 )
 
 // Event is one JSONL record: its original bytes and its decoded fields.

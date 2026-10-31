@@ -11,11 +11,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/devsync"
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/project"
-	"github.com/brandonbosch/chatstrata/internal/relay"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/devsync"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/project"
+	"github.com/brandonbosch/chatstrata/v2/internal/relay"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 func runRelay(e *env, args []string) error {

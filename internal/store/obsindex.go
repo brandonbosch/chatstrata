@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/brandonbosch/chatstrata/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
 )
 
 // IndexedObservation is an observation's index row: everything but content.

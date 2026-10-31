@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/brandonbosch/chatstrata/internal/obslog"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // Stats counts what a catch-up did.

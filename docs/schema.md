@@ -1,6 +1,6 @@
 # Schema
 
-**Schema version:** 1
+**Schema version:** 5
 
 chatstrata stores conversations in a normalized form designed to be source-agnostic.
 The same tables hold a Claude Code session, a claude.ai export, and a ChatGPT export.
@@ -12,7 +12,7 @@ The same tables hold a Claude Code session, a claude.ai export, and a ChatGPT ex
 2. A migration script.
 3. A version bump.
 
-Adapters declare which schema version they target via `SourceAdapter.schema_version`.
+Adapters implement `model.Source`; migrations are embedded from `internal/store/migrations/`. Existing table and column names remain compatible with saved SQL.
 
 ## Tables
 
@@ -90,7 +90,8 @@ when normalization logic changes. **This is critical** — never assume the
 normalized data is the only copy.
 
 ### `labels`
-Typed classifier answers written by `chatstrata label` (schema v4). One row
+Legacy classifier answer tables retained for SQL compatibility (schema v4).
+The Go application does not populate or migrate labels. One row
 per target × question; see [labeling.md](labeling.md) and
 [ADR 0004](adr/0004-classifier-labels.md).
 
@@ -112,11 +113,26 @@ per target × question; see [labeling.md](labeling.md) and
 Primary key `(pack, target_id, question)`.
 
 ### `label_runs`
-One row per `chatstrata label run`: pack, pack version, backend, model,
+Legacy labeling-run metadata: pack, pack version, backend, model,
 start/finish time, items labelled, failures, and input tokens used.
 
 ### `message_embeddings`
-Reserved for future use. Embeddings are generated lazily, not on ingest.
+Retained for compatibility. Go does not generate or migrate embeddings.
+
+## Observation-log projection tables (v5)
+
+- `observations`: source/scope/locator, device sequence, kind and byte range,
+  content hash, path/project hints, legacy flag, and segment/position provenance.
+- `indexed_segments`: segments already projected; rebuild derives this again.
+- `collector_state`: this device's last logged length, hash, and mtime per
+  source/scope/locator. A rebuild can reconstruct content without this cache.
+- `divergences`: fork and branch message IDs plus device provenance when
+  observations disagree.
+- `tool_calls` is a view over `content_blocks` of type `tool_use`, joining
+  message and conversation information for analysis.
+
+The observation log is the source of truth. Do not edit the DuckDB projection
+as a way to change archived content: `rebuild` will overwrite those edits.
 
 ## Design principles
 

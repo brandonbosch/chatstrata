@@ -3,7 +3,7 @@
 // Hermes keeps sessions in $HERMES_HOME/state.db (default ~/.hermes) and in
 // profiles/<name>/state.db for each named profile. A session's rows are
 // serialized as one JSON document, which is what the collector logs and
-// Parse reads. This is a port of chatstrata/sources/hermes_agent/adapter.py
+// Parse reads. This is a port of python-final:chatstrata/sources/hermes_agent/adapter.py
 // and must produce the same archive (see spec/golden).
 package hermes
 
@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 // DefaultHome is the Hermes home when $HERMES_HOME is unset, relative to $HOME.

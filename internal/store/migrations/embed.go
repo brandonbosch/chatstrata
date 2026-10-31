@@ -1,6 +1,5 @@
-// Package migrations holds schema migrations that only the Go implementation
-// applies. They continue the numbering of the shared migrations in
-// chatstrata/core/migrations.
+// Package migrations holds the archive schema, including the original
+// migrations used by Python archives. Never renumber existing migrations.
 package migrations
 
 import "embed"

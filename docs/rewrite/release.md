@@ -1,77 +1,112 @@
-# Releasing the Go app
+# Releasing chatstrata
 
-Go releases are tags starting with `v2`: release candidates (`v2.0.0-rc.1`,
-`-rc.2`, ...) during the M5 parallel-use period, then `v2.0.0` at M6. The
-Python app's releases stay `v0.x` and go to PyPI through `publish.yml`;
-`release.yml` handles only `v2` tags and never touches PyPI.
+Go releases use `v2.*` tags and module path
+`github.com/brandonbosch/chatstrata/v2`. The Python application is preserved at
+`python-final`; its publishing workflow has been retired. Existing PyPI
+releases remain available, but the installer installs native Go binaries.
 
-## Cutting a release
+## Verify and tag
+
+From the reviewed commit on `main`:
 
 ```sh
-git tag v2.0.0-rc.1 && git push origin v2.0.0-rc.1
+go test ./...
+go vet ./...
+test -z "$(gofmt -l .)"
+go run ./internal/tools/fetchfts
+go test -tags fts_embed ./...
+go build -trimpath -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
+scripts/smoke-release.sh bin/chatstrata
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
-`.github/workflows/release.yml` then builds on one native runner per target
-(DuckDB needs CGo, so nothing is cross-compiled):
+The release workflow builds natively because DuckDB uses CGo:
 
-| target | runner |
-|---|---|
-| linux/amd64 | `ubuntu-22.04` (glibc 2.35 floor) |
-| linux/arm64 | `ubuntu-22.04-arm` |
-| darwin/arm64 | `macos-latest` |
+| Target | Runner | Notes |
+|---|---|---|
+| linux/amd64 | ubuntu-22.04 | glibc 2.35 or newer |
+| linux/arm64 | ubuntu-22.04-arm | glibc 2.35 or newer |
+| darwin/arm64 | macos-latest | Apple silicon |
 
-Each job fetches DuckDB's fts extension for its platform, runs
-`go test -tags fts_embed ./...`, builds with the version stamped in, and runs
-`scripts/smoke-release.sh` against the binary in an empty home directory
-(ingest, `reindex`, `search` with the full-text index, and nothing written to
-`~/.duckdb`). The release job uploads `chatstrata_<version>_<os>_<arch>.tar.gz`
-for each target plus `checksums.txt`, as a pre-release when the tag has a
-`-suffix`. Re-running for an existing tag (`workflow_dispatch` with `tag`)
-replaces the assets.
+Intel Macs and Windows have no downloadable release yet. They build from
+source with Go and a C toolchain:
 
-Intel Macs and Windows have no release build yet; both build from source.
+```sh
+go install github.com/brandonbosch/chatstrata/v2/cmd/chatstrata@latest
+```
 
-## Installing
+Each native job fetches DuckDB's signed FTS extension, runs the tests with
+`-tags fts_embed`, builds with the tag's version stamped in, and runs the
+release smoke script in an empty home directory. Smoke checks exercise the
+public `ingest --auto` workflow twice, `mcp config codex`, rebuild, full-text
+search, and the actual stdio MCP binary through `internal/tools/smokemcp`.
+MCP checks include schema/tool discovery, a count query, rejected database
+writes, and a rejected external-file read. No runtime extension download or
+write to `~/.duckdb` is expected.
+
+The workflow uploads `chatstrata_<version>_<os>_<arch>.tar.gz` and
+`checksums.txt`. Tags with a suffix are prereleases; stable tags become the
+latest release. `workflow_dispatch` can rebuild an existing tag and replace
+its assets. Inspect all three native job results before advertising a release.
+
+## Verify installation from the published assets
+
+```sh
+curl -fsSL https://chatstrata.sprawlcommons.com/install.sh | sh
+chatstrata version
+chatstrata ingest --auto
+chatstrata mcp config codex
+```
+
+For an isolated download check, set `CHATSTRATA_INSTALL_DIR` to a temporary
+directory and `CHATSTRATA_VERSION` to the exact tag. Do not replace a real
+installation merely to test a candidate.
+
+The installer prefers stable v2 releases even if a newer candidate exists.
+Before the first stable release it can select a candidate. The override pins
+an explicit tag. It verifies SHA-256, runs the binary's `version` command to
+check compatibility before replacement, then installs to `~/.local/bin` (or
+`CHATSTRATA_INSTALL_DIR`). It replaces a Python entry-point symlink without
+writing through it. Restart an installed daemon with `schedule install` after
+an upgrade; reconnect MCP clients so their server processes use the new binary.
+
+`go test ./scripts` runs the real installer against local fake downloads,
+covering stable/candidate selection, checksum rejection, symlink replacement,
+and preservation of a working install when a new binary cannot run.
+
+The independent installer fallback is:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/brandonbosch/chatstrata/main/scripts/install.sh | sh
 ```
 
-It picks the newest `v2` release (or `CHATSTRATA_VERSION`), checks the
-archive against `checksums.txt` and installs to `~/.local/bin`
-(`CHATSTRATA_INSTALL_DIR`). If `~/.local/bin/chatstrata` is a symlink, which
-is how `uv tool` and `pipx` install the Python app, it replaces the link and
-leaves the Python install alone; it never writes through a symlink.
+## Publish docs and the domain installer
 
-From source, with Go and a C toolchain:
+The documentation workflow builds Go-focused guides with optional Zensical
+and copies `scripts/install.sh` byte-for-byte to the static site's root.
+GitHub Pages remains available at the repository's Pages URL.
 
-```sh
-go install github.com/brandonbosch/chatstrata/cmd/chatstrata@main
-```
+The public domain uses the same static artifact with Cloudflare Workers
+Static Assets. Follow `docs-site/README.md` to build, dry-run, and deploy it.
+`docs-site/wrangler.jsonc` configures only `chatstrata.sprawlcommons.com`;
+the parent Sprawl Commons site is independent. Verify HTTPS, the HTML home
+page, and `/install.sh` (text/plain, byte-identical to the repository script),
+then run an isolated install from that exact public URL.
 
-A source build has no embedded search extension: run
-`chatstrata reindex --install-fts` once, or build as a release does:
+No MCP server, private transcripts, archives, or credentials belong on the
+public site. Automatic Cloudflare deployment requires its own scoped CI token
+or repository build integration; do not copy a personal OAuth login into CI.
 
-```sh
-go run ./internal/tools/fetchfts
-go build -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
-```
+## Embedded search extension
 
-## The embedded search extension
+`internal/tools/fetchfts` reads the linked DuckDB version/platform and fetches
+its signed FTS extension into git-ignored `internal/store/fts/`. Release builds
+embed it with `-tags fts_embed`. At runtime it is extracted to a content-hash
+path under the data directory and DuckDB verifies its signature on load.
 
-`duckdb-go` doesn't bundle DuckDB's fts extension. Release builds carry
-DuckDB's own signed build of it instead of downloading it at run time:
-
-- `internal/tools/fetchfts` reads the DuckDB version and platform this module
-  links and downloads `extensions.duckdb.org/<version>/<platform>/fts.duckdb_extension.gz`
-  into `internal/store/fts/` (git-ignored).
-- With `-tags fts_embed`, `internal/store/fts_embed.go` embeds that file
-  (3.6 MB; the stripped linux/amd64 binary is 72 MB, 29 MB compressed).
-- The first process that needs search writes it, once, to
-  `<data dir>/extensions/<hash>/fts.duckdb_extension` and `LOAD`s it from
-  there. The directory is named after the content hash, so an upgrade never
-  loads an older release's file. DuckDB verifies the extension's signature on
-  load, as it does for `INSTALL`.
-
-So a release binary keeps the README's promise: no network request unless
-the user configured sync.
+Source builds have no bundled extension and use substring search until the
+user explicitly runs `chatstrata reindex --install-fts`. Normal runtime
+collection/search/query/MCP performs no network requests; optional configured
+sync is separate. Read connections load the trusted FTS extension before
+external access and extension autoload/install are disabled and settings locked.

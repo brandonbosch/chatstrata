@@ -1,0 +1,12 @@
+{
+  "name": "chatstrata",
+  "compatibility_date": "2026-10-30",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "dependencies_instrumentation": { "enabled": false },
+  "assets": { "directory": "./site" },
+  "routes": [
+    { "pattern": "chatstrata.sprawlcommons.com", "custom_domain": true }
+  ]
+}

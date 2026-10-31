@@ -12,7 +12,7 @@ import (
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
 )
 
 type Action int

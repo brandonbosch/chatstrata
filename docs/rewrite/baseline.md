@@ -1,3 +1,7 @@
+> Historical Python/Go rewrite baseline, frozen at cutover. The original
+> Python benchmark harness is preserved at `python-final`. Current Go
+> collection benchmarks: `go test ./internal/project -run '^$' -bench . -benchmem`.
+
 # Python baseline (M0)
 
 Numbers the Go rewrite has to beat. Produced with `scripts/bench.py`, which

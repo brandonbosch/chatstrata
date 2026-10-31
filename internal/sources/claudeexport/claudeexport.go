@@ -5,7 +5,7 @@
 // conversation, so each conversation's bytes come from Discover (the array
 // element, exactly as exported) rather than from a file of its own. There is
 // no default location; pass the file or the unzipped export directory. This
-// is a port of chatstrata/sources/claude_export/adapter.py and must produce
+// is a port of python-final:chatstrata/sources/claude_export/adapter.py and must produce
 // the same archive (see spec/golden).
 package claudeexport
 
@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 type Source struct{}

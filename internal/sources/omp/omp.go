@@ -4,7 +4,7 @@
 // ~/.omp/agent/sessions/<encoded-cwd>/<timestamp>_<session-id>.jsonl. A file
 // starts with a fixed-width title slot that is rewritten in place, then a
 // session header and the session's entries. This is a port of
-// chatstrata/sources/omp/adapter.py and must produce the same archive (see
+// python-final:chatstrata/sources/omp/adapter.py and must produce the same archive (see
 // spec/golden).
 package omp
 
@@ -17,9 +17,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/pystr"
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/pystr"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 // DefaultRoot is where Oh My Pi keeps sessions, relative to $HOME.

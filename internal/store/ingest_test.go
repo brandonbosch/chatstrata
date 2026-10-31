@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
 )
 
 func openTestStore(t *testing.T) *Store {

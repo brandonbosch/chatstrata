@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/obslog"
-	"github.com/brandonbosch/chatstrata/internal/project"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/project"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // archive is an open archive for writing: the observation log, which is the

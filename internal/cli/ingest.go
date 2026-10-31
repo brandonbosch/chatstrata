@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/brandonbosch/chatstrata/internal/project"
+	"github.com/brandonbosch/chatstrata/v2/internal/project"
 )
 
 func runIngest(e *env, args []string) error {

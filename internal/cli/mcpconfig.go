@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 func runMCP(e *env, args []string) error {

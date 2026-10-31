@@ -1,235 +1,66 @@
----
-title: Getting Started
-description: Install chatstrata, ingest your first conversations, and run your first queries.
----
-
-# Getting Started
-
-This guide gets you from zero to querying your conversation archive in under five minutes.
-
-## Prerequisites
-
-- Python 3.10 or later.
-- [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/).
-- No separate DuckDB install. The embedded DuckDB Python package is installed
-  with chatstrata.
+# Get started
 
 ## Install
 
-```bash
-uv tool install "chatstrata[embeddings]"
-# or: pipx install "chatstrata[embeddings]"
+```sh
+curl -fsSL https://chatstrata.sprawlcommons.com/install.sh | sh
 ```
 
-The embeddings extra is recommended for first-time setup because `chatstrata ingest --auto` generates semantic-search embeddings after ingesting. For optional features, install the relevant extras:
+Linux x86-64/arm64 and Apple-silicon macOS are supported by downloadable
+releases. Add `~/.local/bin` to PATH if prompted. The installer needs curl or
+wget, tar, and sha256sum or shasum. No sudo, Python, or Go compiler is needed.
 
-```bash
-# PII redaction via Presidio
-uv tool install "chatstrata[redact]"
+To pin a release, download the script first or pass the variable to `sh`:
 
-# MCP server for Claude Code, Claude Desktop, and other MCP clients
-uv tool install "chatstrata[mcp]"
-
-# Everything
-uv tool install "chatstrata[embeddings,redact,mcp]"
+```sh
+curl -fsSL https://chatstrata.sprawlcommons.com/install.sh | CHATSTRATA_VERSION=v2.0.0 sh
 ```
 
-For local development from a clone, use:
+Intel Macs and Windows build from source with Go and a C compiler:
 
-```bash
-git clone https://github.com/brandonbosch/chatstrata.git
-cd chatstrata
-uv venv
-uv pip install -e ".[dev,redact,embeddings]"
+```sh
+go install github.com/brandonbosch/chatstrata/v2/cmd/chatstrata@latest
+chatstrata reindex --install-fts
 ```
 
-## Use from an MCP client
+## Collect and connect
 
-Install with the MCP and embeddings extras:
-
-```bash
-uv tool install "chatstrata[embeddings,mcp]"
-```
-
-Then create and ingest your archive as usual. For Claude Code, generate the
-setup command:
-
-```bash
-chatstrata mcp config claude-code
-```
-
-For Claude Desktop, generate the JSON config:
-
-```bash
-chatstrata mcp config claude-desktop
-```
-
-See [MCP Server](mcp.md) for the full setup flow.
-
-## Initialize your archive
-
-```bash
-chatstrata init
-```
-
-This creates the local DuckDB file, applies schema migrations, and shows which
-conversation sources are detectable on your machine. The database is just a
-single local file; there is no server to run.
-
-## Check installed sources
-
-```bash
-chatstrata sources
-```
-
-This lists every adapter chatstrata can find via Python entry points. Out of the box you'll see:
-
-```
-  claude_code          Claude Code  (v0.1.0)
-  claude_export        claude.ai Export  (v0.1.0)
-  codex_cli            Codex CLI  (v0.1.0)
-  opencode             OpenCode  (v0.1.0)
-```
-
-Third-party adapters installed as pip packages appear here automatically.
-
-## Ingest your conversations
-
-To auto-detect local app data in default locations, ingest it, and generate embeddings:
-
-```bash
+```sh
 chatstrata ingest --auto
-```
-
-Auto mode uses full ingest the first time it sees a source, then switches that source to incremental ingest on later runs. It requires the `[embeddings]` extra; use `--no-embed` to skip embedding generation.
-
-Embedding uses a local sentence-transformers model. The first embedding run may download the model if it is not already cached; transcript content is not sent to chatstrata or a hosted inference API.
-
-To preview what auto mode will ingest:
-
-```bash
-chatstrata ingest --auto --dry-run
-```
-
-For manual control, start with Claude Code — it reads directly from `~/.claude/projects/`:
-
-```bash
-chatstrata ingest claude_code
-```
-
-For a claude.ai data export (download from your account settings), point to the extracted directory:
-
-```bash
-chatstrata ingest claude_export --path ~/Downloads/claude-export/
-```
-
-For Codex CLI sessions:
-
-```bash
-chatstrata ingest codex_cli
-```
-
-For OpenCode sessions (reads from the local SQLite database):
-
-```bash
-chatstrata ingest opencode
-```
-
-Use `--dry-run` to preview what a manual source ingest would import without writing anything:
-
-```bash
-chatstrata ingest claude_code --dry-run
-```
-
-On subsequent runs, add `--incremental` to skip conversations whose source files haven't changed:
-
-```bash
-chatstrata ingest claude_code --incremental
-```
-
-## See what's there
-
-```bash
 chatstrata stats
+chatstrata search "migration"
+chatstrata schedule install
+chatstrata mcp config codex
 ```
 
-This shows a summary: how many conversations and messages per source, date ranges, and totals.
+Choose `claude-code` or `claude-desktop` instead of `codex` for those clients.
+Follow the printed instructions, then reconnect/restart the client so it sees
+the MCP tools. Ask the agent to call `get_schema` before writing queries.
 
-## Your first queries
+## Upgrade
 
-Run arbitrary SQL against the DuckDB database:
+Re-run the installer, then `chatstrata schedule install` to restart the daemon
+on the new binary. `chatstrata version` prints the installed version.
 
-```bash
-# Messages by role
-chatstrata query "SELECT role, COUNT(*) FROM messages GROUP BY role"
+## Import an old Python archive
 
-# Most-used tools
-chatstrata query "SELECT tool_name, COUNT(*) as n FROM tool_calls GROUP BY tool_name ORDER BY n DESC LIMIT 10"
+Before replacing the Python command, run `chatstrata schedule uninstall` to
+remove its scheduled ingest. After installing Go:
 
-# Conversations per project
-chatstrata query "SELECT project, COUNT(*) FROM conversations WHERE project IS NOT NULL GROUP BY project ORDER BY 2 DESC"
+```sh
+chatstrata import-legacy
+chatstrata ingest --auto
+chatstrata schedule install
 ```
 
-Add `--json` for machine-readable output.
+`import-legacy /path/to/old.duckdb` chooses another archive. The command reads
+raw events using SQL and does not require Python. It leaves the old file intact.
+Keep that file as a backup. Old labels and embeddings are not migrated; a
+conversation without raw events cannot be recovered by legacy import.
 
-## Search
+## Check collection
 
-Keyword search uses BM25 full-text indexing. After ingesting, rebuild the search index:
-
-```bash
-chatstrata reindex
-chatstrata search "database migration"
-```
-
-Filter by source, date range, or limit results:
-
-```bash
-chatstrata search "auth module" --source claude_code --since 2026-01-01 --limit 5
-```
-
-If you used `chatstrata ingest --auto`, embeddings are already generated for eligible messages. Otherwise, generate them before semantic search:
-
-```bash
-chatstrata embed --source claude_code
-chatstrata search --semantic "how to handle errors"
-chatstrata search --hybrid "refactor login flow"
-```
-
-## Bundled analysis
-
-```bash
-chatstrata analyze activity --by month
-chatstrata analyze tools --source claude_code
-chatstrata analyze models
-chatstrata analyze projects
-chatstrata analyze conversations --longest 5
-```
-
-## Where the database lives
-
-By default, chatstrata stores its DuckDB file at the `platformdirs`-derived user data directory:
-
-| Platform | Default path |
-|----------|-------------|
-| Linux | `~/.local/share/chatstrata/chatstrata.duckdb` |
-| macOS | `~/Library/Application Support/chatstrata/chatstrata.duckdb` |
-| Windows | `C:\Users\<you>\AppData\Local\chatstrata\chatstrata.duckdb` |
-
-Override with the `CHATSTRATA_DB` environment variable or the `--db` flag on any command:
-
-```bash
-export CHATSTRATA_DB=~/my-archive.duckdb
-chatstrata stats
-```
-
-Run `chatstrata paths` at any time to see the database path, data directory, and
-optional config path for your machine.
-
-## Next steps
-
-- [The Canonical Schema](schema.md) — understand the tables and design principles
-- [Querying and Analysis](querying.md) — DuckDB query patterns, search modes, analyze commands
-- [MCP Server](mcp.md) — connect chatstrata to Claude Code, Claude Desktop, or another MCP client
-- [Writing a Source Adapter](adapters.md) — contribute support for a new provider
-- [Privacy and Redaction](privacy.md) — detect and remove sensitive data before sharing
-- [CLI Reference](cli.md) — every command with flags and examples
+`chatstrata doctor` reports source-format problems and local changes awaiting
+collection. `chatstrata schedule status` shows the daemon and its log location.
+Close direct DuckDB connections in idle analysis/notebook sessions: they block
+collection even when opened read-only. Use MCP or `chatstrata query` instead.

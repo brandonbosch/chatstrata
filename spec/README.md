@@ -1,9 +1,8 @@
 # chatstrata behaviour spec
 
-Language-neutral test data for the v2 rewrite (see
-[docs/rewrite/plan.md](../docs/rewrite/plan.md), milestone M0). The Python app
-generates and checks it today; the Go implementation is tested against the same
-files.
+Regression data for ingestion, legacy import, and deterministic projection.
+The original expected output was captured from the Python implementation;
+the Go tests now maintain and verify every case.
 
 ## `golden/`: what ingestion must produce
 
@@ -28,12 +27,10 @@ Running a case:
    `--incremental` when the step says so. All steps use the same database.
 3. Dump the database in canonical form and compare with `expected/<case>.json`.
 
-A case with `"implementations": ["go"]` runs in Go only, for source formats
-the feature-frozen Python app doesn't read (OpenCode 2.x). Its expected output
-is generated from Go with `go test ./internal/golden -run TestGolden/<case>
--update` and reviewed like any other; `-update` never touches cases Python
-generates. The real data such a fixture was built from lives in
-`captures/<case>/`.
+All cases run in Go. The optional `implementations` field is retained from the
+rewrite for compatibility. Generate expected output only after an intentional
+behaviour change with `go test ./internal/golden -run TestGolden -update` and
+review the diff. Captures are synthetic throwaway sessions only.
 
 Three cases exist to pin behaviour rather than parsing:
 `claude_code_reingest` (re-ingesting changes nothing) and
@@ -59,20 +56,19 @@ up the same as one full ingest) both expect output identical to `claude_code`.
 ### Commands
 
 ```sh
-python scripts/golden.py check      # Python still matches expected/ (also run by tests/test_golden.py)
-python scripts/golden.py generate   # after an intentional change; review the diff
-python scripts/golden.py dump archive.duckdb -o out.json   # canonical dump of any archive
+go test ./internal/golden
+go test ./internal/golden -run TestGolden/CASE -update
 ```
 
-`dump` is the tool for comparing implementations on a real archive: ingest the
-same transcripts with Python and Go into two databases, dump both and diff.
+The updater can regenerate every case. Do not update expected output to hide
+an unexpected regression. Golden comparison checks JSON values, not formatting.
 
 ## `projection/`: how synced observations merge
 
 `scenarios.json` describes the merge rules from ADR 0005 as cases: a set of
 events, the observations different devices made of them, and the archive every
-device must end up with. Nothing executes these yet; M2 (the observation log and
-projector) implements a runner. Status is **proposed**; `divergent_snapshots`
+device must end up with. `internal/project` executes these scenarios, including delivery-order checks.
+The fixture format retains its original proposal status; `divergent_snapshots`
 records its decision in a `decided` field.
 
 Conventions:

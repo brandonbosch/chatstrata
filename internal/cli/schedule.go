@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // `schedule` installs `chatstrata daemon` as a per-user background service:

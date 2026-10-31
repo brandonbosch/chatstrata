@@ -5,7 +5,7 @@
 // part, with JSON in their data columns and times in Unix milliseconds. A
 // session's rows are serialized as one JSON document, which is what the
 // collector logs and Parse reads. This is a port of
-// chatstrata/sources/opencode/adapter.py and must produce the same archive
+// python-final:chatstrata/sources/opencode/adapter.py and must produce the same archive
 // (see spec/golden).
 package opencode
 
@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/model"
-	"github.com/brandonbosch/chatstrata/internal/sources/srcutil"
+	"github.com/brandonbosch/chatstrata/v2/internal/model"
+	"github.com/brandonbosch/chatstrata/v2/internal/sources/srcutil"
 )
 
 // DefaultPath is OpenCode's database, relative to $HOME.

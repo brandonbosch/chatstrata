@@ -13,10 +13,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
-// The MCP server mirrors chatstrata/mcp/server.py: a read-only `query` tool
+// The MCP server provides a read-only `query` tool
 // and the schema as the chatstrata://schema resource, plus a get_schema tool
 // for clients that don't read resources.
 
@@ -47,7 +47,8 @@ Tips:
 - Use LEFT(cb.text, 500) to truncate long text content
 - tool_calls view is convenient for tool usage analysis
 - payload column is JSON -- use ->> for extraction
-- Only SELECT/WITH/DESCRIBE/SHOW/PRAGMA are allowed
+- Only SELECT/WITH/DESCRIBE/SHOW and read-only metadata PRAGMAs are allowed
+- External file/network access and configuration changes are disabled
 - Results limited to 500 rows / 512 KB
 - The BM25 index is rebuilt once enough content is new, so the newest
   blocks may be missing from it; ILIKE on cb.text always sees everything`
@@ -150,6 +151,11 @@ type queryResult struct {
 
 func (a archiveReader) query(ctx context.Context, sqlText string) string {
 	errorJSON := func(msg string) string {
+		// DuckDB errors can echo SQL, including very long string literals.
+		// Leave room for worst-case JSON escaping as well as the envelope.
+		if len(msg) > maxResultBytes/8 {
+			msg = msg[:maxResultBytes/8] + "... (error shortened)"
+		}
 		b, _ := marshalReadable(map[string]string{"error": msg})
 		return string(b)
 	}
@@ -189,11 +195,14 @@ func (a archiveReader) query(ctx context.Context, sqlText string) string {
 	}
 	if truncated {
 		res.Truncated = true
-		res.Note = "Results were truncated. Add LIMIT or narrow your WHERE clause."
+		res.Note = "Results were truncated. Use LEFT() for large text, add LIMIT, or narrow your WHERE clause."
 	}
 	b, err := marshalReadable(res)
 	if err != nil {
 		return errorJSON(err.Error())
+	}
+	if len(b) > maxResultBytes {
+		return errorJSON("Result exceeds the response limit. Use shorter column aliases and LEFT() for large text.")
 	}
 	return string(b)
 }

@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/brandonbosch/chatstrata/internal/cli"
+	"github.com/brandonbosch/chatstrata/v2/internal/cli"
 )
 
 func main() {

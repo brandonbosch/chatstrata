@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/brandonbosch/chatstrata"
+	"github.com/brandonbosch/chatstrata/v2/internal/analysis"
 )
 
-// analyze runs the queries in chatstrata/analysis/queries, shared unchanged
-// with the Python app, and prints them the way Python's `analyze` does.
+// analyze runs the embedded SQL in internal/analysis/queries and preserves
+// the established table/JSON output format.
 var analyzeCommands = []struct {
 	name, summary string
 	run           func(e *env, name string, args []string) error
@@ -39,7 +39,7 @@ func runAnalyze(e *env, args []string) error {
 }
 
 func loadQuery(name string) (string, error) {
-	b, err := chatstrata.AnalysisQueries.ReadFile("chatstrata/analysis/queries/" + name + ".sql")
+	b, err := analysis.Queries.ReadFile("queries/" + name + ".sql")
 	if err != nil {
 		return "", fmt.Errorf("load query %s: %w", name, err)
 	}

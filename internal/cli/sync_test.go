@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/brandonbosch/chatstrata/internal/devsync"
-	"github.com/brandonbosch/chatstrata/internal/relay"
-	"github.com/brandonbosch/chatstrata/internal/store"
+	"github.com/brandonbosch/chatstrata/v2/internal/devsync"
+	"github.com/brandonbosch/chatstrata/v2/internal/relay"
+	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 const projects = "../../spec/golden/inputs/claude_code/projects"

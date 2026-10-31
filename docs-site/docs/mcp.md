@@ -1,108 +1,38 @@
----
-title: MCP Server
-description: Connect chatstrata to Claude Code, Claude Desktop, and other MCP clients.
----
+# Connect an agent through MCP
 
-# MCP Server
+The server is part of the Go binary. There is no Python MCP extra or separate
+`chatstrata-mcp` executable to install. Collect an archive first:
 
-chatstrata ships an MCP server that lets an LLM query your local conversation
-archive through a single read-only SQL tool. The server exposes:
-
-| MCP primitive | Name | Purpose |
-|---|---|---|
-| Tool | `query` | Run read-only DuckDB SQL against your archive |
-| Resource | `chatstrata://schema` | Inspect tables, columns, row counts, and example queries |
-
-The server opens the database read-only, rejects mutating SQL, caps result size,
-and blocks multi-statement queries.
-
-## Install
-
-```bash
-uv tool install "chatstrata[embeddings,mcp]"
-# or: pipx install "chatstrata[embeddings,mcp]"
-```
-
-Create and populate the archive before connecting an MCP client:
-
-```bash
-chatstrata init
+```sh
 chatstrata ingest --auto
-chatstrata paths
-```
-
-If you installed only `chatstrata[mcp]`, run `chatstrata ingest --auto --no-embed` or install the embeddings extra before auto ingest.
-
-## Claude Code
-
-Add chatstrata as a user-scoped stdio server:
-
-```bash
-claude mcp add --transport stdio --scope user chatstrata -- uvx --from "chatstrata[mcp]" chatstrata-mcp
-```
-
-Or generate the command:
-
-```bash
 chatstrata mcp config claude-code
-```
-
-Start a new Claude Code session after adding the server. Check `/mcp` and
-approve the server if prompted.
-
-## Claude Desktop
-
-Add this to Claude Desktop's MCP config:
-
-```json
-{
-  "mcpServers": {
-    "chatstrata": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": ["--from", "chatstrata[mcp]", "chatstrata-mcp"]
-    }
-  }
-}
-```
-
-Generate the same JSON with:
-
-```bash
+chatstrata mcp config codex
 chatstrata mcp config claude-desktop
 ```
 
-Restart Claude Desktop after saving the config.
+Choose your client and apply its printed command/configuration. The command
+prints instructions; it does not modify client configuration. For a custom
+archive, add `--db /absolute/path/archive.duckdb`. Restart/reconnect the MCP
+client afterward. The generated command uses the binary's absolute path.
 
-## Database Selection
+The resulting configuration starts `chatstrata serve` over stdio. Tools:
 
-By default, the MCP server uses the same platform-specific database path as the
-CLI. Check it with:
+- `get_schema`: table/column types, relationships, row counts, and examples.
+- `query`: read-only DuckDB SQL, returning columns, rows, row_count, and a
+  truncation indicator when needed.
+- Resource `chatstrata://schema`: the same schema as `get_schema`.
 
-```bash
-chatstrata paths
-```
+Ask your agent: “Read the schema, then count conversations and messages by
+source.” It can explore tool usage, projects, activity over time, and archived
+text with normal SQL. Query results may be sent to the agent's model provider.
 
-To point the MCP server at a specific archive, include `CHATSTRATA_DB` in the
-generated client setup:
+Database writes, external file/network reads, extension loading/installation,
+and configuration changes are blocked. Queries time out after 30 seconds and
+results are limited to 500 rows / 512 KB. The archive is opened and closed per
+request so the collector can write between calls. A request may wait briefly
+while a collection phase holds the writer lock.
 
-```bash
-chatstrata mcp config claude-code --db /absolute/path/to/chatstrata.duckdb
-chatstrata mcp config claude-desktop --db /absolute/path/to/chatstrata.duckdb
-```
-
-## Remote Access
-
-For HTTP-based MCP clients, run the server on the machine that has your archive:
-
-```bash
-chatstrata serve --transport streamable-http --host 0.0.0.0 --port 8462
-```
-
-Then connect to:
-
-```text
-http://<host>:8462/mcp
-```
-
-Use this only on a trusted network such as Tailscale.
+HTTP transports are also available with `serve --transport streamable-http`
+(`/mcp`) or `--transport sse` (`/sse`), bound to `127.0.0.1:8462` by default.
+They do not supply authentication for a public service. Use stdio for normal
+local agent integration; do not expose the archive at the public installer URL.

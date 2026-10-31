@@ -1,4 +1,4 @@
-module github.com/brandonbosch/chatstrata
+module github.com/brandonbosch/chatstrata/v2
 
 go 1.25.0
 
