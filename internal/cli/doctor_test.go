@@ -53,13 +53,26 @@ func TestDoctorChecksSources(t *testing.T) {
 		t.Errorf("healthy archive:\n%s", out)
 	}
 
+	// A persistent read-only connection can stall the daemon while doctor
+	// still reads the archive. Changed and newly created local sessions must
+	// be reported even though this source already has archived conversations.
+	write(sample, transcript(t, sample, 3))
+	write("-Users-example-new/uncollected.jsonl", []byte(`{"type":"user","uuid":"new","sessionId":"new","message":{"role":"user","content":"new session"}}`+"\n"))
+	if out := run(t, "doctor", "--db", db); !strings.Contains(out, "2 local conversations have uncollected changes") || strings.Contains(out, "All checks passed") {
+		t.Errorf("stalled collection not reported:\n%s", out)
+	}
+	run(t, "ingest", "claude_code", "--db", db)
+	if out := run(t, "doctor", "--db", db); !strings.Contains(out, "All checks passed") {
+		t.Errorf("collection did not clear warning:\n%s", out)
+	}
+
 	// Sessions in a shape the adapter doesn't understand produce no messages.
 	for i := range 4 {
 		write(fmt.Sprintf("-Users-example-new/new-format-%d.jsonl", i),
 			[]byte(`{"kind":"turn","speaker":"human","body":"hello"}`+"\n"))
 	}
 	run(t, "ingest", "claude_code", "--db", db)
-	if out := run(t, "doctor", "--db", db); !strings.Contains(out, "4 of the 5 most recently collected conversations produced no messages") {
+	if out := run(t, "doctor", "--db", db); !strings.Contains(out, "4 of the 6 most recently collected conversations produced no messages") {
 		t.Errorf("format change not reported:\n%s", out)
 	}
 

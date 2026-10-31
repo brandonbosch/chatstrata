@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -38,6 +39,9 @@ func openArchive(e *env, db string) (*archive, error) {
 func openArchiveAt(e *env, dbPath, logPath string) (*archive, error) {
 	s, err := store.Open(e.ctx, dbPath)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "conflicting lock") {
+			return nil, fmt.Errorf("%w\nClose other DuckDB connections, including idle Python/notebook analysis sessions. Use `chatstrata query` or MCP for analysis; they close the archive after each request", err)
+		}
 		return nil, err
 	}
 	l, err := obslog.Open(logPath)

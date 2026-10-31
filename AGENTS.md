@@ -41,6 +41,10 @@ by Go. Keep table and column names compatible. Schema or storage changes need an
 ADR (`docs/adr/`, next number) and a migration.
 
 **Privacy.** The archive holds people's private conversations.
+- Use the read-only MCP tools or `chatstrata query` for analysis. Never leave
+  a DuckDB connection to the live archive open in a Python/notebook scratchpad:
+  even a read-only connection prevents the daemon from collecting. If direct
+  access is necessary, close it promptly in a `finally` block.
 - Never commit real transcripts. Fixtures are synthetic or sanitized.
 - No network calls by default (a promise in the README). The exceptions are
   explicitly opt-in: `chatstrata label`, the DuckDB `vss` install behind

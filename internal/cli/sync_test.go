@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -260,6 +261,49 @@ func TestDaemonRunsCollectAndSync(t *testing.T) {
 	}
 	if !reflect.DeepEqual(withoutPaths(a), withoutPaths(b)) {
 		t.Fatal("devices disagree after daemon runs")
+	}
+}
+
+func TestDaemonReleasesArchiveWhileRelayWaits(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		once.Do(func() { close(entered) })
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+		http.Error(w, "relay unavailable", http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+	defer close(release)
+	db := filepath.Join(t.TempDir(), "archive.duckdb")
+	run(t, "pair", "--relay", srv.URL, "--db", db)
+	done := make(chan error, 1)
+	go func() {
+		var out bytes.Buffer
+		done <- daemonRun(&env{ctx: ctx, stdout: &out, stderr: &out}, db, log.New(&out, "", 0))
+	}()
+	select {
+	case <-entered:
+	case err := <-done:
+		t.Fatalf("daemon stopped before reaching relay: %v", err)
+	case <-ctx.Done():
+		t.Fatal("daemon never reached relay")
+	}
+	// A separate read-only connection must be possible while the relay is
+	// blocked. On the old path DuckDB still had a read-write connection.
+	s, err := store.OpenReadOnly(ctx, db)
+	if err != nil {
+		t.Fatalf("relay wait blocks local analysis: %v", err)
+	}
+	s.Close()
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 
