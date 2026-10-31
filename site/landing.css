@@ -14,7 +14,8 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block;pointer-event
 #bloom{pointer-events:none;filter:blur(15px) saturate(1.2);mix-blend-mode:screen;opacity:.58}
 .atmosphere{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 65% 40%,transparent 30%,rgba(0,0,0,.5) 100%),repeating-linear-gradient(to bottom,rgba(0,0,0,.08) 0 1px,transparent 1px 3px);z-index:2}
 .atmosphere:after{content:'';position:absolute;inset:0;opacity:.045;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-.page{position:relative;z-index:3;min-height:100svh;display:grid;grid-template-rows:auto 1fr auto;gap:24px;padding:26px clamp(20px,4vw,58px) 24px;pointer-events:none}
+.page{position:relative;z-index:3;min-height:100svh;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto;gap:24px;padding:26px clamp(20px,4vw,58px) 24px;pointer-events:none}
+.page>*{min-width:0}
 .page a,.page button,.install{pointer-events:auto}
 .bar{display:flex;align-items:center;justify-content:space-between;gap:24px;text-transform:uppercase;font-size:11px;letter-spacing:.16em}
 .brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink)}
@@ -68,14 +69,16 @@ h1{margin:0;font-size:clamp(48px,6.5vw,96px);font-weight:300;line-height:1.05;le
 @media(max-width:1119px){
   .page{padding:22px clamp(20px,5vw,50px);gap:20px}
   .hero{width:100%;max-width:680px;margin:clamp(220px,42svh,390px) auto 0;padding-bottom:12px}
+  .install{align-items:flex-start}
+  .install code{white-space:normal;overflow-wrap:anywhere;overflow-x:visible}
   h1{font-size:clamp(38px,9vw,76px)}
   .lede{max-width:36em}
   .scene-control{left:50%;top:max(43svh,190px);gap:2px}.scene-label{display:none}
   .palettes{right:clamp(20px,5vw,50px);top:100px}
   .hud{display:none}
   .fallback{left:50%;top:24svh;width:min(65vw,350px)}
-  .bar{font-size:10px;letter-spacing:.12em}.bar nav{gap:20px}
-  .footer{max-width:680px;width:100%;margin:auto}
+  .bar{font-size:10px;letter-spacing:.12em;flex-wrap:wrap;row-gap:8px}.bar nav{gap:20px}
+  .footer{max-width:680px;width:100%;margin:auto;flex-wrap:wrap;row-gap:8px}
 }
 @media(max-width:480px){
   .brand{gap:8px}.brand svg{width:22px}.brand .slash{padding:0 1px}
