@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/brandonbosch/chatstrata/internal/model"
+	"github.com/brandonbosch/chatstrata/internal/project"
 	"github.com/brandonbosch/chatstrata/internal/store"
 )
 
@@ -242,6 +243,14 @@ func checkSources(e *env, s *store.Store) (int, error) {
 		if len(handles) > 0 && archived == 0 {
 			warn("source '%s': %d conversations on this machine, none in the archive (run `chatstrata ingest %s`, or start the daemon)",
 				name, len(handles), name)
+		}
+		if archived > 0 {
+			pending, err := project.PendingCollection(e.ctx, s, src, handles)
+			if err != nil {
+				warn("source '%s': can't check pending collection: %s", name, err)
+			} else if pending > 0 {
+				warn("source '%s': %d local conversations have uncollected changes; run `chatstrata ingest --auto`. If the daemon is running, check its logs for database locks; close direct DuckDB connections in analysis sessions and use MCP or `chatstrata query` instead", name, pending)
+			}
 		}
 
 		// Most recently collected conversations that projected to nothing:

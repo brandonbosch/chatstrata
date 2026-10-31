@@ -263,7 +263,12 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	closed := false
+	defer func() {
+		if !closed {
+			a.Close()
+		}
+	}()
 	err = collectInstalled(e, a, func(name string, err error) {
 		logger.Printf("%s: %s", name, err)
 	}, func(name string, c project.CollectResult) {
@@ -289,15 +294,29 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
+	// Sync only moves immutable log segments. A slow or unavailable relay
+	// must not keep DuckDB's write lock and block local CLI/MCP reads.
+	if err := a.Close(); err != nil {
+		return err
+	}
+	closed = true
 	res, err := devsync.NewClient(space).Sync(e.ctx, a.log)
 	if err != nil {
 		// The relay being away is normal: keep collecting, sync next time.
 		logger.Printf("sync skipped: %s", err)
 		return nil
 	}
-	stats, err = a.proj.CatchUp(e.ctx, false, e.stderr)
-	if err != nil {
-		return err
+	stats.Stored, stats.Removed = 0, 0
+	if res.Downloaded > 0 {
+		s, err := store.Open(e.ctx, a.store.Path)
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		stats, err = newProjector(s, a.log).CatchUp(e.ctx, false, e.stderr)
+		if err != nil {
+			return err
+		}
 	}
 	if res.Uploaded+res.Downloaded > 0 {
 		logger.Printf("sync: uploaded %d, downloaded %d segments, %d conversations updated",

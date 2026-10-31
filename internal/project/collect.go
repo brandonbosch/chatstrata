@@ -24,6 +24,39 @@ type CollectResult struct {
 	Failed    int
 }
 
+// PendingCollection counts local conversations with bytes not yet in the log.
+// It uses the collector's comparison rules without writing observations, so
+// doctor can detect a stalled collector even when the database is readable.
+func PendingCollection(ctx context.Context, s *store.Store, src model.Source, handles []model.Handle) (int, error) {
+	states, err := s.CollectorStates(ctx, src.Name())
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := s.TombstonedLocators(ctx, src.Name())
+	if err != nil {
+		return 0, err
+	}
+	pending := 0
+	for _, h := range handles {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		key := obslog.Key{Source: src.Name(), Locator: h.SourceNativeID}
+		if deleted[key] {
+			continue
+		}
+		prev, known := states[key]
+		c := observe(src, h, key, prev, known, true)
+		if c.err != nil {
+			return 0, fmt.Errorf("inspect local conversation: %w", c.err)
+		}
+		if c.obs != nil {
+			pending++
+		}
+	}
+	return pending, nil
+}
+
 type collected struct {
 	key   obslog.Key
 	obs   *obslog.Observation
