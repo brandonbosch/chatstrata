@@ -50,9 +50,11 @@ h1{margin:0;font-size:clamp(48px,6.5vw,96px);font-weight:300;line-height:1.05;le
 .scene-control button{font-size:10px;text-transform:uppercase;letter-spacing:.12em;border:0;border-bottom:1px solid var(--line);padding:7px 0;background:transparent;color:var(--dim)}
 .scene-control button:hover{color:var(--accent)}
 .scene-control button span{padding-left:10px;color:var(--accent)}
-.palettes{position:fixed;z-index:4;right:clamp(20px,4vw,58px);top:105px;display:flex;flex-direction:column;gap:14px}
-.palettes button{width:9px;height:9px;padding:0;background:var(--swatch);border:0;transform:rotate(45deg);opacity:.4}
-.palettes button[aria-pressed=true]{opacity:1;box-shadow:0 0 15px var(--swatch)}
+.palettes{position:fixed;z-index:4;right:clamp(20px,4vw,58px);top:105px;display:flex;flex-direction:column;gap:3px}
+.palettes button{width:26px;height:26px;padding:0;display:grid;place-items:center;background:transparent;border:0;opacity:.4}
+.palettes button:after{content:'';width:9px;height:9px;background:var(--swatch);transform:rotate(45deg)}
+.palettes button[aria-pressed=true]{opacity:1}
+.palettes button[aria-pressed=true]:after{box-shadow:0 0 15px var(--swatch)}
 .hud{position:fixed;z-index:3;right:clamp(20px,4vw,58px);bottom:80px;display:grid;grid-template-columns:auto auto;gap:3px 24px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;pointer-events:none;color:var(--dim)}
 .hud dt{opacity:.5}.hud dd{margin:0;text-align:right;color:var(--accent)}
 .fallback{position:fixed;z-index:1;left:74%;top:42svh;transform:translate(-50%,-50%);width:min(36vw,430px);filter:drop-shadow(0 0 35px rgba(var(--accent-rgb),.18))}
