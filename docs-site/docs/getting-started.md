@@ -23,6 +23,9 @@ go install github.com/brandonbosch/chatstrata/v2/cmd/chatstrata@latest
 chatstrata reindex --install-fts
 ```
 
+The PyPI package is the retired Python application. `pip install chatstrata`
+does not install Go v2. See [legacy migration](migrations.md) if you used it.
+
 ## Collect and connect
 
 ```sh

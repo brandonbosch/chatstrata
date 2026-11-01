@@ -1,7 +1,7 @@
 # chatstrata
 
 <p align="center">
-  <img src="docs/images/chatstrata.png" alt="chatstrata" width="360">
+  <img src="docs-site/docs/images/chatstrata.svg" alt="chatstrata" width="180">
 </p>
 
 **Your AI conversations, archived locally and queryable by your agents.**
@@ -158,7 +158,8 @@ go build -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
 scripts/smoke-release.sh bin/chatstrata
 ```
 
-See [schema](docs/schema.md), [adapter guide](docs/adapter-guide.md),
+See the [documentation](https://chatstrata.sprawlcommons.com/getting-started/),
+[schema](docs/schema.md), [adapter guide](docs/adapter-guide.md),
 [release instructions](docs/rewrite/release.md), and [regression fixtures](spec/README.md).
 
 ## License

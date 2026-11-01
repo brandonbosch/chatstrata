@@ -1,7 +1,6 @@
 name: Release
 
-# Go releases are tags starting with v2 (release candidates during M5,
-# v2.0.0 at M6). Python releases are v0.x tags and go through publish.yml.
+# Native Go releases use v2.* tags. Python/PyPI publishing is retired.
 on:
   push:
     tags: ["v2.*"]

@@ -60,11 +60,6 @@ h1{margin:0;font-size:clamp(48px,6.5vw,96px);font-weight:300;line-height:1.05;le
 .hud dt{opacity:.5}.hud dd{margin:0;text-align:right;color:var(--accent)}
 .fallback{position:fixed;z-index:1;left:74%;top:42svh;transform:translate(-50%,-50%);width:min(36vw,430px);filter:drop-shadow(0 0 35px rgba(var(--accent-rgb),.18))}
 .webgl-ready .fallback{display:none}
-.fallback path{transition:transform 1s cubic-bezier(.2,.7,.2,1)}
-.expanded .fallback path:nth-child(1){transform:translateY(16px)}
-.expanded .fallback path:nth-child(2){transform:translateY(5px)}
-.expanded .fallback path:nth-child(3){transform:translateY(-5px)}
-.expanded .fallback path:nth-child(4){transform:translateY(-16px)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 @media(max-width:1119px){
   .page{padding:22px clamp(20px,5vw,50px);gap:20px}

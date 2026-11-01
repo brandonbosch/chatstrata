@@ -18,6 +18,13 @@ subdomain, and disables usage metrics and dependency instrumentation. It does
 not publish archives, source transcripts, repository credentials, or an MCP
 server. Never commit OAuth credentials or personal API tokens.
 
+The shared logo is `docs-site/docs/images/chatstrata.svg`, used by the README,
+documentation header/favicon, and landing-page favicon and static fallback.
+Edit that file to update the mark everywhere.
+
+Preview the combined build with `python3 -m http.server 8000 --directory docs-site/site`
+from the repository root.
+
 The build overlays the standalone landing page in `../site/` on the generated
 documentation. Guides keep their existing paths (`/getting-started/`, `/mcp/`,
 and so on). The landing page uses local assets only: a WebGL2 scene, an SVG

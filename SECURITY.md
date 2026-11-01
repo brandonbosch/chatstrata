@@ -1,31 +1,30 @@
-# Security Policy
+# Security policy
 
-chatstrata is a local-first personal archive tool. It stores conversation data
-on the user's machine and should not make network calls during ingestion,
-querying, or redaction.
+chatstrata stores AI conversations locally. Normal collection, search, SQL,
+and MCP make no network requests. Optional device sync sends encrypted
+observation-log segments to an explicitly configured relay.
 
-## Reporting a Vulnerability
+## Report a vulnerability
 
-Please report security issues privately through GitHub security advisories if
-available, or by opening a minimal issue that does not include sensitive details.
+Report security issues privately through GitHub security advisories when
+available. Otherwise, open a minimal issue without sensitive details.
+Never include private transcripts, API keys, pairing codes, or database files.
 
-Do not include private transcripts, API keys, database files, or other secrets in
-public issues.
+## Security scope
 
-## Security Scope
+- SQL access must remain read-only and restricted to the archive.
+- Source adapters parse untrusted local transcripts and exports.
+- Releases must exclude private data, credentials, and local build artifacts.
+- Device sync must protect segment contents and pairing keys.
 
-Security-sensitive areas include:
+Local transcripts, observation logs, and DuckDB files are plaintext. Go v2
+has no automatic redaction or anonymization. Agent providers may receive MCP
+query results. HTTP MCP transports do not provide public-service authentication;
+use stdio for local clients. See the
+[privacy guide](docs-site/docs/privacy.md) and
+[sync security limits](docs/rewrite/sync.md#security-limits-v20).
 
-- Accidental network calls during local operations.
-- SQL surfaces that can mutate or exfiltrate local data unexpectedly.
-- Redaction misses for common developer secrets.
-- Packaging mistakes that include local data, caches, virtualenvs, or generated
-  artifacts.
-- Source adapters that parse untrusted exports unsafely.
+## Supported versions
 
-Redaction is best-effort and is not a guarantee of anonymization. Users should
-review redacted output before publishing it.
-
-## Supported Versions
-
-During the public alpha, only the latest released version is supported.
+Only the latest Go release is supported. The Python application and PyPI
+publishing are retired; historical source is preserved at `python-final`.
