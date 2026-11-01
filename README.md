@@ -160,3 +160,9 @@ scripts/smoke-release.sh bin/chatstrata
 
 See [schema](docs/schema.md), [adapter guide](docs/adapter-guide.md),
 [release instructions](docs/rewrite/release.md), and [regression fixtures](spec/README.md).
+
+## License
+
+Chatstrata is licensed under the [MIT License](LICENSE).
+Third-party dependencies and bundled assets retain their respective licenses,
+including the [JetBrains Mono font license](site/FONT-LICENSE.txt).
