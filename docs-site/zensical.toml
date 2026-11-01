@@ -18,8 +18,8 @@ nav = [
   { "Add an adapter" = "adapters.md" },
 ]
 [project.theme]
-logo = "images/chatstrata.png"
-favicon = "images/chatstrata.png"
+logo = "images/chatstrata.svg"
+favicon = "images/chatstrata.svg"
 features = ["content.code.copy", "navigation.sections", "navigation.footer", "search.highlight"]
 [project.theme.font]
 text = false

@@ -3,7 +3,8 @@
 **Schema version:** 5
 
 chatstrata stores conversations in a normalized form designed to be source-agnostic.
-The same tables hold a Claude Code session, a claude.ai export, and a ChatGPT export.
+The same tables hold Claude Code sessions, Codex CLI sessions, and claude.ai
+exports. ChatGPT web exports are not currently supported.
 
 ## Versioning
 
@@ -33,9 +34,9 @@ One row per conversation/session/thread.
 
 | column            | type        | notes                                                       |
 |-------------------|-------------|-------------------------------------------------------------|
-| id                | VARCHAR PK  | chatstrata-internal UUID                                    |
+| id                | VARCHAR PK  | deterministic chatstrata ID                                 |
 | source_id         | VARCHAR FK  | -> sources.id                                               |
-| source_native_id  | VARCHAR     | id from the source (filename, ChatGPT id, etc.)             |
+| source_native_id  | VARCHAR     | source conversation identifier                              |
 | title             | VARCHAR     | summary or fallback to first user turn                      |
 | project           | VARCHAR     | cwd / workspace / project, if applicable                    |
 | started_at        | TIMESTAMPTZ |                                                             |
@@ -53,7 +54,7 @@ One row per turn.
 
 | column                 | type        | notes                                                |
 |------------------------|-------------|------------------------------------------------------|
-| id                     | VARCHAR PK  | chatstrata-internal UUID                             |
+| id                     | VARCHAR PK  | deterministic chatstrata ID                           |
 | conversation_id        | VARCHAR FK  |                                                      |
 | source_native_id       | VARCHAR     | source-assigned id (uuid for Claude Code)            |
 | parent_message_id      | VARCHAR     | for tree-shaped histories (ChatGPT branches)         |
@@ -68,7 +69,7 @@ One row per content unit inside a message. This is where the data lives.
 
 | column         | type    | notes                                                                  |
 |----------------|---------|------------------------------------------------------------------------|
-| id             | VARCHAR |                                                                        |
+| id             | VARCHAR PK |                                                                     |
 | message_id     | VARCHAR |                                                                        |
 | block_index    | INTEGER | order within message                                                   |
 | type           | VARCHAR | text / tool_use / tool_result / thinking / image / attachment          |
@@ -85,9 +86,9 @@ and project context. Use this for "every bash command I ran via Claude Code" que
 File attachments referenced from messages.
 
 ### `raw_events`
-The source data preserved line-for-line. Lets us re-parse without re-ingesting
-when normalization logic changes. **This is critical** — never assume the
-normalized data is the only copy.
+Source records retained in the projection for SQL access and legacy import.
+The adjacent observation log preserves collected bytes and is the source of
+truth for rebuilds. Back up the log; normalized tables alone are insufficient.
 
 ### `labels`
 Legacy classifier answer tables retained for SQL compatibility (schema v4).
