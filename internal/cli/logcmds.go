@@ -38,14 +38,14 @@ func runRebuild(e *env, args []string) error {
 			return err
 		}
 	}
-	fmt.Fprintf(e.stdout, "Rebuilding %s from %s...\n", dbPath, logPath)
+	_, _ = fmt.Fprintf(e.stdout, "Rebuilding %s from %s...\n", dbPath, logPath)
 	s, err := store.Open(e.ctx, tmp)
 	if err != nil {
 		return err
 	}
 	l, err := obslog.Open(logPath)
 	if err != nil {
-		s.Close()
+		_ = s.Close()
 		return err
 	}
 	a := &archive{store: s, log: l}
@@ -69,10 +69,10 @@ func runRebuild(e *env, args []string) error {
 	if err := os.Rename(tmp, dbPath); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Done. Segments: %d  Conversations: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d\n",
+	_, _ = fmt.Fprintf(e.stdout, "Done. Segments: %d  Conversations: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d\n",
 		stats.Segments, stats.Stored, stats.Unported, stats.Failed)
 	if !stats.Reindexed {
-		fmt.Fprintln(e.stdout, "Run `chatstrata reindex` to rebuild the search index.")
+		_, _ = fmt.Fprintln(e.stdout, "Run `chatstrata reindex` to rebuild the search index.")
 	}
 	return nil
 }
@@ -98,14 +98,14 @@ func runImportLegacy(e *env, args []string) error {
 		return err
 	}
 	if _, err := os.Stat(legacyPath); err != nil {
-		return fmt.Errorf("Python archive: %w", err)
+		return fmt.Errorf("python archive: %w", err)
 	}
 
 	a, err := openArchive(e, *db)
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 	if own, _ := filepath.Abs(a.store.Path); own == legacyPath {
 		return usageError{"that is this archive; pass the Python archive (chatstrata.duckdb)"}
 	}
@@ -121,9 +121,9 @@ func runImportLegacy(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Done. Imported: %d conversations  Already imported: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d\n",
+	_, _ = fmt.Fprintf(e.stdout, "Done. Imported: %d conversations  Already imported: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d\n",
 		len(obs), already, stats.Unported, stats.Failed)
-	fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
+	_, _ = fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
 	return nil
 }
 
@@ -139,7 +139,7 @@ func readLegacy(ctx context.Context, a *archive, path string) ([]*obslog.Observa
 	if err != nil {
 		return nil, 0, err
 	}
-	defer legacy.Close()
+	defer func() { _ = legacy.Close() }()
 
 	convs, err := legacy.QueryContext(ctx, `
 		SELECT source_id, source_native_id, raw_path, project FROM conversations
@@ -147,6 +147,7 @@ func readLegacy(ctx context.Context, a *archive, path string) ([]*obslog.Observa
 	if err != nil {
 		return nil, 0, fmt.Errorf("read %s (is the Python app writing to it?): %w", path, err)
 	}
+	defer func() { _ = convs.Close() }()
 	type conv struct {
 		source, native   string
 		rawPath, project sql.NullString
@@ -155,34 +156,40 @@ func readLegacy(ctx context.Context, a *archive, path string) ([]*obslog.Observa
 	for convs.Next() {
 		var c conv
 		if err := convs.Scan(&c.source, &c.native, &c.rawPath, &c.project); err != nil {
-			convs.Close()
 			return nil, 0, err
 		}
 		list = append(list, c)
 	}
-	convs.Close()
+	if err := convs.Err(); err != nil {
+		return nil, 0, err
+	}
 
 	var out []*obslog.Observation
 	already := 0
 	for _, c := range list {
-		rows, err := legacy.QueryContext(ctx, `
-			SELECT payload::VARCHAR FROM raw_events
-			WHERE source_id = ? AND source_native_conversation_id = ?
-			ORDER BY line_number`, c.source, c.native)
+		var b strings.Builder
+		err := func() error {
+			rows, err := legacy.QueryContext(ctx, `
+				SELECT payload::VARCHAR FROM raw_events
+				WHERE source_id = ? AND source_native_conversation_id = ?
+				ORDER BY line_number`, c.source, c.native)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = rows.Close() }()
+			for rows.Next() {
+				var line string
+				if err := rows.Scan(&line); err != nil {
+					return err
+				}
+				b.WriteString(line)
+				b.WriteByte('\n')
+			}
+			return rows.Err()
+		}()
 		if err != nil {
 			return nil, 0, err
 		}
-		var b strings.Builder
-		for rows.Next() {
-			var line string
-			if err := rows.Scan(&line); err != nil {
-				rows.Close()
-				return nil, 0, err
-			}
-			b.WriteString(line)
-			b.WriteByte('\n')
-		}
-		rows.Close()
 		if b.Len() == 0 {
 			continue
 		}

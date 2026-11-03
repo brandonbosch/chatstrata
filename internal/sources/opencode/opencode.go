@@ -60,7 +60,7 @@ func (Source) Discover(path string) ([]model.Handle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 	tables, err := tableNames(ctx, db)
 	if err != nil {

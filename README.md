@@ -143,20 +143,16 @@ releases remain available, but new application development and releases are Go-o
 
 ## Development
 
-```sh
-go build -o bin/chatstrata ./cmd/chatstrata
-go test ./...
-go vet ./...
-go test ./internal/project -run '^$' -bench . -benchmem
-```
-
-For a release-style build with full-text search:
+One command checks everything, and CI runs the same script:
 
 ```sh
-go run ./internal/tools/fetchfts
-go build -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
-scripts/smoke-release.sh bin/chatstrata
+./scripts/check.sh        # gofmt, vet, tests (including the static gates), build
+./scripts/check.sh --full # also go mod tidy -diff, golangci-lint, release build + smoke
 ```
+
+`go test ./...` includes `internal/guard`, which enforces package boundaries,
+a 400-line file ratchet and an escape-hatch allowlist; see `AGENTS.md`.
+Benchmarks are separate: `go test ./internal/project -run '^$' -bench . -benchmem`.
 
 See the [documentation](https://chatstrata.sprawlcommons.com/getting-started/),
 [schema](docs/schema.md), [adapter guide](docs/adapter-guide.md),

@@ -66,7 +66,7 @@ func (c *Client) Devices(ctx context.Context) ([]RemoteDevice, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
 	}
@@ -87,7 +87,7 @@ func (c *Client) segments(ctx context.Context, device string) (map[uint64]bool, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
 		return map[uint64]bool{}, nil
 	}
@@ -157,7 +157,7 @@ func (c *Client) Sync(ctx context.Context, l *obslog.Log) (Result, error) {
 			if err != nil {
 				return res, err
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			switch resp.StatusCode {
 			case http.StatusCreated:
 				res.Uploaded++
@@ -207,7 +207,7 @@ func (c *Client) download(ctx context.Context, l *obslog.Log, device string, seq
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return statusError(resp)
 	}

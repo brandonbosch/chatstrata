@@ -56,7 +56,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/spaces/{space}/devices/{device}/segments", s.listSegments)
 	mux.HandleFunc("GET /v1/spaces/{space}/devices/{device}/segments/{seq}", s.getSegment)
 	mux.HandleFunc("PUT /v1/spaces/{space}/devices/{device}/segments/{seq}", s.putSegment)
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok\n") })
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok\n") })
 	return mux
 }
 
@@ -246,9 +246,9 @@ func (s *Server) getSegment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	w.Header().Set("Content-Type", "application/octet-stream")
-	io.Copy(w, f)
+	_, _ = io.Copy(w, f)
 }
 
 func (s *Server) putSegment(w http.ResponseWriter, r *http.Request) {
@@ -274,7 +274,7 @@ func (s *Server) putSegment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	n, err := io.Copy(tmp, http.MaxBytesReader(w, r.Body, MaxSegmentBytes))
 	if err == nil {
 		err = tmp.Sync()
@@ -307,5 +307,5 @@ func (s *Server) putSegment(w http.ResponseWriter, r *http.Request) {
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }

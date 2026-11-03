@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -22,8 +23,8 @@ func TestIncrementalIngestSeesDatabaseChangesWithoutMtime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer src.Close()
-	if _, err := src.Exec(string(script)); err != nil {
+	defer func() { _ = src.Close() }()
+	if _, err := src.ExecContext(context.Background(), string(script)); err != nil {
 		t.Fatal(err)
 	}
 	archive := filepath.Join(dir, "archive.duckdb")
@@ -33,7 +34,7 @@ func TestIncrementalIngestSeesDatabaseChangesWithoutMtime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := src.Exec(`
+	if _, err := src.ExecContext(context.Background(), `
 		INSERT INTO message VALUES ('msg_late', 'ses_test001', 1700000100000, 1700000100000,
 			'{"role": "user", "time": {"created": 1700000100000}}');
 		INSERT INTO part VALUES ('prt_late', 'msg_late', 'ses_test001', 1700000100000, 1700000100000,
@@ -66,8 +67,8 @@ func TestSnapshotSourceFollowsRewrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer src.Close()
-	if _, err := src.Exec(string(script)); err != nil {
+	defer func() { _ = src.Close() }()
+	if _, err := src.ExecContext(context.Background(), string(script)); err != nil {
 		t.Fatal(err)
 	}
 	archive := filepath.Join(dir, "archive.duckdb")
@@ -79,7 +80,7 @@ func TestSnapshotSourceFollowsRewrites(t *testing.T) {
 	run(t, "ingest", "opencode", "--path", dbPath, "--db", archive)
 	first := count()
 
-	if _, err := src.Exec(`DELETE FROM part WHERE message_id = 'msg_asst001'; DELETE FROM message WHERE id = 'msg_asst001'`); err != nil {
+	if _, err := src.ExecContext(context.Background(), `DELETE FROM part WHERE message_id = 'msg_asst001'; DELETE FROM message WHERE id = 'msg_asst001'`); err != nil {
 		t.Fatal(err)
 	}
 	run(t, "ingest", "opencode", "--path", dbPath, "--db", archive)

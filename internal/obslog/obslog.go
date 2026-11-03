@@ -295,7 +295,7 @@ func (l *Log) ImportSegment(device string, firstSeq uint64, data []byte) error {
 	var prev uint64
 	for i := 0; ; i++ {
 		o, _, err := readRecord(r, false)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			if i == 0 {
 				return fmt.Errorf("%w: empty segment", ErrCorrupt)
 			}
@@ -459,7 +459,7 @@ func (l *Log) ReadSegment(rel string, withContent bool, fn func(*Observation, Lo
 	if err != nil {
 		return fmt.Errorf("open segment: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	r := bufio.NewReaderSize(f, 1<<20)
 	magic := make([]byte, len(segmentMagic))
 	if _, err := io.ReadFull(r, magic); err != nil || string(magic) != segmentMagic {
@@ -468,7 +468,7 @@ func (l *Log) ReadSegment(rel string, withContent bool, fn func(*Observation, Lo
 	pos := int64(len(segmentMagic))
 	for {
 		o, size, err := readRecord(r, withContent)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil
 		}
 		if err != nil {
@@ -487,7 +487,7 @@ func (l *Log) ReadAt(loc Location) (*Observation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open segment: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if _, err := f.Seek(loc.Position, io.SeekStart); err != nil {
 		return nil, err
 	}
@@ -501,7 +501,7 @@ func (l *Log) ReadAt(loc Location) (*Observation, error) {
 func readRecord(r io.Reader, withContent bool) (*Observation, int64, error) {
 	var prefix [12]byte
 	if _, err := io.ReadFull(r, prefix[:]); err != nil {
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil, 0, io.EOF
 		}
 		return nil, 0, ErrCorrupt
@@ -521,7 +521,7 @@ func readRecord(r io.Reader, withContent bool) (*Observation, int64, error) {
 	}
 	var o Observation
 	if err := json.Unmarshal(body[:headerLen], &o); err != nil {
-		return nil, 0, fmt.Errorf("%w: %v", ErrCorrupt, err)
+		return nil, 0, fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	if o.FormatVersion > FormatVersion {
 		return nil, 0, fmt.Errorf("observation format %d is newer than this version of chatstrata supports (%d)",
@@ -530,7 +530,7 @@ func readRecord(r io.Reader, withContent bool) (*Observation, int64, error) {
 	if withContent {
 		content, err := zstdDecoder().DecodeAll(body[headerLen:], nil)
 		if err != nil {
-			return nil, 0, fmt.Errorf("%w: %v", ErrCorrupt, err)
+			return nil, 0, fmt.Errorf("%w: %w", ErrCorrupt, err)
 		}
 		o.Content = content
 	}
@@ -544,13 +544,13 @@ func writeFileAtomic(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
@@ -560,8 +560,8 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	if d, err := os.Open(dir); err == nil {
-		d.Sync()
-		d.Close()
+		defer func() { _ = d.Close() }()
+		return d.Sync()
 	}
 	return nil
 }

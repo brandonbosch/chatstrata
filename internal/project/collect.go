@@ -120,7 +120,7 @@ func (p *Projector) Collect(ctx context.Context, src model.Source, handles []mod
 		switch {
 		case c.err != nil:
 			result.Failed++
-			fmt.Fprintf(errs, "  ! failed to read %s: %s\n", c.path, c.err)
+			_, _ = fmt.Fprintf(errs, "  ! failed to read %s: %s\n", c.path, c.err)
 		case c.obs != nil:
 			batch = append(batch, c.obs)
 			batchStates = append(batchStates, c)

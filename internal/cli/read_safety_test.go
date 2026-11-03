@@ -30,7 +30,7 @@ func TestQueriesCannotReadOutsideArchive(t *testing.T) {
 	var requests atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
-		fmt.Fprintln(w, "value\nsynthetic")
+		_, _ = fmt.Fprintln(w, "value\nsynthetic")
 	}))
 	defer srv.Close()
 	for _, sql := range []string{
@@ -57,7 +57,7 @@ func TestQueriesCannotReadOutsideArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	if _, err := s.Conn().ExecContext(context.Background(), "SET enable_external_access = true"); err == nil {
 		t.Fatal("read connection allowed re-enabling external access")
 	}

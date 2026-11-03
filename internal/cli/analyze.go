@@ -29,9 +29,9 @@ func runAnalyze(e *env, args []string) error {
 		}
 	}
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
-		fmt.Fprintln(e.stdout, "Usage: chatstrata analyze COMMAND [--db PATH] [--json]\n\nAnalyze your conversation archive.\n\nCommands:")
+		_, _ = fmt.Fprintln(e.stdout, "Usage: chatstrata analyze COMMAND [--db PATH] [--json]\n\nAnalyze your conversation archive.\n\nCommands:")
 		for _, c := range analyzeCommands {
-			fmt.Fprintf(e.stdout, "  %-15s %s\n", c.name, c.summary)
+			_, _ = fmt.Fprintf(e.stdout, "  %-15s %s\n", c.name, c.summary)
 		}
 		return nil
 	}
@@ -147,12 +147,12 @@ func runAnalysisQuery(e *env, db, sql string, params []any, asJSON bool) error {
 	if s == nil || err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	rows, err := s.Conn().QueryContext(e.ctx, sql, params...)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	if err != nil {
 		return err
@@ -183,7 +183,7 @@ func runAnalysisQuery(e *env, db, sql string, params []any, asJSON bool) error {
 // Python analyze commands do.
 func writeTable(e *env, cols []string, values [][]any) {
 	if len(values) == 0 {
-		fmt.Fprintln(e.stdout, "No data.")
+		_, _ = fmt.Fprintln(e.stdout, "No data.")
 		return
 	}
 	widths := make([]int, len(cols))
@@ -197,14 +197,14 @@ func writeTable(e *env, cols []string, values [][]any) {
 		for i := range cells {
 			cells[i] += strings.Repeat(" ", widths[i]-len([]rune(cells[i])))
 		}
-		fmt.Fprintln(e.stdout, strings.Join(cells, "  "))
+		_, _ = fmt.Fprintln(e.stdout, strings.Join(cells, "  "))
 	}
 	line(append([]string(nil), cols...))
 	dashes := make([]string, len(cols))
 	for i, w := range widths {
 		dashes[i] = strings.Repeat("-", w)
 	}
-	fmt.Fprintln(e.stdout, strings.Join(dashes, "  "))
+	_, _ = fmt.Fprintln(e.stdout, strings.Join(dashes, "  "))
 	for _, row := range values {
 		cells := make([]string, len(row))
 		for i, v := range row {

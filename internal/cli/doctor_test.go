@@ -48,7 +48,7 @@ func TestDoctorChecksSources(t *testing.T) {
 	if err := s.EnsureSource(context.Background(), sources["claude_export"]); err != nil {
 		t.Fatal(err)
 	}
-	s.Close()
+	_ = s.Close()
 	if out := run(t, "doctor", "--db", db); !strings.Contains(out, "All checks passed") {
 		t.Errorf("healthy archive:\n%s", out)
 	}
@@ -85,8 +85,8 @@ func TestDoctorChecksSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer oc.Close()
-	if _, err := oc.Exec(`CREATE TABLE session_v3 (id TEXT); CREATE TABLE session_entry (id TEXT)`); err != nil {
+	defer func() { _ = oc.Close() }()
+	if _, err := oc.ExecContext(context.Background(), `CREATE TABLE session_v3 (id TEXT); CREATE TABLE session_entry (id TEXT)`); err != nil {
 		t.Fatal(err)
 	}
 	out := run(t, "doctor", "--db", db)
@@ -111,8 +111,8 @@ func TestOpenCodeCheckNotesUnknownKinds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-	if _, err := db.Exec(string(script)); err != nil {
+	defer func() { _ = db.Close() }()
+	if _, err := db.ExecContext(context.Background(), string(script)); err != nil {
 		t.Fatal(err)
 	}
 	src := sources["opencode"].(interface {
@@ -121,7 +121,7 @@ func TestOpenCodeCheckNotesUnknownKinds(t *testing.T) {
 	if problems, notes := src.Check(path); len(problems)+len(notes) != 0 {
 		t.Errorf("fixture: problems %v, notes %v", problems, notes)
 	}
-	if _, err := db.Exec(`INSERT INTO session_message VALUES ('m9','ses_test001','handoff',99,0,0,'{}');
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO session_message VALUES ('m9','ses_test001','handoff',99,0,0,'{}');
 		INSERT INTO part VALUES ('p9','msg_user001','ses_test001',0,0,'{"type":"subtask"}')`); err != nil {
 		t.Fatal(err)
 	}

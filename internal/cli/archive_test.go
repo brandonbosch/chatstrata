@@ -49,7 +49,7 @@ func countObservations(t *testing.T, db string) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	var n int
 	if err := s.Conn().QueryRowContext(context.Background(), `SELECT count(*) FROM observations`).Scan(&n); err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestCrashAfterLogWriteIsRecovered(t *testing.T) {
 	if _, err := a.proj.Collect(e.ctx, sources["claude_code"], handles, false, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	a.Close() // "crash": the segment is on disk, nothing is projected
+	_ = a.Close() // "crash": the segment is on disk, nothing is projected
 
 	run(t, "stats", "--db", db) // a reader doesn't change anything
 	run(t, "ingest", "claude_code", "--path", root, "--db", db)
@@ -123,7 +123,7 @@ func TestRelogAfterLostCollectorStateIsHarmless(t *testing.T) {
 	if _, err := s.Conn().ExecContext(ctx, `DELETE FROM collector_state`); err != nil {
 		t.Fatal(err)
 	}
-	s.Close()
+	_ = s.Close()
 
 	run(t, "ingest", "claude_code", "--path", root, "--db", db)
 	if got := dump(t, db); !reflect.DeepEqual(got, want) {
@@ -157,7 +157,7 @@ func TestSearchWithNoMatches(t *testing.T) {
 		if _, err := s.Conn().ExecContext(context.Background(), "PRAGMA drop_fts_index('content_blocks')"); err != nil {
 			t.Fatal(err)
 		}
-		s.Close()
+		_ = s.Close()
 		got = run(t, "search", query, "--db", db)
 		if !strings.Contains(got, "`chatstrata reindex`") {
 			t.Errorf("no matches without an index = %q, want a reindex hint", got)

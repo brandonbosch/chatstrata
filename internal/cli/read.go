@@ -27,7 +27,7 @@ func openForReading(e *env, db string) (*store.Store, error) {
 	}
 	s, err := store.OpenReadOnly(e.ctx, dbPath)
 	if errors.Is(err, store.ErrNoArchive) {
-		fmt.Fprintf(e.stdout, "No archive at %s yet. Try `chatstrata ingest claude_code`.\n", dbPath)
+		_, _ = fmt.Fprintf(e.stdout, "No archive at %s yet. Try `chatstrata ingest claude_code`.\n", dbPath)
 		return nil, nil
 	}
 	return s, err
@@ -44,7 +44,7 @@ func validateReadOnly(query string) error {
 		return err
 	}
 	if clean == "" {
-		return errors.New("Empty query.")
+		return errors.New("empty query")
 	}
 	keyword := func(s string) string {
 		i := 0
@@ -62,9 +62,9 @@ func validateReadOnly(query string) error {
 		case "TABLE_INFO", "SHOW_TABLES", "DATABASE_LIST", "VERSION", "FUNCTIONS", "COLLATIONS", "STORAGE_INFO":
 			return nil
 		}
-		return errors.New("Only read-only metadata PRAGMAs are permitted (table_info, show_tables, database_list, version, functions, collations, storage_info).")
+		return errors.New("only read-only metadata PRAGMAs are permitted (table_info, show_tables, database_list, version, functions, collations, storage_info)")
 	default:
-		return fmt.Errorf("%s queries are not allowed. Only SELECT/WITH/DESCRIBE/SHOW/PRAGMA are permitted.", first)
+		return fmt.Errorf("%s queries are not allowed; only SELECT/WITH/DESCRIBE/SHOW/PRAGMA are permitted", first)
 	}
 }
 
@@ -97,14 +97,14 @@ func statementText(query string) (string, error) {
 				}
 			}
 			if depth != 0 {
-				return "", errors.New("Unterminated SQL comment.")
+				return "", errors.New("unterminated SQL comment")
 			}
 			clean.WriteByte(' ')
 		case query[i] == ' ' || query[i] == '\t' || query[i] == '\n' || query[i] == '\r':
 			clean.WriteByte(' ')
 			i++
 		case ended:
-			return "", errors.New("Multi-statement queries are not allowed.")
+			return "", errors.New("multi-statement queries are not allowed")
 		case query[i] == ';':
 			ended = true
 			i++
@@ -124,14 +124,14 @@ func statementText(query string) (string, error) {
 				}
 			}
 			if !closed {
-				return "", errors.New("Unterminated SQL string or identifier.")
+				return "", errors.New("unterminated SQL string or identifier")
 			}
 			clean.WriteString(" ? ")
 		default:
 			if tag := dollarQuote.FindString(query[i:]); tag != "" {
 				end := strings.Index(query[i+len(tag):], tag)
 				if end < 0 {
-					return "", errors.New("Unterminated SQL string.")
+					return "", errors.New("unterminated SQL string")
 				}
 				i += len(tag)*2 + end
 				clean.WriteString(" ? ")
@@ -168,7 +168,7 @@ func runQuery(e *env, args []string) error {
 	if s == nil || err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	ctx, cancel := context.WithTimeout(e.ctx, queryTimeout)
 	defer cancel()
@@ -179,7 +179,7 @@ func runQuery(e *env, args []string) error {
 		}
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, values, truncated, err := collect(rows)
 	if err != nil {
 		return err
@@ -189,22 +189,22 @@ func runQuery(e *env, args []string) error {
 		return writeJSONRows(e.stdout, cols, values)
 	}
 	if len(cols) > 0 {
-		fmt.Fprintln(e.stdout, strings.Join(cols, "\t"))
+		_, _ = fmt.Fprintln(e.stdout, strings.Join(cols, "\t"))
 		dashes := make([]string, len(cols))
 		for i, c := range cols {
 			dashes[i] = strings.Repeat("-", max(3, len([]rune(c))))
 		}
-		fmt.Fprintln(e.stdout, strings.Join(dashes, "\t"))
+		_, _ = fmt.Fprintln(e.stdout, strings.Join(dashes, "\t"))
 	}
 	for _, row := range values {
 		cells := make([]string, len(row))
 		for i, v := range row {
 			cells[i] = formatValue(v)
 		}
-		fmt.Fprintln(e.stdout, strings.Join(cells, "\t"))
+		_, _ = fmt.Fprintln(e.stdout, strings.Join(cells, "\t"))
 	}
 	if truncated {
-		fmt.Fprintln(e.stdout, "\nResults truncated. Refine the query or add LIMIT.")
+		_, _ = fmt.Fprintln(e.stdout, "\nResults truncated. Refine the query or add LIMIT.")
 	}
 	return nil
 }
@@ -225,7 +225,7 @@ func collect(rows *sql.Rows) ([]string, [][]any, bool, error) {
 	}
 	size := len(header)*2 + 2048
 	if size > maxResultBytes {
-		return nil, nil, false, errors.New("Query column names exceed the result limit; use shorter aliases.")
+		return nil, nil, false, errors.New("query column names exceed the result limit; use shorter aliases")
 	}
 	var values [][]any
 	truncated := false
@@ -282,7 +282,7 @@ func writeJSONRows(w io.Writer, cols []string, values [][]any) error {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(&b, "\n    %s: %s", key, val)
+			_, _ = fmt.Fprintf(&b, "\n    %s: %s", key, val)
 		}
 		b.WriteString("\n  }")
 	}
@@ -405,7 +405,7 @@ func runSearch(e *env, args []string) error {
 	if s == nil || err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	results, err := searchFTS(e.ctx, s, query, conditions, params, *limit)
 	substring := err != nil
@@ -435,11 +435,11 @@ func runSearch(e *env, args []string) error {
 		// to fall back to plain substring matching.
 		switch {
 		case !substring:
-			fmt.Fprintln(e.stdout, "No results.")
+			_, _ = fmt.Fprintln(e.stdout, "No results.")
 		case s.LoadFTS(e.ctx):
-			fmt.Fprintln(e.stdout, "No results (substring match). Run `chatstrata reindex` for full-text search.")
+			_, _ = fmt.Fprintln(e.stdout, "No results (substring match). Run `chatstrata reindex` for full-text search.")
 		default:
-			fmt.Fprintln(e.stdout, "No results (substring match). Run `chatstrata reindex --install-fts` once for full-text search.")
+			_, _ = fmt.Fprintln(e.stdout, "No results (substring match). Run `chatstrata reindex --install-fts` once for full-text search.")
 		}
 		return nil
 	}
@@ -462,10 +462,10 @@ func runSearch(e *env, args []string) error {
 		return enc.Encode(out)
 	}
 
-	fmt.Fprintf(e.stdout, "  (keyword search, %d results)\n\n", len(results))
+	_, _ = fmt.Fprintf(e.stdout, "  (keyword search, %d results)\n\n", len(results))
 	for i, r := range results {
 		if i > 0 {
-			fmt.Fprintln(e.stdout)
+			_, _ = fmt.Fprintln(e.stdout)
 		}
 		title := "(untitled)"
 		if r.title.Valid && r.title.String != "" {
@@ -475,9 +475,9 @@ func runSearch(e *env, args []string) error {
 		if r.createdAt.Valid {
 			ts = pyTime(r.createdAt.Time)[:19]
 		}
-		fmt.Fprintf(e.stdout, "  [%s] %s\n", r.source, title)
-		fmt.Fprintf(e.stdout, "  %s @ %s  (score: %.2f)\n", r.role, ts, r.score)
-		fmt.Fprintf(e.stdout, "  %s\n", snippet(r.text.String, query))
+		_, _ = fmt.Fprintf(e.stdout, "  [%s] %s\n", r.source, title)
+		_, _ = fmt.Fprintf(e.stdout, "  %s @ %s  (score: %.2f)\n", r.role, ts, r.score)
+		_, _ = fmt.Fprintf(e.stdout, "  %s\n", snippet(r.text.String, query))
 	}
 	return nil
 }
@@ -525,7 +525,7 @@ func runSearchQuery(ctx context.Context, s *store.Store, sqlText string, args []
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var results []searchResult
 	for rows.Next() {
 		var r searchResult

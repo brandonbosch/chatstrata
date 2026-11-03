@@ -74,21 +74,21 @@ func runMCPConfig(e *env, args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(e.stdout, string(b))
+		_, _ = fmt.Fprintln(e.stdout, string(b))
 	case "claude-code":
 		parts := []string{"claude", "mcp", "add", "--transport", "stdio", "--scope", *scope}
 		if env != nil {
 			parts = append(parts, "--env", "CHATSTRATA_GO_DB="+env["CHATSTRATA_GO_DB"])
 		}
 		parts = append(parts, *name, "--", cmd, "serve")
-		fmt.Fprintln(e.stdout, shellJoin(parts))
+		_, _ = fmt.Fprintln(e.stdout, shellJoin(parts))
 	case "codex":
-		fmt.Fprintln(e.stdout, "# Add to ~/.codex/config.toml")
-		fmt.Fprintf(e.stdout, "[mcp_servers.%s]\n", *name)
-		fmt.Fprintf(e.stdout, "command = %s\n", tomlString(cmd))
-		fmt.Fprintln(e.stdout, `args = ["serve"]`)
+		_, _ = fmt.Fprintln(e.stdout, "# Add to ~/.codex/config.toml")
+		_, _ = fmt.Fprintf(e.stdout, "[mcp_servers.%s]\n", *name)
+		_, _ = fmt.Fprintf(e.stdout, "command = %s\n", tomlString(cmd))
+		_, _ = fmt.Fprintln(e.stdout, `args = ["serve"]`)
 		if env != nil {
-			fmt.Fprintf(e.stdout, "env = { CHATSTRATA_GO_DB = %s }\n", tomlString(env["CHATSTRATA_GO_DB"]))
+			_, _ = fmt.Fprintf(e.stdout, "env = { CHATSTRATA_GO_DB = %s }\n", tomlString(env["CHATSTRATA_GO_DB"]))
 		}
 	default:
 		return usageError{fmt.Sprintf("unknown client %q: use claude-code, claude-desktop or codex", positional[0])}

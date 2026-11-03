@@ -1,0 +1,36 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - govet
+    - ineffassign
+    - misspell
+    - nilerr
+    - noctx
+    - nolintlint
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - unconvert
+    - unused
+    - usetesting
+  settings:
+    govet:
+      enable:
+        - shadow
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    rules:
+      # `shadow` flags the idiomatic `if err := f(); err != nil` inside a
+      # function that already holds an `err` (50 sites when this gate landed).
+      # Each shadows a single-function-scope error that is checked in the same
+      # block, so no outer value is lost. Remove this rule and fix the sites
+      # if the codebase ever needs a distinction the analyzer can see.
+      - linters: [govet]
+        text: "shadow:"

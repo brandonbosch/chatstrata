@@ -41,15 +41,21 @@ func resolve(path string) (string, error) {
 		return "", err
 	}
 	fi, err := os.Stat(path)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return "", nil
+	}
+	if err != nil {
+		return "", err
 	}
 	if !fi.IsDir() {
 		return path, nil
 	}
 	candidate := filepath.Join(path, "conversations.json")
 	if _, err := os.Stat(candidate); err != nil {
-		return "", nil
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
 	}
 	return candidate, nil
 }

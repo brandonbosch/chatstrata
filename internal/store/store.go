@@ -97,7 +97,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	if err := s.migrate(ctx); err != nil {
-		s.Close()
+		_ = s.Close()
 		return nil, err
 	}
 	s.LoadFTS(ctx)
@@ -130,12 +130,12 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if err := s.conn.QueryRowContext(ctx, `SELECT current_setting('lock_configuration'),
 		current_setting('enable_external_access'), current_setting('autoinstall_known_extensions'),
 		current_setting('autoload_known_extensions')`).Scan(&locked, &external, &autoinstall, &autoload); err != nil {
-		s.Close()
+		_ = s.Close()
 		return nil, fmt.Errorf("check archive query restrictions: %w", err)
 	}
 	if locked {
 		if external || autoinstall || autoload {
-			s.Close()
+			_ = s.Close()
 			return nil, errors.New("archive query configuration is locked without required restrictions")
 		}
 		return s, nil
@@ -147,7 +147,7 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 		"SET lock_configuration = true",
 	} {
 		if _, err := s.conn.ExecContext(ctx, setting); err != nil {
-			s.Close()
+			_ = s.Close()
 			return nil, fmt.Errorf("restrict archive query access: %w", err)
 		}
 	}
@@ -161,14 +161,14 @@ func open(ctx context.Context, path, dsn string) (*Store, error) {
 	}
 	conn, err := db.Conn(ctx)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
 	return &Store{DB: db, conn: conn, Path: path}, nil
 }
 
 func (s *Store) Close() error {
-	s.conn.Close()
+	_ = s.conn.Close()
 	return s.DB.Close()
 }
 

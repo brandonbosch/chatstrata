@@ -19,8 +19,8 @@ func OpenSQLite(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
-		db.Close()
+	if err := db.PingContext(context.Background()); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	return db, nil
@@ -70,7 +70,7 @@ func QueryRows(ctx context.Context, db *sql.DB, query string, args ...any) ([]Ro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, err

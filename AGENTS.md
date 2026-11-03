@@ -22,28 +22,43 @@ history and `docs/rewrite/observation-log.md` for the storage rules.
 
 ## Build and verify
 
+There is one verification command. Run it before handing off any change:
+
 ```sh
-go build -o bin/chatstrata ./cmd/chatstrata
-go test ./...
-go vet ./...
-gofmt -l .
-go test ./internal/project -run '^$' -bench . -benchmem
+./scripts/check.sh        # gofmt, go vet, go test ./..., build, `chatstrata version`
+./scripts/check.sh --full # also go mod tidy -diff, golangci-lint, release build + smoke
 ```
+
+`./scripts/check.sh --full` before a release PR. CI runs the same script, so a
+green local run means a green build. Do not run the underlying commands
+separately and call that verified.
+
+`go test ./...` includes `internal/guard`, which reads a tree and reports every
+boundary, size and escape-hatch violation; it fails on the real repository. The
+gates are configuration, not prose:
+
+|Gate|Config|Add a deliberate change by|
+|---|---|---|
+|Package boundaries|`internal/guard/imports.json`|adding the import path to the importer's `may_use`|
+|File-size ratchet|`internal/guard/ratchets.json`|splitting the file; baseline only when it is one concern|
+|Escape hatches|`internal/guard/allow.json`|an entry with `path`, `pattern` and `reason`|
+
+A new dependency, a file that grows past 400 non-test lines, or a `panic`/
+`os.Exit`/`fmt` to `os.Stdout` without an allowlisted reason fails
+`go test ./...` locally.
 
 DuckDB uses CGo: install Go and a C compiler, and build releases natively for
 each OS/architecture. Release binaries embed DuckDB's signed full-text search
-extension so search never needs a download:
+extension so search never needs a download; `--full` fetches it, tests with
+`fts_embed`, and runs `scripts/smoke-release.sh`. See `docs/rewrite/release.md`
+for release packaging and installer checks. Zensical is optional documentation
+tooling; the application and its tests do not need Python.
+
+Benchmarks are not part of the gate; run them when changing projection code:
 
 ```sh
-go run ./internal/tools/fetchfts
-go test -tags fts_embed ./...
-go build -tags fts_embed -o bin/chatstrata ./cmd/chatstrata
-scripts/smoke-release.sh bin/chatstrata
+go test ./internal/project -run '^$' -bench . -benchmem
 ```
-
-See `docs/rewrite/release.md` for release packaging and installer checks.
-Zensical is optional documentation tooling; the application and its tests do
-not need Python.
 
 ## Rules
 
@@ -51,6 +66,8 @@ not need Python.
   small pieces; there is no long-lived rewrite branch.
 - Standard library first, non-public code under `internal/`, contextual errors,
   tests next to code. Commit summaries are imperative; explain why in the body.
+- A recurring review correction gets a static guard first, then a paragraph
+  here -- never only the paragraph.
 - Golden JSON is generated, never hand-edited. Run
   `go test ./internal/golden -run TestGolden -update` only for an intentional
   behaviour change, and explain the fixture diff. Ordinary changes must pass

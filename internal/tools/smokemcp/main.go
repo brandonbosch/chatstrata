@@ -16,7 +16,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "smoke MCP:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "smoke MCP:", err)
 		os.Exit(1)
 	}
 }
@@ -29,14 +29,14 @@ func run() error {
 	defer cancel()
 	// Use the same environment/default path as the CLI smoke commands.
 	// macOS intentionally uses Library/Application Support rather than XDG.
-	cmd := exec.Command(os.Args[1], "serve")
+	cmd := exec.CommandContext(ctx, os.Args[1], "serve")
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Args[2], "XDG_DATA_HOME=" + filepath.Join(os.Args[2], "data")}
 	cmd.Stderr = os.Stderr
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "release-smoke", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
 		return fmt.Errorf("initialize: %w", err)
 	}
-	defer cs.Close()
+	defer func() { _ = cs.Close() }()
 	list, err := cs.ListTools(ctx, nil)
 	if err != nil {
 		return err
@@ -64,11 +64,11 @@ func run() error {
 	}
 	schema, err := call("get_schema", map[string]any{})
 	if err != nil || !strings.Contains(schema, "TABLE conversations:") {
-		return fmt.Errorf("schema discovery failed: %v: %s", err, schema)
+		return fmt.Errorf("schema discovery failed: %w: %s", err, schema)
 	}
 	resource, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "chatstrata://schema"})
 	if err != nil || len(resource.Contents) != 1 || resource.Contents[0].Text != schema {
-		return fmt.Errorf("schema resource differs: %v", err)
+		return fmt.Errorf("schema resource differs: %w", err)
 	}
 	out, err := call("query", map[string]any{"sql": "SELECT count(*) AS n FROM conversations"})
 	var result struct {
@@ -77,7 +77,7 @@ func run() error {
 		} `json:"rows"`
 	}
 	if err != nil || json.Unmarshal([]byte(out), &result) != nil || len(result.Rows) != 1 || result.Rows[0].N != 2 {
-		return fmt.Errorf("archive query failed: %v, %s", err, out)
+		return fmt.Errorf("archive query failed: %w, %s", err, out)
 	}
 	sentinel := filepath.Join(os.Args[2], "synthetic-private.txt")
 	if err := os.WriteFile(sentinel, []byte("SYNTHETIC_PRIVATE_FILE"), 0o600); err != nil {
@@ -87,7 +87,7 @@ func run() error {
 		out, err := call("query", map[string]any{"sql": sql})
 		var result map[string]any
 		if err != nil || json.Unmarshal([]byte(out), &result) != nil || result["error"] == nil || strings.Contains(out, "SYNTHETIC_PRIVATE_FILE") {
-			return fmt.Errorf("query boundary failed: %v", err)
+			return fmt.Errorf("query boundary failed: %w", err)
 		}
 	}
 	fmt.Println("smoke: stdio MCP schema, query, and access restrictions passed")

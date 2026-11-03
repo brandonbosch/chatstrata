@@ -158,7 +158,7 @@ func TestDevicesConvergeThroughRelay(t *testing.T) {
 	}
 
 	// The relay holds only ciphertext.
-	filepath.Walk(relayDir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(relayDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return err
 		}
@@ -167,7 +167,9 @@ func TestDevicesConvergeThroughRelay(t *testing.T) {
 			t.Errorf("plaintext on the relay in %s", path)
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// Syncing again moves nothing and changes nothing.
 	out := run(t, "sync", "--db", b.db)
@@ -223,7 +225,9 @@ func TestDaemonRunsCollectAndSync(t *testing.T) {
 		homeDir = t.TempDir()
 		for rel, content := range files {
 			path := filepath.Join(homeDir, ".claude", "projects", rel)
-			os.MkdirAll(filepath.Dir(path), 0o755)
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(path, content, 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -300,7 +304,7 @@ func TestDaemonReleasesArchiveWhileRelayWaits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("relay wait blocks local analysis: %v", err)
 	}
-	s.Close()
+	_ = s.Close()
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -360,6 +364,6 @@ func ftsAvailable(t *testing.T, db string) bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	return s.LoadFTS(context.Background())
 }

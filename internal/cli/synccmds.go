@@ -45,10 +45,10 @@ func runRelay(e *env, args []string) error {
 		<-e.ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(shutdown)
+		_ = srv.Shutdown(shutdown)
 	}()
-	fmt.Fprintf(e.stdout, "chatstrata relay listening on http://%s, storing in %s\n", *listen, dir)
-	fmt.Fprintln(e.stdout, "Expose it on your tailnet with HTTPS, e.g.: tailscale serve --bg http://"+*listen)
+	_, _ = fmt.Fprintf(e.stdout, "chatstrata relay listening on http://%s, storing in %s\n", *listen, dir)
+	_, _ = fmt.Fprintln(e.stdout, "Expose it on your tailnet with HTTPS, e.g.: tailscale serve --bg http://"+*listen)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
@@ -66,7 +66,7 @@ func runPair(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 
 	space, err := devsync.Load(a.log.Root, a.log.Identity.Space)
 	switch {
@@ -95,11 +95,11 @@ func runPair(e *env, args []string) error {
 	if err := devsync.Save(a.log.Root, space); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "This device syncs through %s.\n\n", space.Relay)
-	fmt.Fprintln(e.stdout, "To add another device, run this there. The code contains the space key:")
-	fmt.Fprintln(e.stdout, "anyone who has it can read this archive, so share it only with yourself.")
-	fmt.Fprintln(e.stdout)
-	fmt.Fprintf(e.stdout, "  chatstrata join %s\n", space.PairingCode())
+	_, _ = fmt.Fprintf(e.stdout, "This device syncs through %s.\n\n", space.Relay)
+	_, _ = fmt.Fprintln(e.stdout, "To add another device, run this there. The code contains the space key:")
+	_, _ = fmt.Fprintln(e.stdout, "anyone who has it can read this archive, so share it only with yourself.")
+	_, _ = fmt.Fprintln(e.stdout)
+	_, _ = fmt.Fprintf(e.stdout, "  chatstrata join %s\n", space.PairingCode())
 	return nil
 }
 
@@ -121,7 +121,7 @@ func runJoin(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 
 	if existing, err := devsync.Load(a.log.Root, a.log.Identity.Space); err == nil && existing.ID != space.ID {
 		return errors.New("this device already belongs to another space; it can only be in one")
@@ -132,7 +132,7 @@ func runJoin(e *env, args []string) error {
 	if err := devsync.Save(a.log.Root, space); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Joined. This device (%s) now syncs through %s.\n", short(a.log.Identity.Device), space.Relay)
+	_, _ = fmt.Fprintf(e.stdout, "Joined. This device (%s) now syncs through %s.\n", short(a.log.Identity.Device), space.Relay)
 	return syncNow(e, a, space)
 }
 
@@ -146,7 +146,7 @@ func runSync(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 	space, err := devsync.Load(a.log.Root, a.log.Identity.Space)
 	if err != nil {
 		return err
@@ -164,7 +164,7 @@ func syncNow(e *env, a *archive, space *devsync.Space) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Synced. Uploaded: %d segments  Downloaded: %d segments  Conversations updated: %d\n",
+	_, _ = fmt.Fprintf(e.stdout, "Synced. Uploaded: %d segments  Downloaded: %d segments  Conversations updated: %d\n",
 		res.Uploaded, res.Downloaded, stats.Stored+stats.Removed)
 	return nil
 }
@@ -179,15 +179,15 @@ func runDevices(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 
 	self := a.log.Identity.Device
-	fmt.Fprintf(e.stdout, "This device: %s\nSpace:       %s\n", self, a.log.Identity.Space)
+	_, _ = fmt.Fprintf(e.stdout, "This device: %s\nSpace:       %s\n", self, a.log.Identity.Space)
 	space, err := devsync.Load(a.log.Root, a.log.Identity.Space)
 	if err == nil {
-		fmt.Fprintf(e.stdout, "Relay:       %s\n", space.Relay)
+		_, _ = fmt.Fprintf(e.stdout, "Relay:       %s\n", space.Relay)
 	} else {
-		fmt.Fprintln(e.stdout, "Relay:       not set up (see `chatstrata pair`)")
+		_, _ = fmt.Fprintln(e.stdout, "Relay:       not set up (see `chatstrata pair`)")
 	}
 
 	local, err := a.log.Devices()
@@ -205,7 +205,7 @@ func runDevices(e *env, args []string) error {
 	if space != nil {
 		remote, err := devsync.NewClient(space).Devices(e.ctx)
 		if err != nil {
-			fmt.Fprintf(e.stdout, "\n(relay not reachable: %s)\n", err)
+			_, _ = fmt.Fprintf(e.stdout, "\n(relay not reachable: %s)\n", err)
 		}
 		for _, d := range remote {
 			r := rows[d.Device]
@@ -221,13 +221,13 @@ func runDevices(e *env, args []string) error {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	fmt.Fprintf(e.stdout, "\n  %-34s %10s %10s\n", "device", "local", "on relay")
+	_, _ = fmt.Fprintf(e.stdout, "\n  %-34s %10s %10s\n", "device", "local", "on relay")
 	for _, id := range ids {
 		mark := ""
 		if id == self {
 			mark = "  (this device)"
 		}
-		fmt.Fprintf(e.stdout, "  %-34s %10s %10s%s\n", id, rows[id][0], rows[id][1], mark)
+		_, _ = fmt.Fprintf(e.stdout, "  %-34s %10s %10s%s\n", id, rows[id][0], rows[id][1], mark)
 	}
 	return nil
 }
@@ -266,7 +266,7 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	closed := false
 	defer func() {
 		if !closed {
-			a.Close()
+			_ = a.Close()
 		}
 	}()
 	err = collectInstalled(e, a, func(name string, err error) {
@@ -312,7 +312,7 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 		if err != nil {
 			return err
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		stats, err = newProjector(s, a.log).CatchUp(e.ctx, false, e.stderr)
 		if err != nil {
 			return err

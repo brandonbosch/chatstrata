@@ -100,7 +100,9 @@ func TestCorruptRecordIsReported(t *testing.T) {
 	path := filepath.Join(l.Root, locs[0].Segment)
 	b, _ := os.ReadFile(path)
 	b[len(b)-1] ^= 0xff
-	os.WriteFile(path, b, 0o600)
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := l.ReadAt(locs[0]); !errors.Is(err, ErrCorrupt) {
 		t.Errorf("err = %v, want ErrCorrupt", err)
 	}

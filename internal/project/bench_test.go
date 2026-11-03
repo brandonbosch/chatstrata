@@ -32,7 +32,7 @@ func BenchmarkCollection(b *testing.B) {
 			if turn%2 == 1 {
 				role = "assistant"
 			}
-			fmt.Fprintf(&text, `{"type":%q,"uuid":"m-%d-%d","timestamp":"2026-01-01T00:00:%02dZ","message":{"role":%q,"content":"Synthetic migration benchmark message %d"}}`+"\n", role, session, turn, turn, role, turn)
+			_, _ = fmt.Fprintf(&text, `{"type":%q,"uuid":"m-%d-%d","timestamp":"2026-01-01T00:00:%02dZ","message":{"role":%q,"content":"Synthetic migration benchmark message %d"}}`+"\n", role, session, turn, turn, role, turn)
 		}
 		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("session-%d.jsonl", session)), []byte(text.String()), 0o600); err != nil {
 			b.Fatal(err)
@@ -56,7 +56,7 @@ func BenchmarkCollection(b *testing.B) {
 		}
 		l, err := obslog.Open(filepath.Join(dir, "archive.log"))
 		if err != nil {
-			s.Close()
+			_ = s.Close()
 			b.Fatal(err)
 		}
 		return &Projector{Store: s, Log: l, Sources: map[string]model.Source{src.Name(): src}}
@@ -74,12 +74,12 @@ func BenchmarkCollection(b *testing.B) {
 		for b.Loop() {
 			p := open()
 			collect(p)
-			p.Store.Close()
+			_ = p.Store.Close()
 		}
 	})
 	b.Run("unchanged_100x20", func(b *testing.B) {
 		p := open()
-		defer p.Store.Close()
+		defer func() { _ = p.Store.Close() }()
 		collect(p)
 		b.ResetTimer()
 		for b.Loop() {

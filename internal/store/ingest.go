@@ -7,6 +7,7 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -72,7 +73,7 @@ func (s *Store) Ingest(ctx context.Context, source string, conv *model.Conversat
 		SELECT id, content_hash, project, started_at FROM conversations
 		WHERE source_id = ? AND source_native_id = ?`, source, conv.SourceNativeID).
 		Scan(&existingID, &storedHash, &storedProject, &storedStarted)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Unchanged, fmt.Errorf("look up %s: %w", conv.SourceNativeID, err)
 	}
 
@@ -185,7 +186,7 @@ func (s *Store) updateConversation(ctx context.Context, source string, conv *mod
 	}
 	defer func() {
 		if err != nil {
-			s.conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
+			_, _ = s.conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
 		}
 	}()
 	err = s.conn.Raw(func(dc any) error {
@@ -223,7 +224,7 @@ func (s *Store) storedMessagePrefix(ctx context.Context, rows *convRows) (keep, 
 	if err != nil {
 		return 0, 0, err
 	}
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 
 	matching := true
 	var cur *messageRow
@@ -279,7 +280,7 @@ func (s *Store) storedEventPrefix(ctx context.Context, source string, conv *mode
 	if err != nil {
 		return 0, 0, err
 	}
-	defer q.Close()
+	defer func() { _ = q.Close() }()
 	matching := true
 	for q.Next() {
 		var line sql.NullInt64
@@ -318,7 +319,7 @@ func (s *Store) insertConversation(ctx context.Context, source string, conv *mod
 	}
 	defer func() {
 		if err != nil {
-			s.conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
+			_, _ = s.conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
 		}
 	}()
 
@@ -445,18 +446,18 @@ func appendRows(dc driver.Conn, source string, conv *model.Conversation, rows *c
 	}
 	blocks, err := duckdb.NewAppenderFromConn(dc, "", "content_blocks")
 	if err != nil {
-		messages.Close()
+		_ = messages.Close()
 		return err
 	}
 	if err := appendMessages(messages, blocks, rows, fromMsg); err != nil {
 		// Closing flushes into the transaction, which the caller rolls back.
-		messages.Close()
-		blocks.Close()
+		_ = messages.Close()
+		_ = blocks.Close()
 		return err
 	}
 	// Messages must be flushed before their blocks, which reference them.
 	if err := messages.Close(); err != nil {
-		blocks.Close()
+		_ = blocks.Close()
 		return fmt.Errorf("flush messages: %w", err)
 	}
 	if err := blocks.Close(); err != nil {
@@ -471,7 +472,7 @@ func appendRows(dc driver.Conn, source string, conv *model.Conversation, rows *c
 	for line := fromEvent; line < len(conv.RawEvents); line++ {
 		if err := events.AppendRow(rawEventID(rows.convID, line), source, conv.SourceNativeID,
 			conv.RawPath, int32(line), conv.RawEvents[line], now); err != nil {
-			events.Close()
+			_ = events.Close()
 			return fmt.Errorf("append raw event %d: %w", line, err)
 		}
 	}

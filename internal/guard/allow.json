@@ -1,0 +1,44 @@
+{
+  "allow": [
+    {
+      "path": "cmd/chatstrata/main.go",
+      "pattern": "os.Stdout",
+      "reason": "the process entry point owns the real streams and hands them to cli.Run"
+    },
+    {
+      "path": "cmd/chatstrata/main.go",
+      "pattern": "os.Stderr",
+      "reason": "the process entry point owns the real streams and hands them to cli.Run"
+    },
+    {
+      "path": "cmd/chatstrata/main.go",
+      "pattern": "os.Exit",
+      "reason": "the process entry point turns cli.Run's status code into the process status"
+    },
+    {
+      "path": "internal/tools/fetchfts/main.go",
+      "pattern": "os.Stderr",
+      "reason": "a build-time tool has no cli.Run to report through"
+    },
+    {
+      "path": "internal/tools/fetchfts/main.go",
+      "pattern": "os.Exit",
+      "reason": "a build-time tool's main exits on failure; it is never imported"
+    },
+    {
+      "path": "internal/tools/smokemcp/main.go",
+      "pattern": "os.Stderr",
+      "reason": "a build-time tool has no cli.Run to report through, and it forwards the child's stderr"
+    },
+    {
+      "path": "internal/tools/smokemcp/main.go",
+      "pattern": "os.Exit",
+      "reason": "a build-time tool's main exits on failure; it is never imported"
+    },
+    {
+      "path": "internal/obslog/obslog.go",
+      "pattern": "panic",
+      "reason": "crypto/rand never fails on supported platforms; the panic documents the invariant instead of returning an impossible error"
+    }
+  ]
+}
