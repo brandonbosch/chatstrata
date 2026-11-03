@@ -1,0 +1,122 @@
+{
+  "modules": {
+    "cmd/chatstrata": {
+      "may_use": [
+        "internal/cli"
+      ]
+    },
+    "internal/analysis": {
+      "may_use": []
+    },
+    "internal/cli": {
+      "may_use": [
+        "internal/*"
+      ]
+    },
+    "internal/devsync": {
+      "may_use": [
+        "internal/obslog"
+      ]
+    },
+    "internal/golden": {
+      "may_use": [
+        "internal/store"
+      ]
+    },
+    "internal/guard": {
+      "may_use": []
+    },
+    "internal/model": {
+      "may_use": []
+    },
+    "internal/obslog": {
+      "may_use": []
+    },
+    "internal/project": {
+      "may_use": [
+        "internal/model",
+        "internal/obslog",
+        "internal/store"
+      ]
+    },
+    "internal/pystr": {
+      "may_use": []
+    },
+    "internal/relay": {
+      "may_use": []
+    },
+    "internal/sources/*": {
+      "may_use": [
+        "internal/model",
+        "internal/pystr",
+        "internal/sources/srcutil"
+      ],
+      "must_not_use": [
+        {
+          "module": "internal/store",
+          "reason": "an adapter reads source files and returns model.Conversations; only project writes the archive"
+        },
+        {
+          "module": "internal/project",
+          "reason": "an adapter reads source files and returns model.Conversations; only project writes the archive"
+        },
+        {
+          "module": "internal/cli",
+          "reason": "adapters are wired by the CLI; they never reach back into command handling"
+        },
+        {
+          "module": "internal/obslog",
+          "reason": "an adapter produces messages; the collector records them in one place"
+        },
+        {
+          "module": "internal/relay",
+          "reason": "adapters know nothing about device sync transport"
+        },
+        {
+          "module": "internal/devsync",
+          "reason": "adapters know nothing about device sync"
+        }
+      ]
+    },
+    "internal/sources/srcutil": {
+      "may_use": [
+        "internal/model",
+        "internal/pystr"
+      ]
+    },
+    "internal/store": {
+      "may_use": [
+        "internal/model",
+        "internal/obslog",
+        "internal/store/migrations"
+      ]
+    },
+    "internal/store/migrations": {
+      "may_use": []
+    },
+    "internal/tools/*": {
+      "may_use": [
+        "internal/*"
+      ]
+    }
+  },
+  "only_by": {
+    "internal/cli": {
+      "modules": [
+        "cmd/chatstrata"
+      ],
+      "reason": "command wiring lives in internal/cli; everything else uses the API it exposes"
+    },
+    "github.com/duckdb/duckdb-go/v2": {
+      "modules": [
+        "internal/store",
+        "internal/tools/*"
+      ],
+      "reason": "DuckDB is an implementation detail of internal/store; project and the analysis layer go through it, so a swap touches one package"
+    },
+    "python-final*": {
+      "modules": [],
+      "reason": "python-final preserves the retired Python source for reference only; it is not part of the Go module"
+    }
+  }
+}

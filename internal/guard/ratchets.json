@@ -1,0 +1,9 @@
+{
+  "ceiling": 400,
+  "files": {
+    "internal/cli/read.go": 559,
+    "internal/cli/schedule.go": 437,
+    "internal/obslog/obslog.go": 527,
+    "internal/store/ingest.go": 553
+  }
+}
