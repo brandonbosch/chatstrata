@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Add `./scripts/check.sh` as the one verification command, used by agents and
+  CI. `--full` adds `go mod tidy -diff`, the pinned golangci-lint, and the
+  release smoke.
+- Add `internal/guard`, run by `go test ./...`: package-boundary table, a
+  400-line file ratchet with locked-in baselines, and an escape-hatch
+  allowlist with required reasons.
+- Pin golangci-lint through `go.mod`'s `tool` directive and start green,
+  fixing the error-checking, error-wrapping, context and SQL-row findings it
+  surfaced.
+
 ## 2.0.0 - 2026-10-30
 
 - Ship a single Go binary for local chat archiving, keyword search, DuckDB SQL,

@@ -18,17 +18,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Check formatting
-        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
-      - name: Vet
-        run: go vet ./...
-      - name: Test
-        run: go test ./...
-      - name: Build
-        run: go build -o bin/chatstrata ./cmd/chatstrata && ./bin/chatstrata version
-      - name: Release build (embedded fts extension)
-        run: |
-          go run ./internal/tools/fetchfts
-          go test -tags fts_embed ./internal/store/ ./internal/cli/
-          go build -tags fts_embed -o bin/chatstrata-release ./cmd/chatstrata
-          scripts/smoke-release.sh bin/chatstrata-release
+      - name: Check
+        run: ./scripts/check.sh
+
+  full:
+    # The same full gate a release hand-off runs: tidy, golangci-lint, and a
+    # release build that loads DuckDB's embedded fts extension.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Full check
+        run: ./scripts/check.sh --full
