@@ -32,17 +32,17 @@ func runIngest(e *env, args []string) error {
 
 	src, ok := sources[name]
 	if !ok {
-		fmt.Fprintf(e.stderr, "Unknown source: %s\nRun `chatstrata sources` to see available adapters.\n", name)
+		_, _ = fmt.Fprintf(e.stderr, "Unknown source: %s\nRun `chatstrata sources` to see available adapters.\n", name)
 		return exitError{1}
 	}
 
 	handles, err := src.Discover(*path)
 	if err != nil {
-		fmt.Fprintf(e.stderr, "! %s\n", err)
+		_, _ = fmt.Fprintf(e.stderr, "! %s\n", err)
 		return exitError{1}
 	}
 	if len(handles) == 0 {
-		fmt.Fprintf(e.stdout, "No conversations found for source '%s'.\n", name)
+		_, _ = fmt.Fprintf(e.stdout, "No conversations found for source '%s'.\n", name)
 		return nil
 	}
 	if *limit > 0 && *limit < len(handles) {
@@ -50,12 +50,12 @@ func runIngest(e *env, args []string) error {
 	}
 
 	if *dryRun {
-		fmt.Fprintf(e.stdout, "Would ingest %d conversations from %s:\n", len(handles), name)
+		_, _ = fmt.Fprintf(e.stdout, "Would ingest %d conversations from %s:\n", len(handles), name)
 		for _, h := range handles[:min(20, len(handles))] {
-			fmt.Fprintf(e.stdout, "  %s  (%s)\n", h.SourceNativeID, h.Path)
+			_, _ = fmt.Fprintf(e.stdout, "  %s  (%s)\n", h.SourceNativeID, h.Path)
 		}
 		if len(handles) > 20 {
-			fmt.Fprintf(e.stdout, "  ... and %d more\n", len(handles)-20)
+			_, _ = fmt.Fprintf(e.stdout, "  ... and %d more\n", len(handles)-20)
 		}
 		return nil
 	}
@@ -64,7 +64,7 @@ func runIngest(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 
 	if err := a.store.EnsureSource(e.ctx, src); err != nil {
 		return err
@@ -78,9 +78,9 @@ func runIngest(e *env, args []string) error {
 		return err
 	}
 	skipped := len(handles) - stats.Stored - collected.Failed - stats.Failed
-	fmt.Fprintf(e.stdout, "\nDone. Ingested: %d  Skipped: %d  Failed: %d\n",
+	_, _ = fmt.Fprintf(e.stdout, "\nDone. Ingested: %d  Skipped: %d  Failed: %d\n",
 		stats.Stored, max(0, skipped), collected.Failed+stats.Failed)
-	fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
+	_, _ = fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
 	return nil
 }
 
@@ -92,12 +92,12 @@ func ingestAuto(e *env, db string) error {
 	if err != nil {
 		return err
 	}
-	defer a.Close()
+	defer func() { _ = a.Close() }()
 	failed := 0
 	err = collectInstalled(e, a, func(name string, err error) {
-		fmt.Fprintf(e.stderr, "! %s skipped: %s\n", name, err)
+		_, _ = fmt.Fprintf(e.stderr, "! %s skipped: %s\n", name, err)
 	}, func(name string, c project.CollectResult) {
-		fmt.Fprintf(e.stdout, "  %-14s %d changed, %d unchanged\n", name, c.Logged, c.Unchanged)
+		_, _ = fmt.Fprintf(e.stdout, "  %-14s %d changed, %d unchanged\n", name, c.Logged, c.Unchanged)
 		failed += c.Failed
 	})
 	if err != nil {
@@ -107,7 +107,7 @@ func ingestAuto(e *env, db string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "\nDone. Ingested: %d  Failed: %d\n", stats.Stored, failed+stats.Failed)
-	fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
+	_, _ = fmt.Fprintf(e.stdout, "\nDone. Ingested: %d  Failed: %d\n", stats.Stored, failed+stats.Failed)
+	_, _ = fmt.Fprintf(e.stdout, "Database: %s\n", a.store.Path)
 	return nil
 }

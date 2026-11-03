@@ -132,11 +132,11 @@ func buildDatabases(t *testing.T, work string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Exec(string(script)); err != nil {
+		if _, err := db.ExecContext(context.Background(), string(script)); err != nil {
 			t.Fatalf("build %s: %v", dump, err)
 		}
-		db.Close()
-		os.Remove(dump)
+		_ = db.Close()
+		_ = os.Remove(dump)
 	}
 }
 

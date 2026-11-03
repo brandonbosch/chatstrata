@@ -47,7 +47,7 @@ func (Source) Check(path string) (problems, notes []string) {
 	if err != nil {
 		return []string{fmt.Sprintf("can't open %s: %s", path, err)}, nil
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 	tables, err := tableNames(ctx, db)
 	if err != nil {

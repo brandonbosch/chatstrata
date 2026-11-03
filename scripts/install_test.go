@@ -3,6 +3,7 @@ package scripts
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -101,7 +102,7 @@ if [ -n "$out" ]; then cp "$file" "$out"; else cat "$file"; fi
 			} else {
 				write("bin/chatstrata", original, 0o755)
 			}
-			cmd := exec.Command("sh", "install.sh")
+			cmd := exec.CommandContext(context.Background(), "sh", "install.sh")
 			cmd.Env = append(os.Environ(), "PATH="+fakebin+string(os.PathListSeparator)+os.Getenv("PATH"), "HOME="+root, "CHATSTRATA_VERSION=", "CHATSTRATA_INSTALL_DIR="+dest, "INSTALL_FIXTURES="+root)
 			out, err := cmd.CombinedOutput()
 			if tc.badChecksum || tc.badBinary {

@@ -20,7 +20,7 @@ func openTestStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	if _, err := s.conn.ExecContext(ctx, `INSERT INTO sources (id, name) VALUES ('src', 'Source')`); err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +79,7 @@ func dump(t *testing.T, s *Store) string {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer func() { _ = rows.Close() }()
 		cols, _ := rows.Columns()
 		for rows.Next() {
 			vals := make([]any, len(cols))
@@ -89,10 +90,12 @@ func dump(t *testing.T, s *Store) string {
 			if err := rows.Scan(ptrs...); err != nil {
 				t.Fatal(err)
 			}
-			fmt.Fprintln(&b, vals...)
+			_, _ = fmt.Fprintln(&b, vals...)
 		}
-		rows.Close()
-		fmt.Fprintln(&b, "--")
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = fmt.Fprintln(&b, "--")
 	}
 	return b.String()
 }
@@ -276,13 +279,13 @@ func TestGrowingSessionsKeepArchiveSmall(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			s.Close() // checkpoints, as every CLI run and daemon cycle does
+			_ = s.Close() // checkpoints, as every CLI run and daemon cycle does
 		}
 		s, err := OpenReadOnly(ctx, path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		if err := s.conn.QueryRowContext(ctx, `SELECT used_blocks FROM pragma_database_size()`).Scan(&used); err != nil {
 			t.Fatal(err)
 		}

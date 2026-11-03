@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -33,7 +34,7 @@ func (s *Store) IndexSegment(ctx context.Context, segment string, obs []IndexedO
 	}
 	defer func() {
 		if err != nil {
-			s.conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
+			_, _ = s.conn.ExecContext(context.WithoutCancel(ctx), "ROLLBACK")
 		}
 	}()
 	stmt, err := s.conn.PrepareContext(ctx, `
@@ -44,7 +45,7 @@ func (s *Store) IndexSegment(ctx context.Context, segment string, obs []IndexedO
 	if err != nil {
 		return nil, err
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 	seen := map[obslog.Key]bool{}
 	for _, o := range obs {
 		res, err := stmt.ExecContext(ctx, o.Device, o.Seq, o.Source, o.Scope, o.Locator, string(o.Kind),
@@ -77,7 +78,7 @@ func (s *Store) ObservationsFor(ctx context.Context, key obslog.Key) ([]IndexedO
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []IndexedObservation
 	for rows.Next() {
 		o := IndexedObservation{}
@@ -132,7 +133,7 @@ func (s *Store) CollectorStates(ctx context.Context, source string) (map[obslog.
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[obslog.Key]CollectorState{}
 	for rows.Next() {
 		var key obslog.Key
@@ -190,7 +191,7 @@ func (s *Store) RemoveConversation(ctx context.Context, source, nativeID string)
 	var id string
 	err := s.conn.QueryRowContext(ctx,
 		`SELECT id FROM conversations WHERE source_id = ? AND source_native_id = ?`, source, nativeID).Scan(&id)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
@@ -218,7 +219,7 @@ func (s *Store) TombstonedLocators(ctx context.Context, source string) (map[obsl
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[obslog.Key]bool{}
 	for rows.Next() {
 		k := obslog.Key{Source: source}

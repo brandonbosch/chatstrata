@@ -43,7 +43,7 @@ func TestSearchCoversContentNotYetIndexed(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 		s.LoadFTS(context.Background())
 		_, indexed, pending, err := s.FTSCoverage(context.Background())
 		if err != nil {

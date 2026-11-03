@@ -25,7 +25,7 @@ const dest = "internal/store/fts/fts.duckdb_extension.gz"
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "fetchfts:", err)
+		_, _ = fmt.Fprintln(os.Stderr, "fetchfts:", err)
 		os.Exit(1)
 	}
 }
@@ -36,7 +36,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var version, platform string
 	if err := db.QueryRowContext(ctx, "SELECT version()").Scan(&version); err != nil {
 		return fmt.Errorf("read duckdb version: %w", err)
@@ -47,11 +47,15 @@ func run() error {
 	url := fmt.Sprintf("https://extensions.duckdb.org/%s/%s/fts.duckdb_extension.gz", version, platform)
 
 	client := &http.Client{Timeout: 2 * time.Minute}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("download %s: %w", url, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: %s", url, resp.Status)
 	}
@@ -68,7 +72,7 @@ func run() error {
 		err = cerr
 	}
 	if err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("download %s: %w", url, err)
 	}
 	if err := os.Rename(tmp, dest); err != nil {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -53,7 +54,7 @@ func defaultScheduler() (*scheduler, error) {
 	return &scheduler{
 		goos: runtime.GOOS, home: home, configHome: config, uid: os.Getuid(),
 		run: func(name string, args ...string) (string, error) {
-			out, err := exec.Command(name, args...).CombinedOutput()
+			out, err := exec.CommandContext(context.Background(), name, args...).CombinedOutput()
 			return string(out), err
 		},
 	}, nil
@@ -144,7 +145,7 @@ func scheduleInstall(e *env, s *scheduler, args []string) error {
 	case "linux":
 		path := s.unitPath()
 		if replaced := replacingForeign(path); replaced {
-			fmt.Fprintf(e.stdout, "Replacing %s, which wasn't installed by chatstrata.\n", path)
+			_, _ = fmt.Fprintf(e.stdout, "Replacing %s, which wasn't installed by chatstrata.\n", path)
 		}
 		if err := writeFile(path, systemdService(argv)); err != nil {
 			return err
@@ -154,14 +155,14 @@ func scheduleInstall(e *env, s *scheduler, args []string) error {
 				return fmt.Errorf("systemctl --user %s: %s", strings.Join(cmd, " "), strings.TrimSpace(firstLine(out, err)))
 			}
 		}
-		fmt.Fprintf(e.stdout, "Installed the chatstrata daemon as a systemd user service (runs every %s).\n", interval)
-		fmt.Fprintf(e.stdout, "  Unit: %s\n", path)
-		fmt.Fprintf(e.stdout, "  Logs: journalctl --user -u %s\n", systemdUnit)
-		fmt.Fprintln(e.stdout, "\nIt runs while you're logged in. To keep it running after you log out: loginctl enable-linger")
+		_, _ = fmt.Fprintf(e.stdout, "Installed the chatstrata daemon as a systemd user service (runs every %s).\n", interval)
+		_, _ = fmt.Fprintf(e.stdout, "  Unit: %s\n", path)
+		_, _ = fmt.Fprintf(e.stdout, "  Logs: journalctl --user -u %s\n", systemdUnit)
+		_, _ = fmt.Fprintln(e.stdout, "\nIt runs while you're logged in. To keep it running after you log out: loginctl enable-linger")
 	case "darwin":
 		path := s.plistPath()
 		if replaced := replacingForeign(path); replaced {
-			fmt.Fprintf(e.stdout, "Replacing %s, which wasn't installed by chatstrata.\n", path)
+			_, _ = fmt.Fprintf(e.stdout, "Replacing %s, which wasn't installed by chatstrata.\n", path)
 		}
 		if err := os.MkdirAll(s.logDir(), 0o755); err != nil {
 			return err
@@ -170,17 +171,17 @@ func scheduleInstall(e *env, s *scheduler, args []string) error {
 			return err
 		}
 		domain := fmt.Sprintf("gui/%d", s.uid)
-		s.run("launchctl", "bootout", domain+"/"+launchdLabel) // not loaded yet is fine
+		_, _ = s.run("launchctl", "bootout", domain+"/"+launchdLabel) // not loaded yet is fine
 		if out, err := s.run("launchctl", "bootstrap", domain, path); err != nil {
 			return fmt.Errorf("launchctl bootstrap: %s", strings.TrimSpace(firstLine(out, err)))
 		}
-		fmt.Fprintf(e.stdout, "Installed the chatstrata daemon as a launchd agent (runs every %s).\n", interval)
-		fmt.Fprintf(e.stdout, "  Plist: %s\n", path)
-		fmt.Fprintf(e.stdout, "  Logs:  %s\n", filepath.Join(s.logDir(), "daemon.log"))
+		_, _ = fmt.Fprintf(e.stdout, "Installed the chatstrata daemon as a launchd agent (runs every %s).\n", interval)
+		_, _ = fmt.Fprintf(e.stdout, "  Plist: %s\n", path)
+		_, _ = fmt.Fprintf(e.stdout, "  Logs:  %s\n", filepath.Join(s.logDir(), "daemon.log"))
 	default:
 		return fmt.Errorf("schedule isn't supported on %s; run `chatstrata daemon` from your own service manager", s.goos)
 	}
-	fmt.Fprintln(e.stdout, "Use `chatstrata schedule status` to check it, `chatstrata schedule uninstall` to remove it.")
+	_, _ = fmt.Fprintln(e.stdout, "Use `chatstrata schedule status` to check it, `chatstrata schedule uninstall` to remove it.")
 	warnPythonSchedule(e, s)
 	return nil
 }
@@ -193,29 +194,29 @@ func scheduleUninstall(e *env, s *scheduler, args []string) error {
 	switch s.goos {
 	case "linux":
 		path := s.unitPath()
-		if _, err := os.Stat(path); err != nil {
-			fmt.Fprintln(e.stdout, "No scheduled daemon is installed.")
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			_, _ = fmt.Fprintln(e.stdout, "No scheduled daemon is installed.")
 			return nil
 		}
-		s.run("systemctl", "--user", "disable", "--now", systemdUnit)
+		_, _ = s.run("systemctl", "--user", "disable", "--now", systemdUnit)
 		if err := os.Remove(path); err != nil {
 			return err
 		}
-		s.run("systemctl", "--user", "daemon-reload")
+		_, _ = s.run("systemctl", "--user", "daemon-reload")
 	case "darwin":
 		path := s.plistPath()
-		if _, err := os.Stat(path); err != nil {
-			fmt.Fprintln(e.stdout, "No scheduled daemon is installed.")
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			_, _ = fmt.Fprintln(e.stdout, "No scheduled daemon is installed.")
 			return nil
 		}
-		s.run("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", s.uid, launchdLabel))
+		_, _ = s.run("launchctl", "bootout", fmt.Sprintf("gui/%d/%s", s.uid, launchdLabel))
 		if err := os.Remove(path); err != nil {
 			return err
 		}
 	default:
 		return fmt.Errorf("schedule isn't supported on %s", s.goos)
 	}
-	fmt.Fprintln(e.stdout, "Scheduled daemon removed.")
+	_, _ = fmt.Fprintln(e.stdout, "Scheduled daemon removed.")
 	return nil
 }
 
@@ -235,8 +236,8 @@ func scheduleStatus(e *env, s *scheduler, args []string) error {
 	}
 	content, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintln(e.stdout, "No scheduled daemon is installed.")
-		fmt.Fprintln(e.stdout, "Run `chatstrata schedule install` to collect and sync in the background.")
+		_, _ = fmt.Fprintln(e.stdout, "No scheduled daemon is installed.")
+		_, _ = fmt.Fprintln(e.stdout, "Run `chatstrata schedule install` to collect and sync in the background.")
 		warnPythonSchedule(e, s)
 		return nil
 	}
@@ -278,28 +279,28 @@ func scheduleStatus(e *env, s *scheduler, args []string) error {
 		}
 	}
 	argv := installedArgv(s.goos, string(content))
-	fmt.Fprintf(e.stdout, "Status:   %s\n", state)
+	_, _ = fmt.Fprintf(e.stdout, "Status:   %s\n", state)
 	if len(argv) > 0 {
-		fmt.Fprintf(e.stdout, "Binary:   %s\n", argv[0])
+		_, _ = fmt.Fprintf(e.stdout, "Binary:   %s\n", argv[0])
 		for i, a := range argv {
 			if a == "--interval" && i+1 < len(argv) {
-				fmt.Fprintf(e.stdout, "Interval: %s\n", argv[i+1])
+				_, _ = fmt.Fprintf(e.stdout, "Interval: %s\n", argv[i+1])
 			}
 			if a == "--db" && i+1 < len(argv) {
-				fmt.Fprintf(e.stdout, "Database: %s\n", argv[i+1])
+				_, _ = fmt.Fprintf(e.stdout, "Database: %s\n", argv[i+1])
 			}
 		}
 	}
 	if s.goos == "linux" {
-		fmt.Fprintf(e.stdout, "Unit:     %s\n", path)
-		fmt.Fprintf(e.stdout, "Logs:     journalctl --user -u %s\n", systemdUnit)
+		_, _ = fmt.Fprintf(e.stdout, "Unit:     %s\n", path)
+		_, _ = fmt.Fprintf(e.stdout, "Logs:     journalctl --user -u %s\n", systemdUnit)
 	} else {
-		fmt.Fprintf(e.stdout, "Plist:    %s\n", path)
-		fmt.Fprintf(e.stdout, "Logs:     %s\n", filepath.Join(s.logDir(), "daemon.log"))
+		_, _ = fmt.Fprintf(e.stdout, "Plist:    %s\n", path)
+		_, _ = fmt.Fprintf(e.stdout, "Logs:     %s\n", filepath.Join(s.logDir(), "daemon.log"))
 	}
 	if exe, err := os.Executable(); err == nil && len(argv) > 0 {
 		if resolved, err := filepath.EvalSymlinks(exe); err == nil && resolved != argv[0] {
-			fmt.Fprintf(e.stdout, "Note:     the service runs %s, not this binary (%s); reinstall to switch.\n", argv[0], resolved)
+			_, _ = fmt.Fprintf(e.stdout, "Note:     the service runs %s, not this binary (%s); reinstall to switch.\n", argv[0], resolved)
 		}
 	}
 	warnPythonSchedule(e, s)
@@ -321,8 +322,8 @@ func warnPythonSchedule(e *env, s *scheduler) {
 		return
 	}
 	if _, err := os.Stat(path); err == nil {
-		fmt.Fprintf(e.stdout, "\nThe Python app's scheduled ingest is also installed (%s); it still runs the Python version.\n", path)
-		fmt.Fprintf(e.stdout, "Remove it with the Python app's `chatstrata schedule uninstall`, or: %s\n", remove)
+		_, _ = fmt.Fprintf(e.stdout, "\nThe Python app's scheduled ingest is also installed (%s); it still runs the Python version.\n", path)
+		_, _ = fmt.Fprintf(e.stdout, "Remove it with the Python app's `chatstrata schedule uninstall`, or: %s\n", remove)
 	}
 }
 
@@ -380,7 +381,7 @@ func xmlComment(s string) string { return "<!-- " + s + " -->" }
 
 func xmlEscape(s string) string {
 	var b strings.Builder
-	xml.EscapeText(&b, []byte(s))
+	_ = xml.EscapeText(&b, []byte(s))
 	return b.String()
 }
 

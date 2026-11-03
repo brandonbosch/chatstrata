@@ -120,7 +120,7 @@ func (a archiveReader) open(ctx context.Context) (*store.Store, error) {
 	for {
 		s, err := store.OpenReadOnly(ctx, a.dbPath)
 		if errors.Is(err, store.ErrNoArchive) {
-			return nil, fmt.Errorf("ChatStrata database not found at %s. Run `chatstrata ingest <source>` first.", a.dbPath)
+			return nil, fmt.Errorf("chatstrata database not found at %s; run `chatstrata ingest <source>` first", a.dbPath)
 		}
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "lock") || time.Now().After(deadline) {
 			if err == nil {
@@ -166,7 +166,7 @@ func (a archiveReader) query(ctx context.Context, sqlText string) string {
 	if err != nil {
 		return errorJSON(err.Error())
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	qctx, cancel := context.WithTimeout(ctx, queryTimeout)
 	defer cancel()
@@ -177,7 +177,7 @@ func (a archiveReader) query(ctx context.Context, sqlText string) string {
 		}
 		return errorJSON("DuckDB error: " + err.Error())
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, values, truncated, err := collect(rows)
 	if err != nil {
 		return errorJSON("DuckDB error: " + err.Error())
@@ -251,105 +251,6 @@ func marshalCompact(v any) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
-// schema describes every table and view with its row count, as the Python
-// chatstrata://schema resource does.
-func (a archiveReader) schema(ctx context.Context) (string, error) {
-	s, err := a.open(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer s.Close()
-	conn := s.Conn()
-	rows, err := conn.QueryContext(ctx, `SELECT table_name, table_type FROM information_schema.tables
-		WHERE table_schema = 'main' ORDER BY table_type, table_name`)
-	if err != nil {
-		return "", err
-	}
-	type table struct{ name, kind string }
-	var tables []table
-	for rows.Next() {
-		var t table
-		if err := rows.Scan(&t.name, &t.kind); err != nil {
-			rows.Close()
-			return "", err
-		}
-		tables = append(tables, t)
-	}
-	rows.Close()
-
-	var schemaParts, statsParts []string
-	for _, t := range tables {
-		label := "TABLE"
-		if t.kind == "VIEW" {
-			label = "VIEW"
-		}
-		cols, err := conn.QueryContext(ctx, `SELECT column_name, data_type, is_nullable
-			FROM information_schema.columns WHERE table_name = ? ORDER BY ordinal_position`, t.name)
-		if err != nil {
-			return "", err
-		}
-		var lines []string
-		for cols.Next() {
-			var name, dtype, nullable string
-			if err := cols.Scan(&name, &dtype, &nullable); err != nil {
-				cols.Close()
-				return "", err
-			}
-			line := fmt.Sprintf("    %-30s %s", name, dtype)
-			if nullable == "YES" {
-				line += " (nullable)"
-			}
-			lines = append(lines, line)
-		}
-		cols.Close()
-		schemaParts = append(schemaParts, fmt.Sprintf("%s %s:\n%s", label, t.name, strings.Join(lines, "\n")))
-
-		var n int64
-		if err := conn.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM "%s"`, t.name)).Scan(&n); err != nil {
-			statsParts = append(statsParts, fmt.Sprintf("  %s: (unable to count)", t.name))
-		} else {
-			statsParts = append(statsParts, fmt.Sprintf("  %s: %s rows", t.name, thousands(n)))
-		}
-	}
-	return fmt.Sprintf(`# ChatStrata Database Schema
-
-%s
-
-## Row Counts
-%s
-
-## Key Relationships
-- conversations.source_id -> sources.id
-- messages.conversation_id -> conversations.id
-- content_blocks.message_id -> messages.id
-- attachments.message_id -> messages.id
-- tool_calls is a VIEW over content_blocks WHERE type = 'tool_use'
-
-## Full-Text Search (BM25)
-Use: fts_main_content_blocks.match_bm25(cb.id, 'your search terms')
-Returns a float score (higher = more relevant), NULL for non-matches.
-Filter with: WHERE fts_main_content_blocks.match_bm25(cb.id, 'term') IS NOT NULL
-Order by score DESC for relevance ranking.
-
-## Example Queries
-%s
-`, strings.Join(schemaParts, "\n\n"), strings.Join(statsParts, "\n"), exampleQueries), nil
-}
-
-// thousands formats n with comma separators, like Python's f"{n:,}".
-func thousands(n int64) string {
-	s := fmt.Sprint(n)
-	neg := strings.HasPrefix(s, "-")
-	s = strings.TrimPrefix(s, "-")
-	for i := len(s) - 3; i > 0; i -= 3 {
-		s = s[:i] + "," + s[i:]
-	}
-	if neg {
-		s = "-" + s
-	}
-	return s
-}
-
 func text(s string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: s}}}
 }
@@ -366,6 +267,7 @@ func newMCPServer(a archiveReader) *mcp.Server {
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 			s, err := a.schema(ctx)
 			if err != nil {
+				//nolint:nilerr // MCP reports a tool failure in the result so the client sees the message
 				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil, nil
 			}
 			return text(s), nil, nil
@@ -421,9 +323,9 @@ func runServe(e *env, args []string) error {
 		<-e.ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(shutdown)
+		_ = srv.Shutdown(shutdown)
 	}()
-	fmt.Fprintf(e.stderr, "ChatStrata MCP server on http://%s%s\n", addr, path)
+	_, _ = fmt.Fprintf(e.stderr, "ChatStrata MCP server on http://%s%s\n", addr, path)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

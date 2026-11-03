@@ -91,7 +91,7 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 		outcome, err := p.Project(ctx, key)
 		if err != nil {
 			stats.Failed++
-			fmt.Fprintf(errs, "  ! failed to project %s %s: %s\n", key.Source, key.Locator, err)
+			_, _ = fmt.Fprintf(errs, "  ! failed to project %s %s: %s\n", key.Source, key.Locator, err)
 			continue
 		}
 		switch outcome {

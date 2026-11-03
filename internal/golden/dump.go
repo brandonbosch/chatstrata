@@ -24,7 +24,7 @@ func Dump(ctx context.Context, path string, replacements [][2]string) (any, erro
 	if err != nil {
 		return nil, err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	db := s.Conn()
 
 	convRows, err := db.QueryContext(ctx, `
@@ -34,6 +34,7 @@ func Dump(ctx context.Context, path string, replacements [][2]string) (any, erro
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = convRows.Close() }()
 	type convRow struct {
 		id, source, native  string
 		title, project, raw sql.NullString
@@ -46,12 +47,13 @@ func Dump(ctx context.Context, path string, replacements [][2]string) (any, erro
 		var c convRow
 		if err := convRows.Scan(&c.id, &c.source, &c.native, &c.title, &c.project, &c.started,
 			&c.ended, &c.count, &c.raw, &c.metadata); err != nil {
-			convRows.Close()
 			return nil, err
 		}
 		convs = append(convs, c)
 	}
-	convRows.Close()
+	if err := convRows.Err(); err != nil {
+		return nil, err
+	}
 
 	conversations := []any{}
 	for _, c := range convs {
@@ -103,16 +105,18 @@ func dumpMessages(ctx context.Context, db *sql.Conn, convID string) ([]any, erro
 		created               sql.NullTime
 		metadata              sql.NullString
 	}
+	defer func() { _ = rows.Close() }()
 	var msgs []msgRow
 	for rows.Next() {
 		var m msgRow
 		if err := rows.Scan(&m.id, &m.seq, &m.native, &m.parent, &m.role, &m.model, &m.created, &m.metadata); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		msgs = append(msgs, m)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	out := []any{}
 	for _, m := range msgs {
@@ -145,7 +149,7 @@ func dumpBlocks(ctx context.Context, db *sql.Conn, messageID string) ([]any, err
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []any{}
 	for rows.Next() {
 		var index int
@@ -178,7 +182,7 @@ func dumpRawEvents(ctx context.Context, db *sql.Conn, source, native string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []any{}
 	for rows.Next() {
 		var line sql.NullInt64

@@ -122,7 +122,9 @@ func orderedEvents(t *testing.T, raw json.RawMessage) ([]string, map[string][]by
 			t.Fatal(err)
 		}
 		var compact bytes.Buffer
-		json.Compact(&compact, event)
+		if err := json.Compact(&compact, event); err != nil {
+			t.Fatal(err)
+		}
 		id := tok.(string)
 		order = append(order, id)
 		lines[id] = append(compact.Bytes(), '\n')
@@ -137,7 +139,7 @@ func runScenario(t *testing.T, sc scenario, deliveryOrder []int, fileOrder []str
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	l, err := obslog.Open(filepath.Join(dir, "archive.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +171,9 @@ func runScenario(t *testing.T, sc scenario, deliveryOrder []int, fileOrder []str
 
 	db := s.Conn()
 	var count int
-	db.QueryRowContext(ctx, `SELECT count(*) FROM conversations`).Scan(&count)
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM conversations`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
 	if count != len(sc.Expected.Conversations) {
 		t.Errorf("%d conversations, want %d", count, len(sc.Expected.Conversations))
 	}
@@ -205,7 +209,7 @@ func messagesOf(t *testing.T, db *sql.Conn, source, locator string) ([]string, m
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var ids []string
 	parents := map[string]string{}
 	for rows.Next() {
@@ -216,6 +220,9 @@ func messagesOf(t *testing.T, db *sql.Conn, source, locator string) ([]string, m
 		}
 		ids = append(ids, id)
 		parents[id] = parent.String
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	return ids, parents
 }
@@ -229,7 +236,7 @@ func checkDivergences(t *testing.T, db *sql.Conn, want []expectedDivergence) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	got := map[string]*expectedDivergence{}
 	for rows.Next() {
 		var source, locator, branch, devices string
@@ -242,8 +249,13 @@ func checkDivergences(t *testing.T, db *sql.Conn, want []expectedDivergence) {
 			got[k] = &expectedDivergence{Source: source, Locator: locator, ForkAfter: fork.String, Branches: map[string][]string{}}
 		}
 		var list []string
-		json.Unmarshal([]byte(devices), &list)
+		if err := json.Unmarshal([]byte(devices), &list); err != nil {
+			t.Fatal(err)
+		}
 		got[k].Branches[branch] = list
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 	if len(got) != len(want) {
 		t.Errorf("divergences = %v, want %v", keys(got), want)

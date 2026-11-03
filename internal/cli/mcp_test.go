@@ -22,12 +22,12 @@ func connectMCP(t *testing.T, db string) *mcp.ClientSession {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { ss.Close() })
+	t.Cleanup(func() { _ = ss.Close() })
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(ctx, clientT, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cs.Close() })
+	t.Cleanup(func() { _ = cs.Close() })
 	return cs
 }
 
@@ -80,7 +80,7 @@ func TestMCPServer(t *testing.T) {
 
 	for sql, want := range map[string]string{
 		"DELETE FROM conversations":   "DELETE queries are not allowed",
-		"SELECT 1; SELECT 2":          "Multi-statement",
+		"SELECT 1; SELECT 2":          "multi-statement",
 		"SELECT * FROM no_such_table": "DuckDB error:",
 	} {
 		res.Error = ""
@@ -107,7 +107,7 @@ func TestMCPServer(t *testing.T) {
 func TestMCPServerWithoutArchive(t *testing.T) {
 	cs := connectMCP(t, filepath.Join(t.TempDir(), "missing.duckdb"))
 	out := callText(t, cs, "query", map[string]any{"sql": "SELECT 1"})
-	if !strings.Contains(out, "Run `chatstrata ingest <source>` first") {
+	if !strings.Contains(out, "run `chatstrata ingest <source>` first") {
 		t.Errorf("missing archive: %s", out)
 	}
 }

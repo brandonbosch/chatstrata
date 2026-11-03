@@ -24,7 +24,7 @@ func TestEmbeddedFTSLoadsWithoutInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	// An empty extension directory, so only the embedded copy can load.
 	if _, err := s.conn.ExecContext(ctx, "SET extension_directory = "+sqlString(t.TempDir())); err != nil {
 		t.Fatal(err)

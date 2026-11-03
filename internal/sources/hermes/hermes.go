@@ -111,7 +111,7 @@ func (Source) Discover(path string) ([]model.Handle, error) {
 		}
 	}
 	if len(present) == 0 {
-		return nil, fmt.Errorf("Hermes state database %w: %s (set HERMES_HOME, or pass --path to pick one store)",
+		return nil, fmt.Errorf("the Hermes state database %w: %s (set HERMES_HOME, or pass --path to pick one store)",
 			model.ErrNotFound, strings.Join(searched, ", "))
 	}
 	var handles []model.Handle
@@ -128,13 +128,13 @@ func (Source) Discover(path string) ([]model.Handle, error) {
 func discoverStore(s store) ([]model.Handle, error) {
 	db, err := srcutil.OpenSQLite(s.path)
 	if err != nil {
-		return nil, fmt.Errorf("Hermes state database is not readable: %s (%w)", s.path, err)
+		return nil, fmt.Errorf("the Hermes state database is not readable: %s (%w)", s.path, err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	ctx := context.Background()
 	ids, err := srcutil.QueryRows(ctx, db, "SELECT id FROM sessions ORDER BY started_at")
 	if err != nil {
-		return nil, fmt.Errorf("Hermes state database has no usable 'sessions' table: %s (%w)", s.path, err)
+		return nil, fmt.Errorf("the Hermes state database has no usable 'sessions' table: %s (%w)", s.path, err)
 	}
 	handles := make([]model.Handle, 0, len(ids))
 	for _, row := range ids {
@@ -142,7 +142,7 @@ func discoverStore(s store) ([]model.Handle, error) {
 		var doc document
 		sessions, err := srcutil.QueryRows(ctx, db, "SELECT * FROM sessions WHERE id = ?", id)
 		if err != nil || len(sessions) == 0 {
-			return nil, fmt.Errorf("read session %s from %s: %v", id, s.path, err)
+			return nil, fmt.Errorf("read session %s from %s: %w", id, s.path, err)
 		}
 		doc.Session = sessions[0]
 		if doc.Messages, err = srcutil.QueryRows(ctx, db,

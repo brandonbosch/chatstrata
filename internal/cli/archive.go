@@ -46,12 +46,12 @@ func openArchiveAt(e *env, dbPath, logPath string) (*archive, error) {
 	}
 	l, err := obslog.Open(logPath)
 	if err != nil {
-		s.Close()
+		_ = s.Close()
 		return nil, err
 	}
 	a := &archive{store: s, log: l, proj: newProjector(s, l)}
 	if _, err := a.proj.CatchUp(e.ctx, false, e.stderr); err != nil {
-		s.Close()
+		_ = s.Close()
 		return nil, err
 	}
 	return a, nil

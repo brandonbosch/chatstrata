@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,7 +18,7 @@ const (
 
 func do(t *testing.T, srv *httptest.Server, method, path, tok string, body []byte) (int, string) {
 	t.Helper()
-	req, _ := http.NewRequest(method, srv.URL+path, bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(context.Background(), method, srv.URL+path, bytes.NewReader(body))
 	if tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
@@ -25,7 +26,7 @@ func do(t *testing.T, srv *httptest.Server, method, path, tok string, body []byt
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
 }

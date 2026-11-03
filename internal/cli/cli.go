@@ -106,26 +106,26 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		case errors.As(err, &exit):
 			return exit.code
 		case errors.As(err, &usage):
-			fmt.Fprintf(stderr, "Error: %s\nRun 'chatstrata %s --help' for usage.\n", usage.msg, c.name)
+			_, _ = fmt.Fprintf(stderr, "Error: %s\nRun 'chatstrata %s --help' for usage.\n", usage.msg, c.name)
 			return 2
 		default:
-			fmt.Fprintf(stderr, "Error: %s\n", err)
+			_, _ = fmt.Fprintf(stderr, "Error: %s\n", err)
 			return 1
 		}
 	}
-	fmt.Fprintf(stderr, "Error: no such command %q\n\n", args[0])
+	_, _ = fmt.Fprintf(stderr, "Error: no such command %q\n\n", args[0])
 	printUsage(stderr)
 	return 2
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: chatstrata COMMAND [ARGS]...")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "A personal, queryable archive of your AI conversations.")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Commands:")
+	_, _ = fmt.Fprintln(w, "Usage: chatstrata COMMAND [ARGS]...")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "A personal, queryable archive of your AI conversations.")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Commands:")
 	for _, c := range commands {
-		fmt.Fprintf(w, "  %-14s %s\n", c.name, c.summary)
+		_, _ = fmt.Fprintf(w, "  %-14s %s\n", c.name, c.summary)
 	}
 }
 
@@ -154,7 +154,7 @@ func newFlagSet(e *env, name, usage string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(e.stderr)
 	fs.Usage = func() {
-		fmt.Fprintf(e.stderr, "Usage: chatstrata %s\n\nOptions:\n", usage)
+		_, _ = fmt.Fprintf(e.stderr, "Usage: chatstrata %s\n\nOptions:\n", usage)
 		fs.PrintDefaults()
 	}
 	return fs
@@ -170,15 +170,15 @@ func runSources(e *env, args []string) error {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	fmt.Fprintln(e.stdout, "Available sources:")
+	_, _ = fmt.Fprintln(e.stdout, "Available sources:")
 	for _, name := range names {
 		s := sources[name]
-		fmt.Fprintf(e.stdout, "  %-20s %-25s v%s\n", name, s.DisplayName(), s.Version())
+		_, _ = fmt.Fprintf(e.stdout, "  %-20s %-25s v%s\n", name, s.DisplayName(), s.Version())
 	}
 	return nil
 }
 
 func runVersion(e *env, args []string) error {
-	fmt.Fprintf(e.stdout, "chatstrata %s\n", Version)
+	_, _ = fmt.Fprintf(e.stdout, "chatstrata %s\n", Version)
 	return nil
 }

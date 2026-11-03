@@ -70,18 +70,18 @@ func writeLegacyArchive(t *testing.T, path string, convs []map[string]any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	for _, stmt := range []string{
 		`CREATE TABLE conversations (source_id VARCHAR, source_native_id VARCHAR, raw_path VARCHAR, project VARCHAR)`,
 		`CREATE TABLE raw_events (source_id VARCHAR, source_native_conversation_id VARCHAR, line_number INTEGER, payload JSON)`,
 	} {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, c := range convs {
 		source, native := c["source_id"].(string), c["source_native_id"].(string)
-		if _, err := db.Exec(`INSERT INTO conversations VALUES (?, ?, ?, ?)`,
+		if _, err := db.ExecContext(context.Background(), `INSERT INTO conversations VALUES (?, ?, ?, ?)`,
 			source, native, c["raw_path"], c["project"]); err != nil {
 			t.Fatal(err)
 		}
@@ -91,7 +91,7 @@ func writeLegacyArchive(t *testing.T, path string, convs []map[string]any) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.Exec(`INSERT INTO raw_events VALUES (?, ?, ?, ?)`,
+			if _, err := db.ExecContext(context.Background(), `INSERT INTO raw_events VALUES (?, ?, ?, ?)`,
 				source, native, int(e["line_number"].(float64)), string(payload)); err != nil {
 				t.Fatal(err)
 			}

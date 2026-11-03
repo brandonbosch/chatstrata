@@ -21,9 +21,9 @@ func runStats(e *env, args []string) error {
 	if s == nil || err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
-	fmt.Fprintf(e.stdout, "Database: %s\n\n", s.Path)
+	_, _ = fmt.Fprintf(e.stdout, "Database: %s\n\n", s.Path)
 	rows, err := s.Conn().QueryContext(e.ctx, `
 		SELECT s.id, s.name, COUNT(c.id) AS conversations,
 		       MIN(c.started_at) AS earliest, MAX(c.ended_at) AS latest
@@ -34,7 +34,7 @@ func runStats(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	printed := false
 	for rows.Next() {
 		var id, name string
@@ -44,17 +44,17 @@ func runStats(e *env, args []string) error {
 			return err
 		}
 		if !printed {
-			fmt.Fprintln(e.stdout, "Sources:")
+			_, _ = fmt.Fprintln(e.stdout, "Sources:")
 			printed = true
 		}
-		fmt.Fprintf(e.stdout, "  %-20s %-25s %6d conversations  %s  to  %s\n",
+		_, _ = fmt.Fprintf(e.stdout, "  %-20s %-25s %6d conversations  %s  to  %s\n",
 			id, name, n, timeOrDash(earliest), timeOrDash(latest))
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
 	if !printed {
-		fmt.Fprintln(e.stdout, "No data ingested yet. Try `chatstrata ingest claude_code`.")
+		_, _ = fmt.Fprintln(e.stdout, "No data ingested yet. Try `chatstrata ingest claude_code`.")
 		return nil
 	}
 
@@ -68,7 +68,7 @@ func runStats(e *env, args []string) error {
 		Scan(&conversations, &messages, &blocks, &toolCalls); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "\nTotals: conversations=%d, messages=%d, content_blocks=%d, tool_calls=%d\n",
+	_, _ = fmt.Fprintf(e.stdout, "\nTotals: conversations=%d, messages=%d, content_blocks=%d, tool_calls=%d\n",
 		conversations, messages, blocks, toolCalls)
 	return nil
 }
@@ -90,7 +90,7 @@ func runDoctor(e *env, args []string) error {
 	if s == nil || err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	issues := 0
 	// A source registered without anything ever collected for it (the
@@ -105,16 +105,18 @@ func runDoctor(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
 			return err
 		}
-		fmt.Fprintf(e.stdout, "  ⚠ source '%s' has no conversations\n", id)
+		_, _ = fmt.Fprintf(e.stdout, "  ⚠ source '%s' has no conversations\n", id)
 		issues++
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 
 	checks := []struct{ sql, message string }{
 		{`SELECT COUNT(*) FROM conversations c
@@ -130,14 +132,14 @@ func runDoctor(e *env, args []string) error {
 			return err
 		}
 		if n > 0 {
-			fmt.Fprintf(e.stdout, "  ⚠ %d %s\n", n, c.message)
+			_, _ = fmt.Fprintf(e.stdout, "  ⚠ %d %s\n", n, c.message)
 			issues++
 		}
 	}
 
 	if s.LoadFTS(e.ctx) {
 		if exists, indexed, pending, err := s.FTSCoverage(e.ctx); err == nil && exists && pending > 0 {
-			fmt.Fprintf(e.stdout, "  ℹ %d content blocks are newer than the search index (of %d indexed); search finds them by substring until the next rebuild, or run `chatstrata reindex`\n", pending, indexed)
+			_, _ = fmt.Fprintf(e.stdout, "  ℹ %d content blocks are newer than the search index (of %d indexed); search finds them by substring until the next rebuild, or run `chatstrata reindex`\n", pending, indexed)
 		}
 	}
 
@@ -148,9 +150,9 @@ func runDoctor(e *env, args []string) error {
 	issues += n
 
 	if issues == 0 {
-		fmt.Fprintln(e.stdout, "✓ All checks passed.")
+		_, _ = fmt.Fprintln(e.stdout, "✓ All checks passed.")
 	} else {
-		fmt.Fprintf(e.stdout, "\n%d issue(s) found.\n", issues)
+		_, _ = fmt.Fprintf(e.stdout, "\n%d issue(s) found.\n", issues)
 	}
 	return nil
 }
@@ -170,15 +172,15 @@ func runReindex(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	if !s.LoadFTS(e.ctx) {
 		if !*install {
-			fmt.Fprintln(e.stderr, "DuckDB's full-text search extension isn't installed, so `search` falls back to substring matching.")
-			fmt.Fprintln(e.stderr, "Run `chatstrata reindex --install-fts` to download it once (the only network request search needs).")
+			_, _ = fmt.Fprintln(e.stderr, "DuckDB's full-text search extension isn't installed, so `search` falls back to substring matching.")
+			_, _ = fmt.Fprintln(e.stderr, "Run `chatstrata reindex --install-fts` to download it once (the only network request search needs).")
 			return exitError{1}
 		}
-		fmt.Fprintln(e.stdout, "Downloading DuckDB full-text search extension...")
+		_, _ = fmt.Fprintln(e.stdout, "Downloading DuckDB full-text search extension...")
 		if err := s.InstallFTS(e.ctx); err != nil {
 			return err
 		}
@@ -188,11 +190,11 @@ func runReindex(e *env, args []string) error {
 	if err := s.Conn().QueryRowContext(e.ctx, `SELECT COUNT(*) FROM content_blocks WHERE text IS NOT NULL`).Scan(&n); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Rebuilding search index over %d content blocks...\n", n)
+	_, _ = fmt.Fprintf(e.stdout, "Rebuilding search index over %d content blocks...\n", n)
 	if err := s.RebuildFTS(e.ctx); err != nil {
 		return fmt.Errorf("rebuild search index: %w", err)
 	}
-	fmt.Fprintln(e.stdout, "Done. Search index is up to date.")
+	_, _ = fmt.Fprintln(e.stdout, "Done. Search index is up to date.")
 	return nil
 }
 
@@ -212,7 +214,7 @@ func checkSources(e *env, s *store.Store) (int, error) {
 	sort.Strings(names)
 	issues := 0
 	warn := func(format string, args ...any) {
-		fmt.Fprintf(e.stdout, "  ⚠ "+format+"\n", args...)
+		_, _ = fmt.Fprintf(e.stdout, "  ⚠ "+format+"\n", args...)
 		issues++
 	}
 	for _, name := range names {
@@ -231,7 +233,7 @@ func checkSources(e *env, s *store.Store) (int, error) {
 				warn("source '%s': %s", name, p)
 			}
 			for _, n := range notes {
-				fmt.Fprintf(e.stdout, "  ℹ source '%s' %s\n", name, n)
+				_, _ = fmt.Fprintf(e.stdout, "  ℹ source '%s' %s\n", name, n)
 			}
 		}
 
@@ -294,10 +296,10 @@ func runPaths(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(e.stdout, "Database:  %s\n", dbPath)
-	fmt.Fprintf(e.stdout, "Log:       %s  (source of truth; `chatstrata rebuild` recreates the database from it)\n", logDir(dbPath))
-	fmt.Fprintf(e.stdout, "Data dir:  %s\n", dataDir)
-	fmt.Fprintln(e.stdout)
-	fmt.Fprintln(e.stdout, "Override the database with CHATSTRATA_GO_DB or per-command --db.")
+	_, _ = fmt.Fprintf(e.stdout, "Database:  %s\n", dbPath)
+	_, _ = fmt.Fprintf(e.stdout, "Log:       %s  (source of truth; `chatstrata rebuild` recreates the database from it)\n", logDir(dbPath))
+	_, _ = fmt.Fprintf(e.stdout, "Data dir:  %s\n", dataDir)
+	_, _ = fmt.Fprintln(e.stdout)
+	_, _ = fmt.Fprintln(e.stdout, "Override the database with CHATSTRATA_GO_DB or per-command --db.")
 	return nil
 }
