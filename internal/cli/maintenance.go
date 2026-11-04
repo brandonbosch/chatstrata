@@ -148,6 +148,7 @@ func runDoctor(e *env, args []string) error {
 		return err
 	}
 	issues += n
+	issues += checkSync(e, logDir(s.Path))
 
 	if issues == 0 {
 		_, _ = fmt.Fprintln(e.stdout, "✓ All checks passed.")

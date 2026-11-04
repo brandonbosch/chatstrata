@@ -177,6 +177,7 @@ func syncNow(e *env, a *archive, space *devsync.Space, reseed bool) error {
 		sync = devsync.NewClient(space).Reseed
 	}
 	res, err := sync(e.ctx, a.log)
+	recordSync(e, a.log.Root, err)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}
@@ -206,6 +207,7 @@ func runDevices(e *env, args []string) error {
 	space, err := devsync.Load(a.log.Root, a.log.Identity.Space)
 	if err == nil {
 		_, _ = fmt.Fprintf(e.stdout, "Relay:       %s\n", space.Relay)
+		printLastSync(e, a.log.Root)
 	} else {
 		_, _ = fmt.Fprintln(e.stdout, "Relay:       not set up (see `chatstrata pair`)")
 	}
@@ -321,9 +323,10 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	}
 	closed = true
 	res, err := devsync.NewClient(space).Sync(e.ctx, a.log)
+	recordSync(e, a.log.Root, err)
 	if err != nil {
 		// The relay being away is normal: keep collecting, sync next time.
-		logger.Printf("sync skipped: %s", err)
+		logger.Print(syncFailure(a.log.Root, err))
 		return nil
 	}
 	stats.Stored, stats.Removed = 0, 0

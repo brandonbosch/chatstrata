@@ -10,7 +10,7 @@
 | `search TERMS` | Keyword search across archived text |
 | `stats` | Archive counts and source date ranges |
 | `analyze activity / tools / models / projects / conversations` | Built-in analyses |
-| `doctor` | Source-format, pending-collection, and archive checks |
+| `doctor` | Source-format, pending-collection, archive, and sync-health checks |
 | `paths` | Archive, log, and data-directory locations |
 | `sources` | Built-in source adapters |
 | `serve` | MCP server (stdio by default) |

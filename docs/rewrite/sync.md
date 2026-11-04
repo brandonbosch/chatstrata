@@ -47,7 +47,8 @@ its history: its segments are moved into the shared space and uploaded.
 ```sh
 chatstrata schedule install  # run the daemon in the background: collect and sync every 5 minutes
 chatstrata schedule status   # is it running, which binary, which interval
-chatstrata devices           # who is in the space, and what the relay holds
+chatstrata devices           # who is in the space, what the relay holds, when sync last worked
+chatstrata doctor            # flags sync that has been failing for over a day
 chatstrata sync              # sync now
 ```
 
@@ -63,6 +64,15 @@ service managers.
 The daemon opens the archive only during each run, so `query`, `search` and
 the other commands work in between. If the relay is unreachable, devices
 keep collecting and catch up on the next run.
+
+A relay that stays down shouldn't go unnoticed. Each device records its sync
+attempts in `sync-state.json`. Once sync has failed continuously for 24 hours,
+`doctor` reports it as an issue, `devices` marks the "Last sync" line with ⚠,
+and every failed daemon run logs a `WARNING:` line instead of `sync skipped`.
+Shorter outages (a laptop closed overnight) are only noted. `doctor` also
+notes sync that hasn't run for a day without failing, which usually means
+the daemon isn't running. These times come from the device's clock and are
+only displayed; nothing orders or merges by them.
 
 ## Moving the relay
 
@@ -127,6 +137,7 @@ Files next to the archive, all mode 0600:
 | `chatstrata-go.log/identity.json` | this device's id and its space id |
 | `chatstrata-go.log/space.key` | the space key (age identity) |
 | `chatstrata-go.log/sync.json` | the relay URL |
+| `chatstrata-go.log/sync-state.json` | this device's last sync attempt, last success and current failure |
 
 ## Why not tsnet
 
