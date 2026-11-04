@@ -133,3 +133,45 @@ func TestSetRelayRejectsInvalidURLAndUnpairedDevice(t *testing.T) {
 		t.Fatalf("invalid relay URL changed config: %v", err)
 	}
 }
+
+// Replacing the shared credential while reseeding must not change the space,
+// archive IDs, or original observations. The old credential must be refused.
+func TestReseedWithReplacementKeyPreservesArchive(t *testing.T) {
+	old := httptest.NewServer((&relay.Server{Dir: t.TempDir()}).Handler())
+	defer old.Close()
+	a := newDevice(t, map[string][]byte{sample: transcript(t, sample, 0)})
+	run(t, "ingest", "claude_code", "--path", a.root, "--db", a.db)
+	oldCode := pairingCode(t, run(t, "pair", "--relay", old.URL, "--db", a.db))
+	run(t, "sync", "--db", a.db)
+	want := withoutPaths(dump(t, a.db))
+	space, err := devsync.ParsePairingCode(oldCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldKey := space.Key
+	space.Key, err = devsync.NewKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement := httptest.NewServer((&relay.Server{Dir: t.TempDir()}).Handler())
+	defer replacement.Close()
+	space.Relay = replacement.URL
+	if err := devsync.Save(strings.TrimSuffix(a.db, ".duckdb")+".log", space); err != nil {
+		t.Fatal(err)
+	}
+	run(t, "sync", "--reseed", "--db", a.db)
+	if !reflect.DeepEqual(withoutPaths(dump(t, a.db)), want) {
+		t.Fatal("key replacement changed the original archive")
+	}
+	b := newDevice(t, nil)
+	run(t, "join", space.PairingCode(), "--db", b.db)
+	if !reflect.DeepEqual(withoutPaths(dump(t, b.db)), want) {
+		t.Fatal("archive restored with replacement key differs")
+	}
+	// A stale member has the right space and endpoint but the exposed key.
+	space.Key = oldKey
+	intruder := newDevice(t, nil)
+	if _, err := runErr("join", space.PairingCode(), "--db", intruder.db); err == nil || !strings.Contains(err.Error(), "wrong token") {
+		t.Fatalf("old key was not refused: %v", err)
+	}
+}
