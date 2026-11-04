@@ -22,7 +22,7 @@
 | `import-legacy [PATH]` | Import an old Python archive without Python |
 | `pair --relay URL` | Configure sync and show a private pairing code |
 | `join CODE` | Join another trusted device to the space |
-| `sync` | Exchange encrypted observation-log segments |
+| `sync [--set-relay URL] [--reseed]` | Exchange encrypted segments; change relay without printing the key, or reseed all locally held device history |
 | `devices` | Show device/sync state |
 | `relay` | Run the optional segment relay |
 | `version` | Installed build version |
