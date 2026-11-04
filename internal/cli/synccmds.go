@@ -133,14 +133,23 @@ func runJoin(e *env, args []string) error {
 		return err
 	}
 	_, _ = fmt.Fprintf(e.stdout, "Joined. This device (%s) now syncs through %s.\n", short(a.log.Identity.Device), space.Relay)
-	return syncNow(e, a, space)
+	return syncNow(e, a, space, false)
 }
 
 func runSync(e *env, args []string) error {
-	fs := newFlagSet(e, "sync", "sync [--db PATH]")
+	fs := newFlagSet(e, "sync", "sync [--set-relay URL] [--reseed] [--db PATH]")
+	relayURL := fs.String("set-relay", "", "Change an already paired device's relay without displaying its space key, then sync.")
+	reseed := fs.Bool("reseed", false, "Upload all locally held devices' segments, including offline devices, to seed a replacement relay.")
 	db := fs.String("db", "", "Override the database path.")
 	if _, err := parse(fs, args); err != nil {
 		return err
+	}
+	if *relayURL != "" {
+		var err error
+		*relayURL, err = devsync.ValidateRelay(*relayURL)
+		if err != nil {
+			return usageError{err.Error()}
+		}
 	}
 	a, err := openArchive(e, *db)
 	if err != nil {
@@ -151,12 +160,23 @@ func runSync(e *env, args []string) error {
 	if err != nil {
 		return err
 	}
-	return syncNow(e, a, space)
+	if *relayURL != "" {
+		space.Relay = *relayURL
+		if err := devsync.Save(a.log.Root, space); err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(e.stdout, "This device now syncs through %s.\n", space.Relay)
+	}
+	return syncNow(e, a, space, *reseed)
 }
 
 // syncNow exchanges segments with the relay and applies what arrived.
-func syncNow(e *env, a *archive, space *devsync.Space) error {
-	res, err := devsync.NewClient(space).Sync(e.ctx, a.log)
+func syncNow(e *env, a *archive, space *devsync.Space, reseed bool) error {
+	sync := devsync.NewClient(space).Sync
+	if reseed {
+		sync = devsync.NewClient(space).Reseed
+	}
+	res, err := sync(e.ctx, a.log)
 	if err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}

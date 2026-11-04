@@ -64,6 +64,45 @@ The daemon opens the archive only during each run, so `query`, `search` and
 the other commands work in between. If the relay is unreachable, devices
 keep collecting and catch up on the next run.
 
+## Moving the relay
+
+Keep the existing space ID and key when moving the relay. On an already paired
+device, `sync --set-relay URL` saves the new URL without printing a pairing code
+or key, then syncs. The URL stays saved even if that sync fails; fix connectivity
+and retry `sync`. An unpaired device must still use `pair` or `join` first.
+
+1. Start `chatstrata relay` on the new host as a persistent service, with its
+   own data directory and HTTPS through `tailscale serve` as above. On Linux,
+   enable user lingering if a user service must run after logout and at boot.
+2. If the old relay is available, copy its encrypted data directory, including
+   `spaces/*/token.sha256`, to the new relay while writes are stopped. Otherwise
+   seed an empty relay from a paired device holding the most complete log:
+
+   ```sh
+   chatstrata sync --set-relay https://<new-host>.<tailnet>.ts.net --reseed
+   chatstrata devices
+   ```
+
+   Ordinary sync uploads only the current device's segments. `--reseed` uploads
+   every locally held device's segments, preserving offline or retired devices'
+   history too. It encrypts the original segment bytes under the existing space
+   key; duplicate sequence numbers are left intact. Retrying is safe.
+3. On every other paired device, run the same command with `--reseed`, then
+   check `devices`. Reseeding from each device also preserves any history that
+   never reached the old relay. Devices that are offline need this step when
+   they return. Their daemon uses the saved URL on its next cycle.
+4. Verify the replacement holds the expected segments for every device before
+   retiring the old relay. Preserve the old store as a rollback backup until
+   all devices have migrated; do not delete any observation logs or keys.
+
+Reseeding can only preserve segments held by the device doing the reseed. If
+the old relay and every device holding some history are unavailable, wait for
+one of them to return before declaring the migration complete.
+
+For future moves, prefer a stable Tailscale Service name (or a stable HTTPS
+name you control), so moving the backend needs no client URL changes. Configure
+the service and its tailnet permissions before using that name.
+
 ## How it works
 
 - Each device uploads its own segments and downloads everyone else's. Segments

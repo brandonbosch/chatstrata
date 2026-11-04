@@ -120,17 +120,38 @@ type Result struct {
 // Each segment moves on its own, so an interrupted sync leaves only whole
 // segments behind and the next run picks up where it stopped.
 func (c *Client) Sync(ctx context.Context, l *obslog.Log) (Result, error) {
+	return c.sync(ctx, l, false)
+}
+
+// Reseed also uploads segments held locally for other devices. Use it when
+// moving to an empty relay, so offline or retired devices' history survives.
+func (c *Client) Reseed(ctx context.Context, l *obslog.Log) (Result, error) {
+	return c.sync(ctx, l, true)
+}
+
+func (c *Client) sync(ctx context.Context, l *obslog.Log, reseed bool) (Result, error) {
 	var res Result
 	recipient := c.Space.Key.Recipient()
 
 	// Push.
 	self := l.Identity.Device
-	local, err := l.Segments(self)
-	if err != nil {
-		return res, err
+	pushDevices := []string{self}
+	if reseed {
+		var err error
+		pushDevices, err = l.Devices()
+		if err != nil {
+			return res, err
+		}
 	}
-	if len(local) > 0 {
-		remote, err := c.segments(ctx, self)
+	for _, device := range pushDevices {
+		local, err := l.Segments(device)
+		if err != nil {
+			return res, err
+		}
+		if len(local) == 0 {
+			continue
+		}
+		remote, err := c.segments(ctx, device)
 		if err != nil {
 			return res, err
 		}
@@ -153,18 +174,20 @@ func (c *Client) Sync(ctx context.Context, l *obslog.Log) (Result, error) {
 			if err := w.Close(); err != nil {
 				return res, err
 			}
-			resp, err := c.do(ctx, "PUT", "/devices/"+self+"/segments/"+strconv.FormatUint(seg.FirstSeq, 10), buf.Bytes())
+			resp, err := c.do(ctx, "PUT", "/devices/"+device+"/segments/"+strconv.FormatUint(seg.FirstSeq, 10), buf.Bytes())
 			if err != nil {
 				return res, err
 			}
-			_ = resp.Body.Close()
 			switch resp.StatusCode {
 			case http.StatusCreated:
 				res.Uploaded++
 			case http.StatusConflict: // uploaded by an earlier, interrupted run
 			default:
-				return res, statusError(resp)
+				err := statusError(resp)
+				_ = resp.Body.Close()
+				return res, err
 			}
+			_ = resp.Body.Close()
 		}
 	}
 
