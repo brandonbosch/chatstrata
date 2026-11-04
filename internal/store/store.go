@@ -29,6 +29,8 @@ type Store struct {
 	conn      *sql.Conn
 	Path      string
 	ftsLoaded bool
+	deleted   int64 // rows deleted this session, not yet added to the meta count
+	closed    bool
 }
 
 // DefaultPath returns the Go implementation's archive location. During the
@@ -168,8 +170,13 @@ func open(ctx context.Context, path, dsn string) (*Store, error) {
 }
 
 func (s *Store) Close() error {
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	err := s.saveDeleted(context.Background())
 	_ = s.conn.Close()
-	return s.DB.Close()
+	return errors.Join(err, s.DB.Close())
 }
 
 // Conn returns the store's single connection, for queries that must see
@@ -275,7 +282,7 @@ func (s *Store) SchemaVersion(ctx context.Context) int {
 
 // migrate applies the numbered embedded migrations, preserving the original
 // version numbering for existing Go installations and legacy SQL compatibility.
-func (s *Store) migrate(ctx context.Context) error {
+func (s *Store) migrate(ctx context.Context) (err error) {
 	type source struct {
 		fsys fs.FS
 		dir  string
@@ -306,6 +313,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 
 	current := s.SchemaVersion(ctx)
+	if current == 0 { // a new archive: no dead rows yet (see CompactionDue)
+		defer func() {
+			if err == nil {
+				_, err = s.conn.ExecContext(ctx, `INSERT OR REPLACE INTO meta (key, value) VALUES (?, '0')`, deletedKey)
+			}
+		}()
+	}
 	for _, m := range all {
 		if m.version <= current {
 			continue

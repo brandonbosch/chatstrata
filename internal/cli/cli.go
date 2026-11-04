@@ -68,6 +68,7 @@ func init() {
 		{"doctor", "Run basic sanity checks on the archive", runDoctor},
 		{"reindex", "Rebuild the full-text search index", runReindex},
 		{"rebuild", "Rebuild the archive from its observation log", runRebuild},
+		{"compact", "Reclaim the space deleted rows still take in the archive", runCompact},
 		{"import-legacy", "Import a Python-era archive into the observation log", runImportLegacy},
 		{"pair", "Set up sync and print a code for adding devices", runPair},
 		{"join", "Join this device to a space with a pairing code", runJoin},

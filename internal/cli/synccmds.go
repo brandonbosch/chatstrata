@@ -308,6 +308,7 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 	if stats.Stored > 0 {
 		logger.Printf("archive: %d conversations updated", stats.Stored)
 	}
+	compactIfDue(e, a, logger) // may close the archive; closing again is a no-op
 
 	space, err := devsync.Load(a.log.Root, a.log.Identity.Space)
 	if errors.Is(err, devsync.ErrNotPaired) {

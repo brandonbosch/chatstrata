@@ -109,11 +109,41 @@ writing the log and updating the projection is repaired, and how segments
 from other devices will be applied once sync (M3) delivers them into their
 device directories.
 
+## Compaction
+
+DuckDB never returns the space deleted rows take: it stays in the file
+until the file is rewritten. A grown transcript only appends rows, but some
+updates still delete them: a changed `project` or `started_at` replaces the
+whole conversation, a `hashVersion` bump re-ingests everything, and an
+edited, shrunk or reordered conversation is rewritten from its first
+difference.
+
+The store counts the rows it deletes in `meta.compaction_deleted_rows`
+(saved when the archive closes). Once that reaches the live rows of
+`conversations`, `messages`, `content_blocks` and `raw_events` (so at least
+half of what was written is dead) and at least 10,000 rows, the daemon
+compacts the archive on its next run. An archive from before the count has
+no such row; it is compacted once if it is 64 MB or larger.
+
+Compacting creates a fresh archive with the same migrations as a new one,
+copies every table into it in foreign-key order (`COPY FROM DATABASE` copies
+children before parents and fails), checks each table's row count, and
+rebuilds the search index on it. The swap happens while the daemon still
+holds DuckDB's write lock: the old file is checkpointed, the new one renamed
+over it, and only then is the old connection closed. That close leaves the
+new file's write-ahead log alone, so a writer that opens the new file at once
+is safe (`TestSwapLeavesNewFilesWALAlone`). A failure before the rename
+leaves the archive untouched; a crash leaves `<archive>.compact` behind for
+the next compaction to remove. Windows can't rename over an open file, so
+compaction doesn't run there; `rebuild` is the alternative.
+
 ## Commands
 
 - `chatstrata ingest SOURCE`: collect, log, project.
 - `chatstrata rebuild`: build a fresh projection from the log and swap it in.
   The search index is rebuilt with it when the FTS extension is installed.
+- `chatstrata compact`: reclaim the space deleted rows take now, rather than
+  waiting for the daemon to do it.
 - `chatstrata import-legacy PYTHON_ARCHIVE`: log each conversation of a
   Python-era archive as a legacy snapshot, so history whose transcripts are
   gone survives. Re-running it skips what was already imported. Every Python

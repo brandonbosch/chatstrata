@@ -131,7 +131,7 @@ func (s *Store) deleteConversation(ctx context.Context, source, nativeID, convID
 		{`DELETE FROM conversations WHERE id = ?`, []any{convID}},
 	}
 	for _, step := range steps {
-		if _, err := s.conn.ExecContext(ctx, step.sql, step.args...); err != nil {
+		if err := s.exec(ctx, step.sql, step.args...); err != nil {
 			return fmt.Errorf("remove old version of %s: %w", nativeID, err)
 		}
 	}
@@ -171,7 +171,7 @@ func (s *Store) updateConversation(ctx context.Context, source string, conv *mod
 				[]any{source, conv.SourceNativeID, keepEvents}},
 		}
 		for _, step := range steps {
-			if _, err := s.conn.ExecContext(ctx, step.sql, step.args...); err != nil {
+			if err := s.exec(ctx, step.sql, step.args...); err != nil {
 				return fmt.Errorf("remove changed rows of %s: %w", conv.SourceNativeID, err)
 			}
 		}

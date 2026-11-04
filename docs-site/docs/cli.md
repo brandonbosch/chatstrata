@@ -19,6 +19,7 @@
 | `daemon` | Foreground collection and optional sync loop |
 | `reindex` | Refresh the full-text index |
 | `rebuild` | Recreate DuckDB from the observation log |
+| `compact` | Reclaim space deleted rows still take (the daemon does this when needed) |
 | `import-legacy [PATH]` | Import an old Python archive without Python |
 | `pair --relay URL` | Configure sync and show a private pairing code |
 | `join CODE` | Join another trusted device to the space |
