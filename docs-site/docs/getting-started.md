@@ -64,6 +64,7 @@ conversation without raw events cannot be recovered by legacy import.
 ## Check collection
 
 `chatstrata doctor` reports source-format problems and local changes awaiting
-collection. `chatstrata schedule status` shows the daemon and its log location.
+collection, and, on a device that syncs, sync that has been failing for over a
+day. `chatstrata schedule status` shows the daemon and its log location.
 Close direct DuckDB connections in idle analysis/notebook sessions: they block
 collection even when opened read-only. Use MCP or `chatstrata query` instead.
