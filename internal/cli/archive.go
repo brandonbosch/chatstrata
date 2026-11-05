@@ -39,7 +39,7 @@ func openArchive(e *env, db string) (*archive, error) {
 func openArchiveAt(e *env, dbPath, logPath string) (*archive, error) {
 	s, err := store.Open(e.ctx, dbPath)
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "conflicting lock") {
+		if lockConflict(err) {
 			return nil, fmt.Errorf("%w\nClose other DuckDB connections, including idle Python/notebook analysis sessions. Use `chatstrata query` or MCP for analysis; they close the archive after each request", err)
 		}
 		return nil, err
@@ -58,6 +58,12 @@ func openArchiveAt(e *env, dbPath, logPath string) (*archive, error) {
 }
 
 func (a *archive) Close() error { return a.store.Close() }
+
+// lockConflict reports whether opening an archive failed because another
+// process holds DuckDB's lock on it.
+func lockConflict(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "conflicting lock")
+}
 
 func newProjector(s *store.Store, l *obslog.Log) *project.Projector {
 	srcs := make(map[string]model.Source, len(sources))
