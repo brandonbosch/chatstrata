@@ -27,6 +27,8 @@ and before waiting for an optional relay.
 `chatstrata paths` shows the projection and adjacent observation log.
 Back up the log directory. `chatstrata rebuild` recreates DuckDB from it,
 including conversations no longer present in their original source files.
+It refuses to run while the daemon or another writer has the archive open;
+wait for the current run to finish, or stop the daemon, and try again.
 Do not edit the projection directly: a rebuild would discard those edits.
 
 Normal collection makes no network requests. Optional device sync requires

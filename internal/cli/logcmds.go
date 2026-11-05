@@ -30,6 +30,22 @@ func runRebuild(e *env, args []string) error {
 		return fmt.Errorf("no observation log at %s to rebuild from", logPath)
 	}
 
+	// Hold the current archive's write lock for the whole rebuild, so the
+	// daemon or another writer can't be using the file that gets replaced.
+	old, err := store.OpenForReplace(e.ctx, dbPath)
+	if err != nil {
+		if lockConflict(err) {
+			return fmt.Errorf("rebuild: another process has %s open for writing (the background daemon, an ingest or sync run, or a Python/notebook session); stop it and try again: %w", dbPath, err)
+		}
+		return fmt.Errorf("rebuild: open %s (to rebuild over an archive DuckDB can't open, move it aside first): %w", dbPath, err)
+	}
+	swapped := false
+	defer func() {
+		if !swapped {
+			_ = old.Close()
+		}
+	}()
+
 	// Build next to the archive, then swap it in, so a failed rebuild leaves
 	// the current archive untouched.
 	tmp := dbPath + ".rebuild"
@@ -61,13 +77,9 @@ func runRebuild(e *env, args []string) error {
 		return fmt.Errorf("rebuild: %w", err)
 	}
 
-	// A stale write-ahead log next to the old file would be replayed into the
-	// new one, so it goes first.
-	if err := os.Remove(dbPath + ".wal"); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := os.Rename(tmp, dbPath); err != nil {
-		return err
+	swapped = true
+	if err := old.ReplaceWith(e.ctx, tmp); err != nil {
+		return fmt.Errorf("rebuild: swap in %s: %w", tmp, err)
 	}
 	_, _ = fmt.Fprintf(e.stdout, "Done. Segments: %d  Conversations: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d\n",
 		stats.Segments, stats.Stored, stats.Unported, stats.Failed)

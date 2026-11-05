@@ -114,6 +114,11 @@ device directories.
 - `chatstrata ingest SOURCE`: collect, log, project.
 - `chatstrata rebuild`: build a fresh projection from the log and swap it in.
   The search index is rebuilt with it when the FTS extension is installed.
+  It holds the current archive's write lock throughout, so it refuses while
+  the daemon or another writer has the archive open. The swap checkpoints
+  the old file, renames the new one over it, and only then closes the old
+  connection; it never deletes `<archive>.wal` by path, which could be
+  another process's write-ahead log.
 - `chatstrata import-legacy PYTHON_ARCHIVE`: log each conversation of a
   Python-era archive as a legacy snapshot, so history whose transcripts are
   gone survives. Re-running it skips what was already imported. Every Python
