@@ -10,8 +10,11 @@ choices. Code: `internal/obslog`, `internal/project`.
 chatstrata-go.duckdb           the projection (the archive everyone queries)
 chatstrata-go.log/
   identity.json                this device's id and its space id (random, created once)
+  space.key, sync.json         optional sync pairing (never logged)
   devices/<device-id>/
     0000000000000001.seg       segments, named by their first sequence number
+chatstrata-go.redactions/
+  runs/<run-id>.jsonl.zst      append-only archive redaction overlay (ADR 0008)
 ```
 
 The log sits next to the archive and is named after it, so `--db PATH` picks
@@ -30,13 +33,17 @@ repeat:
 
 Integers are big-endian; the checksum covers the header and the compressed
 content. A segment is written to a temporary file, synced, and renamed into
-place, so a reader never sees a partial one. Segments are never modified.
-Sequence numbers are per device and strictly increasing.
+place, so a reader never sees a partial one. Segments are append-only; the
+one exception is `redact purge --hard`, which rewrites this device's segments
+into a new log and archives the old directory (ADR 0008). Sequence numbers are
+per device and strictly increasing.
 
 An observation header carries: format version, space, device, sequence
 number, source, scope, locator (the source's conversation id), kind, offset,
 length, SHA-256 of the content, the device's clock (informational only), the
-file's path and project hint on that device, and whether it is a legacy import.
+file's path and project hint on that device, whether it is a legacy import, and
+whether a hard purge rewrote it. A redacted observation tells the collector to
+apply the policy to later source bytes before logging them.
 
 | kind | meaning |
 |---|---|
@@ -112,13 +119,17 @@ device directories.
 ## Commands
 
 - `chatstrata ingest SOURCE`: collect, log, project.
-- `chatstrata rebuild`: build a fresh projection from the log and swap it in.
-  The search index is rebuilt with it when the FTS extension is installed.
-  It holds the current archive's write lock throughout, so it refuses while
-  the daemon or another writer has the archive open. The swap checkpoints
-  the old file, renames the new one over it, and only then closes the old
-  connection; it never deletes `<archive>.wal` by path, which could be
-  another process's write-ahead log.
+- `chatstrata rebuild`: build a fresh projection from the log, replay the
+  redaction overlay, and swap it in. The search index is rebuilt with it when
+  the FTS extension is installed. It holds the current archive's write lock
+  throughout, so it refuses while the daemon or another writer has the
+  archive open. The swap checkpoints the old file, renames the new one over
+  it, and only then closes the old connection; it never deletes
+  `<archive>.wal` by path, which could be another process's write-ahead log.
+- `chatstrata redact apply`: scan the projection and append a redaction run;
+  the overlay is replayed after every re-ingest and rebuild.
+- `chatstrata redact purge --hard --yes`: redact this device's segments into a
+  new log, rebuild the projection, and keep or delete the old plaintext log.
 - `chatstrata import-legacy PYTHON_ARCHIVE`: log each conversation of a
   Python-era archive as a legacy snapshot, so history whose transcripts are
   gone survives. Re-running it skips what was already imported. Every Python

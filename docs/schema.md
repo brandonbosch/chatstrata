@@ -1,6 +1,6 @@
 # Schema
 
-**Schema version:** 5
+**Schema version:** 6
 
 chatstrata stores conversations in a normalized form designed to be source-agnostic.
 The same tables hold Claude Code sessions, Codex CLI sessions, and claude.ai
@@ -120,20 +120,30 @@ start/finish time, items labelled, failures, and input tokens used.
 ### `message_embeddings`
 Retained for compatibility. Go does not generate or migrate embeddings.
 
-## Observation-log projection tables (v5)
+## Observation-log projection tables (v5, v6 redaction flag)
 
 - `observations`: source/scope/locator, device sequence, kind and byte range,
-  content hash, path/project hints, legacy flag, and segment/position provenance.
+  content hash, path/project hints, legacy flag, redacted flag, and
+  segment/position provenance. `redacted` marks content rewritten by
+  `redact purge --hard`; the collector re-applies the policy to future source
+  bytes for those conversations.
 - `indexed_segments`: segments already projected; rebuild derives this again.
 - `collector_state`: this device's last logged length, hash, and mtime per
   source/scope/locator. A rebuild can reconstruct content without this cache.
 - `divergences`: fork and branch message IDs plus device provenance when
   observations disagree.
+- `redaction_runs`: one row per append-only redaction run, with its version and
+  record count.
+- `redactions`: target kind/id, the input text hash, and payload-free spans.
+  The `chatstrata-go.redactions/` sidecar is the source of truth; these rows
+  let SQL audit the overlay and are replayed by `rebuild`.
 - `tool_calls` is a view over `content_blocks` of type `tool_use`, joining
   message and conversation information for analysis.
 
 The observation log is the source of truth. Do not edit the DuckDB projection
 as a way to change archived content: `rebuild` will overwrite those edits.
+Redactions are the exception because their append-only sidecar is replayed
+after every rebuild and re-ingest.
 
 ## Design principles
 

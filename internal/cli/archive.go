@@ -8,6 +8,8 @@ import (
 	"github.com/brandonbosch/chatstrata/v2/internal/model"
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
 	"github.com/brandonbosch/chatstrata/v2/internal/project"
+	"github.com/brandonbosch/chatstrata/v2/internal/redact"
+	"github.com/brandonbosch/chatstrata/v2/internal/redactions"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
@@ -49,7 +51,12 @@ func openArchiveAt(e *env, dbPath, logPath string) (*archive, error) {
 		_ = s.Close()
 		return nil, err
 	}
-	a := &archive{store: s, log: l, proj: newProjector(s, l)}
+	proj, err := newProjector(s, l)
+	if err != nil {
+		_ = s.Close()
+		return nil, err
+	}
+	a := &archive{store: s, log: l, proj: proj}
 	if _, err := a.proj.CatchUp(e.ctx, false, e.stderr); err != nil {
 		_ = s.Close()
 		return nil, err
@@ -65,10 +72,21 @@ func lockConflict(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "conflicting lock")
 }
 
-func newProjector(s *store.Store, l *obslog.Log) *project.Projector {
+func newProjector(s *store.Store, l *obslog.Log) (*project.Projector, error) {
 	srcs := make(map[string]model.Source, len(sources))
 	for name, src := range sources {
 		srcs[name] = src
 	}
-	return &project.Projector{Store: s, Log: l, Sources: srcs}
+	policy, err := redact.LoadPolicy("")
+	if err != nil {
+		return nil, err
+	}
+	engine, err := redact.NewEngine(policy)
+	if err != nil {
+		return nil, err
+	}
+	return &project.Projector{
+		Store: s, Log: l, Sources: srcs, Redactor: engine,
+		RedactionsDir: redactions.Dir(s.Path),
+	}, nil
 }

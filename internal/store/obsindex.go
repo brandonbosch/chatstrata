@@ -40,8 +40,8 @@ func (s *Store) IndexSegment(ctx context.Context, segment string, obs []IndexedO
 	stmt, err := s.conn.PrepareContext(ctx, `
 		INSERT OR IGNORE INTO observations (
 			device_id, device_seq, source_id, scope, locator, kind, byte_offset, length,
-			content_sha256, observed_at, path, project_hint, legacy, segment, position
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			content_sha256, observed_at, path, project_hint, legacy, redacted, segment, position
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (s *Store) IndexSegment(ctx context.Context, segment string, obs []IndexedO
 	for _, o := range obs {
 		res, err := stmt.ExecContext(ctx, o.Device, o.Seq, o.Source, o.Scope, o.Locator, string(o.Kind),
 			o.Offset, o.Length, nullIfEmpty(o.SHA256), o.ObservedAt.UTC(), nullIfEmpty(o.Path),
-			nullIfEmpty(o.ProjectHint), o.Legacy, o.Location.Segment, o.Location.Position)
+			nullIfEmpty(o.ProjectHint), o.Legacy, o.Redacted, o.Location.Segment, o.Location.Position)
 		if err != nil {
 			return nil, fmt.Errorf("index observation %s/%d: %w", o.Device, o.Seq, err)
 		}
@@ -71,7 +71,7 @@ func (s *Store) IndexSegment(ctx context.Context, segment string, obs []IndexedO
 func (s *Store) ObservationsFor(ctx context.Context, key obslog.Key) ([]IndexedObservation, error) {
 	rows, err := s.conn.QueryContext(ctx, `
 		SELECT device_id, device_seq, kind, byte_offset, length, content_sha256, observed_at,
-		       path, project_hint, legacy, segment, position
+		       path, project_hint, legacy, redacted, segment, position
 		FROM observations
 		WHERE source_id = ? AND scope = ? AND locator = ?
 		ORDER BY device_id, device_seq`, key.Source, key.Scope, key.Locator)
@@ -87,13 +87,34 @@ func (s *Store) ObservationsFor(ctx context.Context, key obslog.Key) ([]IndexedO
 		var sha, path, hint sql.NullString
 		var observed sql.NullTime
 		if err := rows.Scan(&o.Device, &o.Seq, &kind, &o.Offset, &o.Length, &sha, &observed,
-			&path, &hint, &o.Legacy, &o.Location.Segment, &o.Location.Position); err != nil {
+			&path, &hint, &o.Legacy, &o.Redacted, &o.Location.Segment, &o.Location.Position); err != nil {
 			return nil, err
 		}
 		o.Kind = obslog.Kind(kind)
 		o.SHA256, o.Path, o.ProjectHint = sha.String, path.String, hint.String
 		o.ObservedAt = observed.Time
 		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// RedactedLocators lists the conversations of a source with at least one
+// observation rewritten by `redact purge --hard`.
+func (s *Store) RedactedLocators(ctx context.Context, source string) (map[obslog.Key]bool, error) {
+	rows, err := s.conn.QueryContext(ctx, `
+		SELECT DISTINCT scope, locator FROM observations
+		WHERE source_id = ? AND redacted`, source)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[obslog.Key]bool{}
+	for rows.Next() {
+		k := obslog.Key{Source: source}
+		if err := rows.Scan(&k.Scope, &k.Locator); err != nil {
+			return nil, err
+		}
+		out[k] = true
 	}
 	return out, rows.Err()
 }
