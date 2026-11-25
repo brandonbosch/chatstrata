@@ -36,10 +36,15 @@
       "may_use": [
         "internal/model",
         "internal/obslog",
+        "internal/redact",
+        "internal/redactions",
         "internal/store"
       ]
     },
     "internal/pystr": {
+      "may_use": []
+    },
+    "internal/redact": {
       "may_use": []
     },
     "internal/relay": {
@@ -98,6 +103,13 @@
       "may_use": [
         "internal/*"
       ]
+    },
+    "internal/redactions": {
+      "may_use": [
+        "internal/obslog",
+        "internal/redact",
+        "internal/store"
+      ]
     }
   },
   "only_by": {
@@ -113,6 +125,12 @@
         "internal/tools/*"
       ],
       "reason": "DuckDB is an implementation detail of internal/store; project and the analysis layer go through it, so a swap touches one package"
+    },
+    "github.com/baum-ai/goredact": {
+      "modules": [
+        "internal/redact"
+      ],
+      "reason": "the secret detector is an implementation detail of the redaction boundary; a swap touches one package"
     },
     "python-final*": {
       "modules": [],

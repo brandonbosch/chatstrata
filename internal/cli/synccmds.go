@@ -336,7 +336,11 @@ func daemonRun(e *env, db string, logger *log.Logger) error {
 			return err
 		}
 		defer func() { _ = s.Close() }()
-		stats, err = newProjector(s, a.log).CatchUp(e.ctx, false, e.stderr)
+		proj, err := newProjector(s, a.log)
+		if err != nil {
+			return err
+		}
+		stats, err = proj.CatchUp(e.ctx, false, e.stderr)
 		if err != nil {
 			return err
 		}

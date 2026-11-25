@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/redactions"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
@@ -18,6 +19,8 @@ type Stats struct {
 	Removed  int
 	Unported int
 	Failed   int
+	// Redacted counts projection rows changed by the archive overlay.
+	Redacted int
 	// Reindexed is set when the full-text search index was rebuilt.
 	Reindexed bool
 }
@@ -104,24 +107,54 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 		}
 	}
 
+	// Replay the archive redaction overlay after projection, so rows rewritten
+	// by a re-ingest or a rebuild do not briefly expose their original text.
+	// The overlay is idempotent: records whose input hash no longer matches
+	// are left in the sidecar and skipped.
+	if p.Store != nil {
+		applied, err := redactions.Apply(ctx, p.Store, p.redactionsDir())
+		if err != nil {
+			return stats, fmt.Errorf("apply archive redactions: %w", err)
+		}
+		stats.Redacted = applied.Applied
+	}
+
 	// Keep the search index in step. DuckDB rebuilds it whole, so it's
 	// rebuilt only when enough content is new (store.FTSNeedsRebuild);
 	// until then `search` finds the newest content by substring matching.
+	// Redaction changes existing text, so force a rebuild when it applied.
 	// Skipped when the FTS extension isn't installed, as search then
 	// substring-matches everything.
-	if stats.Stored+stats.Removed > 0 && p.Store.LoadFTS(ctx) {
-		exists, indexed, pending, err := p.Store.FTSCoverage(ctx)
-		if err != nil {
-			return stats, fmt.Errorf("check search index: %w", err)
-		}
-		if store.FTSNeedsRebuild(exists, indexed, pending) {
+	if (stats.Stored+stats.Removed+stats.Redacted > 0) && p.Store.LoadFTS(ctx) {
+		if stats.Redacted > 0 {
 			if err := p.Store.RebuildFTS(ctx); err != nil {
 				return stats, fmt.Errorf("update search index: %w", err)
 			}
 			stats.Reindexed = true
+		} else {
+			exists, indexed, pending, err := p.Store.FTSCoverage(ctx)
+			if err != nil {
+				return stats, fmt.Errorf("check search index: %w", err)
+			}
+			if store.FTSNeedsRebuild(exists, indexed, pending) {
+				if err := p.Store.RebuildFTS(ctx); err != nil {
+					return stats, fmt.Errorf("update search index: %w", err)
+				}
+				stats.Reindexed = true
+			}
 		}
 	}
 	return stats, nil
+}
+
+func (p *Projector) redactionsDir() string {
+	if p.RedactionsDir != "" {
+		return p.RedactionsDir
+	}
+	if p.Store == nil {
+		return ""
+	}
+	return redactions.Dir(p.Store.Path)
 }
 
 // recomputeOwnState replays this device's own observations of a conversation

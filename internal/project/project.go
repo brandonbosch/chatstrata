@@ -8,6 +8,7 @@ import (
 
 	"github.com/brandonbosch/chatstrata/v2/internal/model"
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/redact"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
@@ -16,6 +17,12 @@ type Projector struct {
 	Store   *store.Store
 	Log     *obslog.Log
 	Sources map[string]model.Source
+
+	// Redactor re-applies the policy to bytes from a conversation whose
+	// observations were rewritten by `redact purge --hard`.
+	Redactor *redact.Engine
+	// RedactionsDir overrides the sidecar path derived from Store.Path.
+	RedactionsDir string
 
 	registered map[string]bool
 }

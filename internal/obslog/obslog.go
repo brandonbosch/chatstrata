@@ -71,11 +71,10 @@ type Observation struct {
 	Path string `json:"path,omitempty"`
 	// ProjectHint is the adapter's fallback project for this file.
 	ProjectHint string `json:"project_hint,omitempty"`
-	// Legacy marks content imported from a Python-era archive: re-serialized
-	// JSON rather than the original bytes.
-	Legacy bool `json:"legacy,omitempty"`
-
-	Content []byte `json:"-"`
+	// Legacy marks re-serialized Python-era content rather than original bytes.
+	Legacy   bool   `json:"legacy,omitempty"`
+	Redacted bool   `json:"redacted,omitempty"`
+	Content  []byte `json:"-"`
 }
 
 // Key identifies the conversation an observation belongs to.

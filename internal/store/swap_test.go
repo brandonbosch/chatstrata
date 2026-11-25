@@ -52,7 +52,7 @@ func heldWriter(t *testing.T) bool {
 func startWriter(t *testing.T, test, path string) (stop func()) {
 	t.Helper()
 	var out strings.Builder
-	child := exec.Command(os.Args[0], "-test.run=^"+test+"$")
+	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^"+test+"$")
 	child.Env = append(os.Environ(), "CHATSTRATA_WRITER_CHILD="+path)
 	child.Stdout, child.Stderr = &out, &out
 	if err := child.Start(); err != nil {

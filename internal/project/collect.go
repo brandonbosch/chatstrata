@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/brandonbosch/chatstrata/v2/internal/model"
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
+	"github.com/brandonbosch/chatstrata/v2/internal/redact"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
@@ -36,6 +38,10 @@ func PendingCollection(ctx context.Context, s *store.Store, src model.Source, ha
 	if err != nil {
 		return 0, err
 	}
+	redacted, err := s.RedactedLocators(ctx, src.Name())
+	if err != nil {
+		return 0, err
+	}
 	pending := 0
 	for _, h := range handles {
 		if err := ctx.Err(); err != nil {
@@ -45,8 +51,13 @@ func PendingCollection(ctx context.Context, s *store.Store, src model.Source, ha
 		if deleted[key] {
 			continue
 		}
+		if redacted[key] {
+			// Comparing a purged conversation needs the policy engine; doctor
+			// cannot do it from the read-only store alone.
+			continue
+		}
 		prev, known := states[key]
-		c := observe(src, h, key, prev, known, true)
+		c := observe(src, h, key, prev, known, true, nil, false)
 		if c.err != nil {
 			return 0, fmt.Errorf("inspect local conversation: %w", c.err)
 		}
@@ -80,6 +91,10 @@ func (p *Projector) Collect(ctx context.Context, src model.Source, handles []mod
 	if err != nil {
 		return result, err
 	}
+	redacted, err := p.Store.RedactedLocators(ctx, src.Name())
+	if err != nil {
+		return result, err
+	}
 
 	work := make(chan model.Handle)
 	out := make(chan collected)
@@ -91,7 +106,7 @@ func (p *Projector) Collect(ctx context.Context, src model.Source, handles []mod
 			for h := range work {
 				key := obslog.Key{Source: src.Name(), Locator: h.SourceNativeID}
 				prev, known := states[key]
-				out <- observe(src, h, key, prev, known, incremental)
+				out <- observe(src, h, key, prev, known, incremental, p.Redactor, redacted[key])
 			}
 		}()
 	}
@@ -149,7 +164,7 @@ func (p *Projector) Collect(ctx context.Context, src model.Source, handles []mod
 	return result, nil
 }
 
-func observe(src model.Source, h model.Handle, key obslog.Key, prev store.CollectorState, known, incremental bool) collected {
+func observe(src model.Source, h model.Handle, key obslog.Key, prev store.CollectorState, known, incremental bool, redactor *redact.Engine, redactContent bool) collected {
 	c := collected{key: key, path: h.Path}
 	fi, err := os.Stat(h.Path)
 	if err != nil {
@@ -175,6 +190,28 @@ func observe(src model.Source, h model.Handle, key obslog.Key, prev store.Collec
 	if src.AppendOnly() {
 		data = completeLines(data)
 	}
+	path, project := h.Path, h.Project
+	if redactContent {
+		if redactor == nil {
+			c.err = errors.New("conversation was purged; no redaction policy is available for re-collection")
+			return c
+		}
+		scope := redact.Scope{Project: h.Project, Path: h.Path}
+		redacted, err := redactPreserving(redactor, scope, string(data))
+		if err != nil {
+			c.err = err
+			return c
+		}
+		data = []byte(redacted)
+		if path, err = redactPreserving(redactor, scope, path); err != nil {
+			c.err = err
+			return c
+		}
+		if project, err = redactPreserving(redactor, scope, project); err != nil {
+			c.err = err
+			return c
+		}
+	}
 	sum := sha256.Sum256(data)
 	c.state = store.CollectorState{Length: int64(len(data)), SHA256: hex.EncodeToString(sum[:]), Mtime: &mtime}
 	if len(data) == 0 {
@@ -186,8 +223,9 @@ func observe(src model.Source, h model.Handle, key obslog.Key, prev store.Collec
 		Source:      key.Source,
 		Scope:       key.Scope,
 		Locator:     key.Locator,
-		Path:        h.Path,
-		ProjectHint: h.Project,
+		Path:        path,
+		ProjectHint: project,
+		Redacted:    redactContent,
 	}
 	switch {
 	case known && prev.Length == int64(len(data)) && prev.SHA256 == c.state.SHA256:
@@ -212,6 +250,21 @@ func completeLines(data []byte) []byte {
 		return data
 	}
 	return data[:i+1]
+}
+
+func redactPreserving(engine *redact.Engine, scope redact.Scope, text string) (string, error) {
+	if text == "" {
+		return text, nil
+	}
+	result, err := engine.RedactScope(scope, text)
+	if err != nil || len(result.Findings) == 0 {
+		return text, err
+	}
+	spans := make([]redact.Span, len(result.Findings))
+	for i, finding := range result.Findings {
+		spans[i] = finding.Span()
+	}
+	return redact.ApplyPreserving(text, spans)
 }
 
 func sha256Hex(b []byte) string {

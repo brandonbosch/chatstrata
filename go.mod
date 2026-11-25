@@ -1,11 +1,13 @@
 module github.com/brandonbosch/chatstrata/v2
 
-go 1.26.0
+go 1.26.6
 
 require (
 	filippo.io/age v1.3.2
+	github.com/BurntSushi/toml v1.6.0
+	github.com/baum-ai/goredact v0.4.0
 	github.com/duckdb/duckdb-go/v2 v2.10506.0
-	github.com/klauspost/compress v1.18.3
+	github.com/klauspost/compress v1.20.3
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 )
@@ -27,7 +29,6 @@ require (
 	github.com/Antonboom/errname v1.1.2 // indirect
 	github.com/Antonboom/nilnil v1.1.2 // indirect
 	github.com/Antonboom/testifylint v1.6.4 // indirect
-	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/ClickHouse/clickhouse-go-linter v1.2.1 // indirect
 	github.com/Djarvur/go-err113 v0.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
