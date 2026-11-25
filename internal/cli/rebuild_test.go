@@ -61,7 +61,7 @@ func TestRebuildRefusesWhileAnotherProcessWrites(t *testing.T) {
 	root, db := fixture(t)
 	run(t, "ingest", "claude_code", "--path", root, "--db", db)
 	var out strings.Builder
-	child := exec.Command(os.Args[0], "-test.run=^TestRebuildRefusesWhileAnotherProcessWrites$")
+	child := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestRebuildRefusesWhileAnotherProcessWrites$")
 	child.Env = append(os.Environ(), "CHATSTRATA_REBUILD_WRITER="+db)
 	child.Stdout, child.Stderr = &out, &out
 	if err := child.Start(); err != nil {
