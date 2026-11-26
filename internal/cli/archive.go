@@ -87,6 +87,7 @@ func newProjector(s *store.Store, l *obslog.Log) (*project.Projector, error) {
 	}
 	return &project.Projector{
 		Store: s, Log: l, Sources: srcs, Redactor: engine,
-		RedactionsDir: redactions.Dir(s.Path),
+		RedactOnCollect: policy.Collect,
+		RedactionsDir:   redactions.Dir(s.Path),
 	}, nil
 }

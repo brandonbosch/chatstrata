@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/brandonbosch/chatstrata/v2/internal/cli"
+	"github.com/brandonbosch/chatstrata/v2/internal/redact"
 )
 
 const specDir = "../../spec/golden"
@@ -38,6 +39,14 @@ type goldenCase struct {
 var update = flag.Bool("update", false, "rewrite expected output; review all fixture changes")
 
 func TestGolden(t *testing.T) {
+	// The collector reads the user's default policy; pin one so a local
+	// collect = true does not redact the fixtures.
+	policy := filepath.Join(t.TempDir(), "redaction.toml")
+	if err := os.WriteFile(policy, []byte("[redaction]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(redact.ConfigEnv, policy)
+
 	raw, err := os.ReadFile(filepath.Join(specDir, "cases.json"))
 	if err != nil {
 		t.Fatal(err)

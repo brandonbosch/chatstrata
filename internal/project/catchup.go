@@ -3,7 +3,9 @@ package project
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -109,10 +111,14 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 
 	// Replay the archive redaction overlay after projection, so rows rewritten
 	// by a re-ingest or a rebuild do not briefly expose their original text.
-	// The overlay is idempotent: records whose input hash no longer matches
-	// are left in the sidecar and skipped.
+	// Only the conversations projected above are read: replaying every record
+	// would read the whole archive on each cycle.
 	if p.Store != nil {
-		applied, err := redactions.Apply(ctx, p.Store, p.redactionsDir())
+		targets, err := p.redactionTargets(ctx, affected)
+		if err != nil {
+			return stats, fmt.Errorf("select archive redaction targets: %w", err)
+		}
+		applied, err := redactions.ApplyTargets(ctx, p.Store, p.redactionsDir(), targets)
 		if err != nil {
 			return stats, fmt.Errorf("apply archive redactions: %w", err)
 		}
@@ -145,6 +151,73 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 		}
 	}
 	return stats, nil
+}
+
+// redactionTargets lists the projection cells that belong to the conversations
+// in keys. ApplyTargets reads only these, so an overlay with hundreds of
+// thousands of records costs one conversation's rows per catch-up cycle.
+func (p *Projector) redactionTargets(ctx context.Context, keys []obslog.Key) (map[redactions.TargetRef]struct{}, error) {
+	out := make(map[redactions.TargetRef]struct{})
+	for _, key := range keys {
+		var convID string
+		err := p.Store.Conn().QueryRowContext(ctx,
+			`SELECT id FROM conversations WHERE source_id = ? AND source_native_id = ?`,
+			key.Source, key.Locator).Scan(&convID)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out[redactions.TargetRef{Kind: redactions.TargetConversationTitle, ID: convID}] = struct{}{}
+
+		if err := addBlockTargets(ctx, p.Store.Conn(), convID, out); err != nil {
+			return nil, err
+		}
+		if err := addEventTargets(ctx, p.Store.Conn(), key.Source, key.Locator, out); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func addBlockTargets(ctx context.Context, conn *sql.Conn, convID string, out map[redactions.TargetRef]struct{}) error {
+	rows, err := conn.QueryContext(ctx, `
+		SELECT cb.id
+		FROM content_blocks cb
+		JOIN messages m ON m.id = cb.message_id
+		WHERE m.conversation_id = ?`, convID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		out[redactions.TargetRef{Kind: redactions.TargetBlockText, ID: id}] = struct{}{}
+		out[redactions.TargetRef{Kind: redactions.TargetBlockPayload, ID: id}] = struct{}{}
+	}
+	return rows.Err()
+}
+
+func addEventTargets(ctx context.Context, conn *sql.Conn, source, locator string, out map[redactions.TargetRef]struct{}) error {
+	rows, err := conn.QueryContext(ctx, `
+		SELECT id FROM raw_events WHERE source_id = ? AND source_native_conversation_id = ?`,
+		source, locator)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		out[redactions.TargetRef{Kind: redactions.TargetRawEventPayload, ID: id}] = struct{}{}
+	}
+	return rows.Err()
 }
 
 func (p *Projector) redactionsDir() string {

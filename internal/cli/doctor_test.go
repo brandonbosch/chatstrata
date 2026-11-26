@@ -9,12 +9,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/brandonbosch/chatstrata/v2/internal/redact"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
 )
 
 // doctor warns about sources whose storage it finds but can't make sense
 // of, which is how a tool changing its format shows up.
 func TestDoctorChecksSources(t *testing.T) {
+	// Pin the policy: the collector would otherwise read the user's default
+	// one and emit collection-time redactions the test does not expect.
+	policy := filepath.Join(t.TempDir(), "redaction.toml")
+	if err := os.WriteFile(policy, []byte("[redaction]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(redact.ConfigEnv, policy)
+
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("HERMES_HOME", "")

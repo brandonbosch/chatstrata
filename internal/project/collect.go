@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/brandonbosch/chatstrata/v2/internal/model"
@@ -106,7 +107,7 @@ func (p *Projector) Collect(ctx context.Context, src model.Source, handles []mod
 			for h := range work {
 				key := obslog.Key{Source: src.Name(), Locator: h.SourceNativeID}
 				prev, known := states[key]
-				out <- observe(src, h, key, prev, known, incremental, p.Redactor, redacted[key])
+				out <- observe(src, h, key, prev, known, incremental, p.Redactor, redacted[key] || p.RedactOnCollect)
 			}
 		}()
 	}
@@ -193,7 +194,7 @@ func observe(src model.Source, h model.Handle, key obslog.Key, prev store.Collec
 	path, project := h.Path, h.Project
 	if redactContent {
 		if redactor == nil {
-			c.err = errors.New("conversation was purged; no redaction policy is available for re-collection")
+			c.err = errors.New("observations for this conversation are already redacted; no redaction policy is available")
 			return c
 		}
 		scope := redact.Scope{Project: h.Project, Path: h.Path}
@@ -256,15 +257,68 @@ func redactPreserving(engine *redact.Engine, scope redact.Scope, text string) (s
 	if text == "" {
 		return text, nil
 	}
-	result, err := engine.RedactScope(scope, text)
-	if err != nil || len(result.Findings) == 0 {
+	spans, err := redactionSpans(engine, scope, text)
+	if err != nil || len(spans) == 0 {
 		return text, err
+	}
+	return redact.ApplyPreserving(text, spans)
+}
+
+// redactionSpans finds the policy's spans in one source payload. JSON
+// documents and JSONL are scanned by decoded string value, so a marker can
+// never split an escape sequence: the length-preserving rewrite would
+// otherwise leave an observation the source parser cannot read.
+func redactionSpans(engine *redact.Engine, scope redact.Scope, text string) ([]redact.Span, error) {
+	if json.Valid([]byte(text)) {
+		return redact.JSONSpans(engine, scope, text)
+	}
+	if spans, ok, err := jsonLineSpans(engine, scope, text); ok || err != nil {
+		return spans, err
+	}
+	result, err := engine.RedactScope(scope, text)
+	if err != nil {
+		return nil, err
 	}
 	spans := make([]redact.Span, len(result.Findings))
 	for i, finding := range result.Findings {
 		spans[i] = finding.Span()
 	}
-	return redact.ApplyPreserving(text, spans)
+	return spans, nil
+}
+
+// jsonLineSpans handles JSONL: every non-empty line must be a JSON value. A
+// file with any other shape is not treated as JSON.
+func jsonLineSpans(engine *redact.Engine, scope redact.Scope, text string) ([]redact.Span, bool, error) {
+	var spans []redact.Span
+	start := 0
+	for {
+		lineEnd := len(text)
+		next := len(text)
+		if i := strings.IndexByte(text[start:], '\n'); i >= 0 {
+			lineEnd = start + i
+			next = lineEnd + 1
+		}
+		line := text[start:lineEnd]
+		if strings.TrimSpace(line) != "" {
+			if !json.Valid([]byte(line)) {
+				return nil, false, nil
+			}
+			lineSpans, err := redact.JSONSpans(engine, scope, line)
+			if err != nil {
+				return nil, false, err
+			}
+			for _, s := range lineSpans {
+				s.Start += start
+				s.End += start
+				spans = append(spans, s)
+			}
+		}
+		if next >= len(text) {
+			break
+		}
+		start = next
+	}
+	return spans, true, nil
 }
 
 func sha256Hex(b []byte) string {

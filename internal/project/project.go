@@ -19,8 +19,12 @@ type Projector struct {
 	Sources map[string]model.Source
 
 	// Redactor re-applies the policy to bytes from a conversation whose
-	// observations were rewritten by `redact purge --hard`.
+	// observations were rewritten by `redact purge --hard`, and redacts new
+	// observations when RedactOnCollect is set.
 	Redactor *redact.Engine
+	// RedactOnCollect redacts every new observation before it is appended.
+	// The policy is loaded with collect = true.
+	RedactOnCollect bool
 	// RedactionsDir overrides the sidecar path derived from Store.Path.
 	RedactionsDir string
 

@@ -53,6 +53,7 @@ type fileConfig struct {
 type redactionFile struct {
 	Profile              string       `toml:"profile"`
 	MaxInputBytes        int          `toml:"max_input_bytes"`
+	Collect              bool         `toml:"collect"`
 	Usernames            []string     `toml:"usernames"`
 	PrivateHosts         []string     `toml:"private_hosts"`
 	DisableLocalUsername bool         `toml:"disable_local_username"`
@@ -113,6 +114,7 @@ func LoadPolicy(path string) (Policy, error) {
 	if cfg.Redaction.MaxInputBytes > 0 {
 		p.MaxInputBytes = cfg.Redaction.MaxInputBytes
 	}
+	p.Collect = cfg.Redaction.Collect
 	p.Usernames = cfg.Redaction.Usernames
 	p.PrivateHosts = cfg.Redaction.PrivateHosts
 	p.DisableLocalUsername = cfg.Redaction.DisableLocalUsername

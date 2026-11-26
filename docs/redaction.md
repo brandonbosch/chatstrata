@@ -6,8 +6,8 @@ are plaintext; optional relay sync encrypts segments before upload.
 
 The design is [ADR 0008](adr/0008-local-redaction-boundary.md). The secrets
 engine, deterministic PII recognizers, user-defined rules, and the labeling
-egress gate are implemented in `internal/redact`. The archive redaction overlay
-and destructive purge are not yet.
+egress gate are implemented in `internal/redact`; the archive overlay and
+destructive purge are implemented in `internal/redactions`.
 
 ## Egress gate
 
@@ -64,6 +64,7 @@ cannot silently weaken the policy.
 [redaction]
 profile = "balanced"          # fast, balanced, deep
 max_input_bytes = 1048576
+collect = false               # redact observations before the log append
 usernames = ["alice"]         # in addition to the current OS username
 private_hosts = ["buildbox"]  # in addition to the hostname suffixes above
 disable_local_username = false
@@ -127,6 +128,13 @@ the target, a hash of the input text, and payload-free spans. The overlay is
 replayed after every re-ingest and `rebuild`, and `redaction_runs` /
 `redactions` mirror it for SQL audit.
 
+The two payload columns are JSON. Detection runs on each decoded string value,
+including object keys, and the spans are mapped back to the serialized bytes.
+A span therefore never begins or ends inside an escape sequence, and replacing
+it with a typed placeholder cannot invalidate the document. A larger
+`max_input_bytes` may be needed for archives whose source records embed whole
+transcripts; the cap applies to one decoded string value.
+
 Runs chain: a later run's input hash may be the previous run's output, so a
 policy change can add spans to already-redacted text. A record whose input
 hash no longer matches (the source changed) is left in the sidecar and
@@ -151,9 +159,18 @@ after verifying the result. Future collection of a purged conversation
 re-applies the policy to the source bytes before logging them, so the original
 plaintext does not return.
 
-New conversations are still collected as-is: run `redact apply` or
-`redact purge` again after collection. Collection-time redaction for every
-source is a later option.
+New conversations are collected as-is unless the policy sets `collect = true`
+([ADR 0009](adr/0009-collection-time-redaction.md)). With collection-time
+redaction the collector applies the policy to each new observation before it
+enters the log, including path and project hints. The rewrite preserves byte
+length, and JSON or JSONL payloads are scanned by decoded string value so a
+marker cannot split an escape sequence. Observations are marked `redacted`, so
+re-collecting them redacts again. The local plaintext is discarded; source
+files, other devices, relay ciphertext and backups are not changed.
+
+Collection-time redaction affects only new observations. Existing plaintext
+still needs `redact apply` or `redact purge`. Every device sharing the space
+must use the same policy, because observations are merged as written.
 
 Neither operation can recall copies from other devices, the relay, backups,
 or the original source files. Redaction is not secure deletion on modern
