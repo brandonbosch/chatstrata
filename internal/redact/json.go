@@ -1,4 +1,4 @@
-package redactions
+package redact
 
 import (
 	"errors"
@@ -8,8 +8,6 @@ import (
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
-
-	"github.com/brandonbosch/chatstrata/v2/internal/redact"
 )
 
 // jsonString is one string literal's content range in a JSON document. The
@@ -48,12 +46,13 @@ func jsonStrings(raw string) []jsonString {
 	return out
 }
 
-// scanJSONValue redacts one JSON document. Detection runs on each decoded
-// string value, and the findings are mapped back to the serialized text, so a
-// span can never begin or end inside an escape sequence. Replacing such a span
-// with a typed placeholder therefore keeps the document valid JSON.
-func scanJSONValue(engine *redact.Engine, scope redact.Scope, raw string) ([]redact.Span, error) {
-	var spans []redact.Span
+// JSONSpans returns the findings for one JSON document. Detection runs on
+// each decoded string value, and the spans are mapped back to the serialized
+// text, so a span can never begin or end inside an escape sequence. Replacing
+// such a span with a typed placeholder therefore keeps the document valid
+// JSON.
+func JSONSpans(engine *Engine, scope Scope, raw string) ([]Span, error) {
+	var spans []Span
 	for _, lit := range jsonStrings(raw) {
 		content := raw[lit.start:lit.end]
 		if content == "" {

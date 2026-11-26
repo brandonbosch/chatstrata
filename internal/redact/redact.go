@@ -82,6 +82,9 @@ func (p Profile) goredact() (goredact.Profile, error) {
 type Policy struct {
 	Profile       Profile
 	MaxInputBytes int
+	// Collect redacts a new observation before it is appended to the log.
+	// It permanently discards the source plaintext from this device's archive.
+	Collect bool
 
 	// Usernames are extra local usernames to redact. The current OS username
 	// is added unless DisableLocalUsername is set.

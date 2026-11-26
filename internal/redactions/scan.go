@@ -93,7 +93,7 @@ func scanQuery(ctx context.Context, s *store.Store, engine *redact.Engine, kind 
 		scope := redact.Scope{Project: project.String, Path: path.String}
 		var spans []redact.Span
 		if jsonTarget {
-			spans, err = scanJSONValue(engine, scope, text)
+			spans, err = redact.JSONSpans(engine, scope, text)
 			if err != nil {
 				return nil, fmt.Errorf("redact %s %s: %w", kind, id, err)
 			}
