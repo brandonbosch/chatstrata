@@ -171,54 +171,53 @@ func (p *Projector) redactionTargets(ctx context.Context, keys []obslog.Key) (ma
 		}
 		out[redactions.TargetRef{Kind: redactions.TargetConversationTitle, ID: convID}] = struct{}{}
 
-		blocks, err := p.Store.Conn().QueryContext(ctx, `
-			SELECT cb.id
-			FROM content_blocks cb
-			JOIN messages m ON m.id = cb.message_id
-			WHERE m.conversation_id = ?`, convID)
-		if err != nil {
+		if err := addBlockTargets(ctx, p.Store.Conn(), convID, out); err != nil {
 			return nil, err
 		}
-		for blocks.Next() {
-			var id string
-			if err := blocks.Scan(&id); err != nil {
-				_ = blocks.Close()
-				return nil, err
-			}
-			out[redactions.TargetRef{Kind: redactions.TargetBlockText, ID: id}] = struct{}{}
-			out[redactions.TargetRef{Kind: redactions.TargetBlockPayload, ID: id}] = struct{}{}
-		}
-		if err := blocks.Err(); err != nil {
-			_ = blocks.Close()
-			return nil, err
-		}
-		if err := blocks.Close(); err != nil {
-			return nil, err
-		}
-
-		events, err := p.Store.Conn().QueryContext(ctx, `
-			SELECT id FROM raw_events WHERE source_id = ? AND source_native_conversation_id = ?`,
-			key.Source, key.Locator)
-		if err != nil {
-			return nil, err
-		}
-		for events.Next() {
-			var id string
-			if err := events.Scan(&id); err != nil {
-				_ = events.Close()
-				return nil, err
-			}
-			out[redactions.TargetRef{Kind: redactions.TargetRawEventPayload, ID: id}] = struct{}{}
-		}
-		if err := events.Err(); err != nil {
-			_ = events.Close()
-			return nil, err
-		}
-		if err := events.Close(); err != nil {
+		if err := addEventTargets(ctx, p.Store.Conn(), key.Source, key.Locator, out); err != nil {
 			return nil, err
 		}
 	}
 	return out, nil
+}
+
+func addBlockTargets(ctx context.Context, conn *sql.Conn, convID string, out map[redactions.TargetRef]struct{}) error {
+	rows, err := conn.QueryContext(ctx, `
+		SELECT cb.id
+		FROM content_blocks cb
+		JOIN messages m ON m.id = cb.message_id
+		WHERE m.conversation_id = ?`, convID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		out[redactions.TargetRef{Kind: redactions.TargetBlockText, ID: id}] = struct{}{}
+		out[redactions.TargetRef{Kind: redactions.TargetBlockPayload, ID: id}] = struct{}{}
+	}
+	return rows.Err()
+}
+
+func addEventTargets(ctx context.Context, conn *sql.Conn, source, locator string, out map[redactions.TargetRef]struct{}) error {
+	rows, err := conn.QueryContext(ctx, `
+		SELECT id FROM raw_events WHERE source_id = ? AND source_native_conversation_id = ?`,
+		source, locator)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		out[redactions.TargetRef{Kind: redactions.TargetRawEventPayload, ID: id}] = struct{}{}
+	}
+	return rows.Err()
 }
 
 func (p *Projector) redactionsDir() string {

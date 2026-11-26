@@ -147,45 +147,44 @@ func indexRuns(ctx context.Context, s *store.Store, runs []Run) error {
 		if indexed == len(run.Records) {
 			continue
 		}
-		tx, err := s.Conn().BeginTx(ctx, nil)
+		if err := indexRun(ctx, s, run); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func indexRun(ctx context.Context, s *store.Store, run Run) error {
+	tx, err := s.Conn().BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO redaction_runs (run_id, created_at, redaction_version, records)
+		VALUES (?, ?, ?, ?)`,
+		run.Header.RunID, run.Header.CreatedAt.UTC(), run.Header.RedactionVersion, len(run.Records)); err != nil {
+		return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
+	}
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT OR IGNORE INTO redactions (run_id, target_kind, target_id, input_sha256, spans, created_at)
+		VALUES (?, ?, ?, ?, ?::JSON, ?)`)
+	if err != nil {
+		return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
+	}
+	defer func() { _ = stmt.Close() }()
+	for _, record := range run.Records {
+		spans, err := json.Marshal(record.Spans)
 		if err != nil {
-			return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
+			return fmt.Errorf("encode redaction spans: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT OR IGNORE INTO redaction_runs (run_id, created_at, redaction_version, records)
-			VALUES (?, ?, ?, ?)`,
-			run.Header.RunID, run.Header.CreatedAt.UTC(), run.Header.RedactionVersion, len(run.Records)); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
+		if _, err := stmt.ExecContext(ctx,
+			run.Header.RunID, string(record.TargetKind), record.TargetID, record.InputSHA256, string(spans), run.Header.CreatedAt.UTC()); err != nil {
+			return fmt.Errorf("record redaction %s %s: %w", record.TargetKind, record.TargetID, err)
 		}
-		stmt, err := tx.PrepareContext(ctx, `
-			INSERT OR IGNORE INTO redactions (run_id, target_kind, target_id, input_sha256, spans, created_at)
-			VALUES (?, ?, ?, ?, ?::JSON, ?)`)
-		if err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
-		}
-		for _, record := range run.Records {
-			spans, err := json.Marshal(record.Spans)
-			if err != nil {
-				_ = stmt.Close()
-				_ = tx.Rollback()
-				return fmt.Errorf("encode redaction spans: %w", err)
-			}
-			if _, err := stmt.ExecContext(ctx,
-				run.Header.RunID, string(record.TargetKind), record.TargetID, record.InputSHA256, string(spans), run.Header.CreatedAt.UTC()); err != nil {
-				_ = stmt.Close()
-				_ = tx.Rollback()
-				return fmt.Errorf("record redaction %s %s: %w", record.TargetKind, record.TargetID, err)
-			}
-		}
-		if err := stmt.Close(); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
-		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("record redaction run %s: %w", run.Header.RunID, err)
 	}
 	return nil
 }
