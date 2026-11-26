@@ -27,6 +27,7 @@ func Scan(ctx context.Context, s *store.Store, engine *redact.Engine) ([]Record,
 	queries := []struct {
 		kind TargetKind
 		sql  string
+		json bool
 	}{
 		{TargetBlockText, `
 			SELECT cb.id, cb.text, c.project, c.raw_path
@@ -34,14 +35,14 @@ func Scan(ctx context.Context, s *store.Store, engine *redact.Engine) ([]Record,
 			JOIN messages m ON m.id = cb.message_id
 			JOIN conversations c ON c.id = m.conversation_id
 			WHERE cb.text IS NOT NULL AND cb.text <> ''
-			ORDER BY cb.id`},
+			ORDER BY cb.id`, false},
 		{TargetBlockPayload, `
 			SELECT cb.id, cb.payload::VARCHAR, c.project, c.raw_path
 			FROM content_blocks cb
 			JOIN messages m ON m.id = cb.message_id
 			JOIN conversations c ON c.id = m.conversation_id
 			WHERE cb.payload IS NOT NULL
-			ORDER BY cb.id`},
+			ORDER BY cb.id`, true},
 		{TargetRawEventPayload, `
 			SELECT re.id, re.payload::VARCHAR, c.project, c.raw_path
 			FROM raw_events re
@@ -49,15 +50,15 @@ func Scan(ctx context.Context, s *store.Store, engine *redact.Engine) ([]Record,
 			  ON c.source_id = re.source_id
 			 AND c.source_native_id = re.source_native_conversation_id
 			WHERE re.payload IS NOT NULL
-			ORDER BY re.id`},
+			ORDER BY re.id`, true},
 		{TargetConversationTitle, `
 			SELECT c.id, c.title, c.project, c.raw_path
 			FROM conversations c
 			WHERE c.title IS NOT NULL AND c.title <> ''
-			ORDER BY c.id`},
+			ORDER BY c.id`, false},
 	}
 	for _, q := range queries {
-		records, err := scanQuery(ctx, s, engine, q.kind, q.sql, &stats)
+		records, err := scanQuery(ctx, s, engine, q.kind, q.sql, q.json, &stats)
 		if err != nil {
 			return nil, stats, err
 		}
@@ -69,7 +70,7 @@ func Scan(ctx context.Context, s *store.Store, engine *redact.Engine) ([]Record,
 	return out, stats, nil
 }
 
-func scanQuery(ctx context.Context, s *store.Store, engine *redact.Engine, kind TargetKind, query string, stats *Stats) ([]Record, error) {
+func scanQuery(ctx context.Context, s *store.Store, engine *redact.Engine, kind TargetKind, query string, jsonTarget bool, stats *Stats) ([]Record, error) {
 	rows, err := s.Conn().QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("scan %s: %w", kind, err)
@@ -89,21 +90,33 @@ func scanQuery(ctx context.Context, s *store.Store, engine *redact.Engine, kind 
 			continue
 		}
 		stats.Rows++
-		result, err := engine.RedactScope(redact.Scope{Project: project.String, Path: path.String}, text)
-		if err != nil {
-			return nil, fmt.Errorf("redact %s %s: %w", kind, id, err)
+		scope := redact.Scope{Project: project.String, Path: path.String}
+		var spans []redact.Span
+		if jsonTarget {
+			spans, err = scanJSONValue(engine, scope, text)
+			if err != nil {
+				return nil, fmt.Errorf("redact %s %s: %w", kind, id, err)
+			}
+		} else {
+			var result redact.Result
+			result, err = engine.RedactScope(scope, text)
+			if err != nil {
+				return nil, fmt.Errorf("redact %s %s: %w", kind, id, err)
+			}
+			spans = make([]redact.Span, len(result.Findings))
+			for i, f := range result.Findings {
+				spans[i] = f.Span()
+			}
 		}
-		if len(result.Findings) == 0 {
+		if len(spans) == 0 {
 			continue
 		}
-		spans := make([]redact.Span, len(result.Findings))
-		for i, f := range result.Findings {
-			spans[i] = f.Span()
+		for _, span := range spans {
 			stats.Findings++
 			if stats.Counts == nil {
 				stats.Counts = map[string]int{}
 			}
-			stats.Counts[f.RuleID]++
+			stats.Counts[span.RuleID]++
 		}
 		out = append(out, Record{
 			TargetKind:  kind,

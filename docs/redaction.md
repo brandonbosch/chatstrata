@@ -6,8 +6,8 @@ are plaintext; optional relay sync encrypts segments before upload.
 
 The design is [ADR 0008](adr/0008-local-redaction-boundary.md). The secrets
 engine, deterministic PII recognizers, user-defined rules, and the labeling
-egress gate are implemented in `internal/redact`. The archive redaction overlay
-and destructive purge are not yet.
+egress gate are implemented in `internal/redact`; the archive overlay and
+destructive purge are implemented in `internal/redactions`.
 
 ## Egress gate
 
@@ -126,6 +126,13 @@ under `chatstrata-go.redactions/runs/` and applies it to DuckDB. Records store
 the target, a hash of the input text, and payload-free spans. The overlay is
 replayed after every re-ingest and `rebuild`, and `redaction_runs` /
 `redactions` mirror it for SQL audit.
+
+The two payload columns are JSON. Detection runs on each decoded string value,
+including object keys, and the spans are mapped back to the serialized bytes.
+A span therefore never begins or ends inside an escape sequence, and replacing
+it with a typed placeholder cannot invalidate the document. A larger
+`max_input_bytes` may be needed for archives whose source records embed whole
+transcripts; the cap applies to one decoded string value.
 
 Runs chain: a later run's input hash may be the previous run's output, so a
 policy change can add spans to already-redacted text. A record whose input
