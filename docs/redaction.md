@@ -170,7 +170,9 @@ files, other devices, relay ciphertext and backups are not changed.
 
 Collection-time redaction affects only new observations. Existing plaintext
 still needs `redact apply` or `redact purge`. Every device sharing the space
-must use the same policy, because observations are merged as written.
+must use the same policy, because observations are merged as written. Rolling
+this out to a paired fleet is covered in
+[the fleet runbook](rewrite/redaction-fleet.md).
 
 Neither operation can recall copies from other devices, the relay, backups,
 or the original source files. Redaction is not secure deletion on modern
