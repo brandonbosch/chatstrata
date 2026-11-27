@@ -239,3 +239,21 @@ func TestPolicyChangesVersion(t *testing.T) {
 		t.Fatal("policy change did not change redaction_version")
 	}
 }
+
+func TestPolicyVersionIgnoresCollect(t *testing.T) {
+	base := DefaultPolicy()
+	base.DisableLocalUsername = true
+	collect := base
+	collect.Collect = true
+	a, err := NewEngine(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := NewEngine(collect)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Version() != b.Version() {
+		t.Fatalf("collect changed the version: %s != %s", a.Version(), b.Version())
+	}
+}
