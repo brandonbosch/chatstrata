@@ -284,6 +284,10 @@ func (e *Engine) RedactScopeContext(ctx context.Context, scope Scope, text strin
 }
 
 func policyVersion(p Policy, builtinVersion, matcherVersion string) string {
+	// Collect changes where redaction is applied, not what it produces; two
+	// devices with the same policy must report the same version whether one
+	// collects redacted and the other only applies the overlay.
+	p.Collect = false
 	config, _ := json.Marshal(p)
 	h := sha256.New()
 	_, _ = fmt.Fprintf(h, "%s\n%s\n%s\n%s\n%s\n%s\n%s",
