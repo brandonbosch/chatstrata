@@ -27,6 +27,8 @@ type Projector struct {
 	RedactOnCollect bool
 	// RedactionsDir overrides the sidecar path derived from Store.Path.
 	RedactionsDir string
+	// LabelsDir overrides the label sidecar path derived from Store.Path.
+	LabelsDir string
 
 	registered map[string]bool
 }

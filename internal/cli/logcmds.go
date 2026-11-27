@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brandonbosch/chatstrata/v2/internal/label"
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
 	"github.com/brandonbosch/chatstrata/v2/internal/redactions"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
@@ -72,6 +73,7 @@ func runRebuild(e *env, args []string) error {
 		return err
 	}
 	a.proj.RedactionsDir = redactions.Dir(dbPath)
+	a.proj.LabelsDir = label.Dir(dbPath)
 	stats, err := a.proj.CatchUp(e.ctx, true, e.stderr)
 	if err == nil {
 		err = s.Checkpoint(e.ctx)
@@ -87,8 +89,8 @@ func runRebuild(e *env, args []string) error {
 	if err := old.ReplaceWith(e.ctx, tmp); err != nil {
 		return fmt.Errorf("rebuild: swap in %s: %w", tmp, err)
 	}
-	_, _ = fmt.Fprintf(e.stdout, "Done. Segments: %d  Conversations: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d  Redacted: %d\n",
-		stats.Segments, stats.Stored, stats.Unported, stats.Failed, stats.Redacted)
+	_, _ = fmt.Fprintf(e.stdout, "Done. Segments: %d  Conversations: %d  Kept in log only (source not in the Go version yet): %d  Failed: %d  Redacted: %d  Labels: %d\n",
+		stats.Segments, stats.Stored, stats.Unported, stats.Failed, stats.Redacted, stats.Labels)
 	if !stats.Reindexed {
 		_, _ = fmt.Fprintln(e.stdout, "Run `chatstrata reindex` to rebuild the search index.")
 	}

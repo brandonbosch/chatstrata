@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/brandonbosch/chatstrata/v2/internal/label"
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
 	"github.com/brandonbosch/chatstrata/v2/internal/redactions"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
@@ -23,6 +24,8 @@ type Stats struct {
 	Failed   int
 	// Redacted counts projection rows changed by the archive overlay.
 	Redacted int
+	// Labels counts classifier label rows replayed from chatstrata-go.labels/.
+	Labels int
 	// Reindexed is set when the full-text search index was rebuilt.
 	Reindexed bool
 }
@@ -123,6 +126,12 @@ func (p *Projector) CatchUp(ctx context.Context, ownState bool, errs io.Writer) 
 			return stats, fmt.Errorf("apply archive redactions: %w", err)
 		}
 		stats.Redacted = applied.Applied
+
+		replayed, err := label.Replay(ctx, p.Store, p.labelsDir(), ownState)
+		if err != nil {
+			return stats, fmt.Errorf("replay classifier labels: %w", err)
+		}
+		stats.Labels = replayed.Applied
 	}
 
 	// Keep the search index in step. DuckDB rebuilds it whole, so it's
@@ -228,6 +237,16 @@ func (p *Projector) redactionsDir() string {
 		return ""
 	}
 	return redactions.Dir(p.Store.Path)
+}
+
+func (p *Projector) labelsDir() string {
+	if p.LabelsDir != "" {
+		return p.LabelsDir
+	}
+	if p.Store == nil {
+		return ""
+	}
+	return label.Dir(p.Store.Path)
 }
 
 // recomputeOwnState replays this device's own observations of a conversation

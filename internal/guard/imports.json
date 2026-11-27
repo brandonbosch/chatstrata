@@ -26,6 +26,12 @@
     "internal/guard": {
       "may_use": []
     },
+    "internal/label": {
+      "may_use": [
+        "internal/redact",
+        "internal/store"
+      ]
+    },
     "internal/model": {
       "may_use": []
     },
@@ -34,6 +40,7 @@
     },
     "internal/project": {
       "may_use": [
+        "internal/label",
         "internal/model",
         "internal/obslog",
         "internal/redact",
