@@ -172,8 +172,25 @@ func TestLoadBuiltinPacksAndTopologicalOrder(t *testing.T) {
 	if pos["session-triage"] >= pos["user-turn-boundaries"] {
 		t.Errorf("session-triage must come before user-turn-boundaries: %v", pos)
 	}
+	if pos["session-triage"] >= pos["tool-failures"] {
+		t.Errorf("session-triage must come before tool-failures: %v", pos)
+	}
 	if pos["user-turn-boundaries"] >= pos["benchmark-candidacy"] {
 		t.Errorf("user-turn-boundaries must come before benchmark-candidacy: %v", pos)
+	}
+
+	// Verify tool-failures splits blocked into sandbox_blocked and user_rejected.
+	fmCrit, ok := packs["tool-failures"].Questions["failure_mode"].Criteria.(map[string]string)
+	if !ok {
+		t.Fatalf("failure_mode criteria missing or wrong type")
+	}
+	if _, hasOld := fmCrit["blocked"]; hasOld {
+		t.Error("failure_mode should split blocked into sandbox_blocked and user_rejected")
+	}
+	for _, wantOpt := range []string{"sandbox_blocked", "user_rejected"} {
+		if _, ok := fmCrit[wantOpt]; !ok {
+			t.Errorf("failure_mode missing option %q", wantOpt)
+		}
 	}
 
 	// Custom user pack overrides built-in and rejects unknown keys.
@@ -337,8 +354,92 @@ func TestEndToEndThreeStagePipelineRedactionAndReplay(t *testing.T) {
 		t.Fatalf("expected 1 benchmark candidate %s, got %+v", convID, benchSel.Targets)
 	}
 
-	// Tool failures pack SQL & state unwrap.
+	// Tool failures pack SQL, eligibility screening, Codex exit_code, and state unwrap.
+	// Add a claude_export tool call that passes session-triage; it must still be excluded.
+	if err := s.EnsureSource(ctx, stubSource{name: "claude_export"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EnsureSource(ctx, stubSource{name: "codex_cli"}); err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 11, 20, 10, 0, 0, 0, time.UTC)
+	exportConv := &model.Conversation{
+		SourceNativeID: "export-1",
+		StartedAt:      &t0,
+		EndedAt:        &t0,
+		Messages: []model.Message{
+			{SourceNativeID: strPtr("em1"), Role: model.RoleAssistant, CreatedAt: &t0, Blocks: []model.Block{
+				{Type: model.BlockToolUse, ToolName: strPtr("web_search"), ToolUseID: strPtr("etu-1"), Payload: map[string]any{"input": map[string]any{"q": "go"}}},
+			}},
+			{SourceNativeID: strPtr("em2"), Role: model.RoleTool, CreatedAt: &t0, Blocks: []model.Block{
+				{Type: model.BlockToolResult, ToolUseID: strPtr("etu-1"), Text: strPtr("results")},
+			}},
+		},
+	}
+	if _, err := s.Ingest(ctx, "claude_export", exportConv, nil); err != nil {
+		t.Fatal(err)
+	}
+	codexConv := &model.Conversation{
+		SourceNativeID: "codex-1",
+		Project:        strPtr("chatstrata"),
+		StartedAt:      &t0,
+		EndedAt:        &t0,
+		Messages: []model.Message{
+			{SourceNativeID: strPtr("cm1"), Role: model.RoleAssistant, CreatedAt: &t0, Blocks: []model.Block{
+				{Type: model.BlockToolUse, ToolName: strPtr("exec"), ToolUseID: strPtr("ctu-1"), Payload: map[string]any{"input": "git status"}},
+			}},
+			{SourceNativeID: strPtr("cm2"), Role: model.RoleTool, CreatedAt: &t0, Blocks: []model.Block{
+				{Type: model.BlockToolResult, ToolUseID: strPtr("ctu-1"), Text: strPtr("Script completed\nWall time 0.1 seconds\nOutput:\n"), Payload: map[string]any{"status": "failed", "is_error": true, "exit_code": 128}},
+			}},
+		},
+	}
+	if _, err := s.Ingest(ctx, "codex_cli", codexConv, nil); err != nil {
+		t.Fatal(err)
+	}
+	var exportID, codexID string
+	if err := s.Conn().QueryRowContext(ctx, `SELECT id FROM conversations WHERE source_native_id = 'export-1'`).Scan(&exportID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Conn().QueryRowContext(ctx, `SELECT id FROM conversations WHERE source_native_id = 'codex-1'`).Scan(&codexID); err != nil {
+		t.Fatal(err)
+	}
+	for _, cid := range []string{exportID, codexID} {
+		if _, err := s.Conn().ExecContext(ctx, `
+			INSERT INTO labels (pack, target_kind, target_id, question, answer_type, value, pack_version, model, run_id)
+			VALUES ('session-triage', 'conversation', ?, 'is_real_work_session', 'noul', 0.95, ?, 'jev-1.14.0', 'r-screen')
+		`, cid, triage.Version()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	tf := packs["tool-failures"]
+	tfAll, err := SelectTargets(ctx, s, tf, gate, TargetFilters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Expect 2 claude_code calls + 1 codex_cli call; claude_export must be excluded.
+	if len(tfAll.Targets) != 3 {
+		t.Fatalf("expected 3 screened coding-harness tool calls, got %d", len(tfAll.Targets))
+	}
+	var sawCodex bool
+	for _, tgt := range tfAll.Targets {
+		if tgt.SourceID == "claude_export" {
+			t.Fatal("claude_export tool call was not excluded by tool-failures eligibility filter")
+		}
+		if tgt.SourceID == "codex_cli" {
+			sawCodex = true
+			if tgt.State["harness_flagged_error"] != true {
+				t.Errorf("codex harness_flagged_error = %#v, want true", tgt.State["harness_flagged_error"])
+			}
+			if tgt.State["exit_code"] != int32(128) && tgt.State["exit_code"] != int64(128) && tgt.State["exit_code"] != 128 {
+				t.Errorf("codex exit_code = %#v (%T), want 128", tgt.State["exit_code"], tgt.State["exit_code"])
+			}
+		}
+	}
+	if !sawCodex {
+		t.Fatal("missing screened codex_cli target")
+	}
+
 	tfSel, err := SelectTargets(ctx, s, tf, gate, TargetFilters{Tool: "Edit"})
 	if err != nil {
 		t.Fatal(err)

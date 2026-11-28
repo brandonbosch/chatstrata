@@ -1,18 +1,27 @@
 # Port of v1 tool-failures pack with recovery tracking.
 # Classifies tool-call outcomes, agent-caused errors, stale-file-view errors,
 # and whether the agent recovered within the next two tool calls.
+# Screened through session-triage to real work sessions in coding harnesses.
 # See docs/adr/0007-go-classifier-labels.md.
 
 name = "tool-failures"
 description = """
-Classify tool calls by outcome and failure mode, whether failures were caused by
-the agent (including stale file views), and whether the agent recovered cleanly
-in subsequent tool calls."""
+Classify coding-harness tool calls in real work sessions by outcome and failure
+mode, whether failures were caused by the agent (including stale file views),
+and whether the agent recovered cleanly in subsequent tool calls."""
 target_kind = "tool_call"
-state_version = 2
+state_version = 3
+depends_on = ["session-triage"]
 
 target_sql = """
-WITH results AS (
+WITH screened_convs AS (
+    SELECT target_id AS conversation_id
+    FROM labels
+    WHERE pack = 'session-triage'
+      AND question = 'is_real_work_session'
+      AND value > 0.65
+),
+results AS (
     SELECT
         m.conversation_id,
         cb.tool_use_id,
@@ -20,10 +29,13 @@ WITH results AS (
         coalesce(
             try_cast(cb.payload->>'is_error' AS BOOLEAN),
             try_cast(cb.payload->>'isError' AS BOOLEAN),
-            CASE WHEN cb.payload->>'status' = 'error' THEN TRUE END
-        ) AS reported_error
+            CASE WHEN cb.payload->>'status' IN ('error', 'failed') THEN TRUE END,
+            CASE WHEN try_cast(cb.payload->>'exit_code' AS INTEGER) <> 0 THEN TRUE END
+        ) AS reported_error,
+        try_cast(cb.payload->>'exit_code' AS INTEGER) AS exit_code
     FROM content_blocks cb
     JOIN messages m ON m.id = cb.message_id
+    JOIN screened_convs sc ON sc.conversation_id = m.conversation_id
     WHERE cb.type = 'tool_result' AND cb.tool_use_id IS NOT NULL
     QUALIFY row_number() OVER (
         PARTITION BY m.conversation_id, cb.tool_use_id ORDER BY m.sequence_index
@@ -44,6 +56,7 @@ ordered_calls AS (
         cb.payload AS arguments,
         r.result_text,
         r.reported_error,
+        r.exit_code,
         lead(cb.tool_name || ': ' || left(coalesce(r.result_text, '(no output)'), 250), 1) OVER (
             PARTITION BY m.conversation_id ORDER BY m.sequence_index, cb.block_index
         ) AS next_call_1,
@@ -53,10 +66,12 @@ ordered_calls AS (
     FROM content_blocks cb
     JOIN messages m ON m.id = cb.message_id
     JOIN conversations c ON c.id = m.conversation_id
+    JOIN screened_convs sc ON sc.conversation_id = c.id
     JOIN results r
       ON r.conversation_id = m.conversation_id
      AND r.tool_use_id = cb.tool_use_id
     WHERE cb.type = 'tool_use'
+      AND c.source_id <> 'claude_export'
 )
 SELECT
     target_id,
@@ -70,6 +85,7 @@ SELECT
     arguments,
     result_text,
     reported_error,
+    exit_code,
     coalesce(next_call_1, '(none)') || chr(10) || coalesce(next_call_2, '(none)') AS following_calls
 FROM ordered_calls
 """
@@ -80,18 +96,36 @@ tool_name = { column = "tool_name" }
 arguments = { column = "arguments", unwrap = true, json = true, clip = 2000 }
 result = { column = "result_text", clip = 3000, default = "(no output)" }
 harness_flagged_error = { column = "reported_error" }
+exit_code = { column = "exit_code" }
 following_calls = { column = "following_calls", clip = 700 }
 
 [questions.failure_mode]
 type = "choice"
 instructions = """
-What happened when the agent ran this tool call? Judge from `result`; `arguments`
-shows what the agent asked the tool to do."""
+What happened when the agent ran this tool call? Judge from `result`,
+`harness_flagged_error`, and `exit_code` (when present); `arguments` shows what
+the agent asked the tool to do.
+
+Judge whether the tool call itself worked, not whether the content it returned
+is good news. Reading, searching, or listing something that mentions errors,
+failures, or tracebacks is a success: the file, log, or search hit just contains
+those words.
+
+When `harness_flagged_error` is false, start from succeeded. Choose a failure
+only when the result shows a clear error produced by this call itself, such as
+"No such file or directory", "Operation not permitted", "command not found", a
+traceback from the command, or an explicit non-zero exit status printed in the
+output. Exit codes are often hidden by pipes or a trailing echo, so such errors
+still count. Warnings, progress or statistics printed to stderr, verbose tool
+logs, and output you don't recognise are not failures."""
 
 [questions.failure_mode.criteria]
 succeeded = """
-The tool did what was asked. Includes commands that ran and printed normal output,
-and searches that correctly returned no matches."""
+The tool did what was asked. Includes commands that ran and printed normal output
+(even with warnings, progress lines, or encoder/compiler statistics), searches
+that correctly returned no matches, and Read/Grep/Glob/ls calls that returned
+content, whatever that content says. An empty result from a read or command that
+reports no error is also a success."""
 match_failed = """
 An edit, replace, or patch could not be applied because the text, anchor, or hunk
 it had to find was missing, did not match exactly, or matched more than one place."""
@@ -101,10 +135,21 @@ The tool rejected the call itself: missing or malformed parameters, schema valid
 errors, or an unknown option."""
 command_failed = """
 A shell command, build, test, or script ran but exited with an error, reported
-failing tests, or printed a compile or runtime error."""
-blocked = """
-The call was not allowed to run: permission denied, sandbox refusal, or the user
-rejected or interrupted it."""
+failing tests, or printed a compile or runtime error that stopped it. Compiler
+warnings, deprecation notices, and diagnostics followed by a successful finish
+(e.g. "built", "OK", output files written) are not command failures. Never use
+this for a Read, Grep, or Glob call whose returned content describes a failure."""
+sandbox_blocked = """
+The OS, environment, or harness sandbox prevented the call from running:
+permission denied, read-only filesystem, network/egress blocked, seccomp/landlock/
+seatbelt/no-new-privileges refusal, or a harness approval policy blocked it without
+user input."""
+user_rejected = """
+The human user explicitly declined, rejected, cancelled, or interrupted the tool
+call (e.g. denied a permission prompt, pressed Esc/Ctrl-C, or aborted execution).
+The result must show the rejection or interruption itself, such as a harness
+message that the user declined or interrupted the call; ordinary output is not
+a rejection."""
 timeout = "The call timed out or was killed for running too long."
 other_error = "The call failed in a way none of the other options describe."
 

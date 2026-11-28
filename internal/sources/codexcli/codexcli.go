@@ -104,6 +104,7 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 	}
 	var span srcutil.Span
 	var modelName *string
+	outcomes := newOutcomeTracker(events)
 	for _, ev := range events {
 		conv.RawEvents = append(conv.RawEvents, ev.Raw)
 		ts := timestamp(ev.Fields["timestamp"])
@@ -123,6 +124,7 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 				conv.Project = srcutil.NonEmpty(payload, "cwd")
 			}
 		case "event_msg":
+			outcomes.observeEventMsg(payload)
 			if payload["type"] != "user_message" {
 				continue
 			}
@@ -135,7 +137,7 @@ func (Source) Parse(h model.Handle, content []byte) (*model.Conversation, error)
 				})
 			}
 		case "response_item":
-			role, blocks := responseBlocks(payload)
+			role, blocks := responseBlocks(payload, outcomes)
 			if role == "" || len(blocks) == 0 {
 				continue
 			}
@@ -194,7 +196,7 @@ func outputText(v any) *string {
 	return nil
 }
 
-func responseBlocks(p map[string]any) (model.Role, []model.Block) {
+func responseBlocks(p map[string]any, outcomes *outcomeTracker) (model.Role, []model.Block) {
 	switch p["type"] {
 	case "message":
 		text := joinText(srcutil.GetOr(p, "content", []any{}))
@@ -225,10 +227,13 @@ func responseBlocks(p map[string]any) (model.Role, []model.Block) {
 			Payload:   map[string]any{"arguments": srcutil.GetOr(p, "arguments", "")},
 		}}
 	case "function_call_output", "custom_tool_call_output":
+		callID := srcutil.Str(p, "call_id")
+		text := outputText(p["output"])
 		return model.RoleTool, []model.Block{{
 			Type:      model.BlockToolResult,
-			ToolUseID: srcutil.Str(p, "call_id"),
-			Text:      outputText(p["output"]),
+			ToolUseID: callID,
+			Text:      text,
+			Payload:   outcomes.consume(callID, text),
 		}}
 	case "web_search_call":
 		var query any
