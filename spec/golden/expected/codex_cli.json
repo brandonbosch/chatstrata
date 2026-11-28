@@ -88,7 +88,11 @@
           "blocks": [
             {
               "block_index": 0,
-              "payload": null,
+              "payload": {
+                "exit_code": 0,
+                "is_error": false,
+                "status": "completed"
+              },
               "text": "import sqlite3\n\ndef connect():\n    return sqlite3.connect('app.db')\n",
               "tool_name": null,
               "tool_use_id": "call-001",
@@ -147,7 +151,11 @@
           "blocks": [
             {
               "block_index": 0,
-              "payload": null,
+              "payload": {
+                "exit_code": 0,
+                "is_error": false,
+                "status": "completed"
+              },
               "text": "{\"output\":\"Success. Updated db.py\\n\",\"metadata\":{\"exit_code\":0}}",
               "tool_name": null,
               "tool_use_id": "call-002",
