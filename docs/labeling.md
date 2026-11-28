@@ -48,7 +48,7 @@ chatstrata label packs
 | `session-triage` | `conversation` | — | Screen real work sessions, activity, domain, completion, complexity, verifiability |
 | `user-turn-boundaries` | `message` | `session-triage` | Separate human prompts from harness wrappers, turn role, self-containment, corrections |
 | `benchmark-candidacy` | `conversation` | `session-triage`, `user-turn-boundaries` | Score replayable `workeval` benchmark candidates and task archetypes |
-| `tool-failures` | `tool_call` | — | Classify tool failure modes, agent-caused errors, stale views, and recovery |
+| `tool-failures` | `tool_call` | `session-triage` | Classify coding-harness tool failure modes (`sandbox_blocked` vs `user_rejected`, exit codes), agent-caused errors, stale views, and recovery |
 
 Custom TOML packs placed in `$CHATSTRATA_PACKS_DIR` (default
 `<config>/chatstrata/packs`) are discovered automatically and may add new packs
@@ -63,6 +63,9 @@ chatstrata label run session-triage --dry-run --show-state --limit 10
 # Run with an explicit key and cost cap
 export TYPESAFE_API_KEY=...
 chatstrata label run session-triage --max-cost-usd 2.00 --yes
+
+# Calibrate tool-failures cheaply on Claude Code before a full run
+chatstrata label run tool-failures --source claude_code --limit 500 --max-cost-usd 0.10 --yes
 
 # Run all packs in dependency order
 chatstrata label run --all --max-cost-usd 5.00 --yes
