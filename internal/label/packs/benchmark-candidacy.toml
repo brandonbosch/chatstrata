@@ -1,0 +1,234 @@
+# Stage-2 benchmark candidacy scoring aligned with workeval's methodology
+# (replayability, clean-start likelihood, leakage, dependency risk, archetype
+# stratification, and difficulty). See docs/adr/0007-go-classifier-labels.md.
+
+name = "benchmark-candidacy"
+description = """
+Evaluate screened coding/engineering sessions for suitability as isolated,
+reproducible workeval benchmark tasks and categorize them by engineering archetype."""
+target_kind = "conversation"
+state_version = 1
+depends_on = ["session-triage", "user-turn-boundaries"]
+
+target_sql = """
+WITH eligible AS (
+    SELECT
+        t_real.target_id AS conversation_id
+    FROM labels t_real
+    JOIN labels t_verif
+      ON t_verif.target_id = t_real.target_id
+     AND t_verif.pack = 'session-triage'
+     AND t_verif.question = 'verifiable_outcome'
+    JOIN labels t_scope
+      ON t_scope.target_id = t_real.target_id
+     AND t_scope.pack = 'session-triage'
+     AND t_scope.question = 'scope_complexity'
+    JOIN labels t_sec
+      ON t_sec.target_id = t_real.target_id
+     AND t_sec.pack = 'session-triage'
+     AND t_sec.question = 'sensitive_or_secrets_risk'
+    WHERE t_real.pack = 'session-triage'
+      AND t_real.question = 'is_real_work_session'
+      AND t_real.value > 0.65
+      AND t_verif.value > 0.55
+      AND t_scope.value >= 1.0
+      AND t_sec.value < 0.5
+),
+human_prompts AS (
+    SELECT
+        m.conversation_id,
+        m.sequence_index,
+        l_role.choice AS turn_role,
+        coalesce(l_corr.value, 0.0) AS correction_severity,
+        string_agg(cb.text, chr(10) ORDER BY cb.block_index) AS text,
+        row_number() OVER (
+            PARTITION BY m.conversation_id
+            ORDER BY CASE WHEN l_role.choice = 'new_task_spec' THEN 0 ELSE 1 END, m.sequence_index
+        ) AS prompt_rk,
+        row_number() OVER (
+            PARTITION BY m.conversation_id
+            ORDER BY coalesce(l_corr.value, 0.0) DESC, m.sequence_index
+        ) AS corr_rk
+    FROM messages m
+    JOIN eligible e ON e.conversation_id = m.conversation_id
+    JOIN labels l_human
+      ON l_human.target_id = m.id
+     AND l_human.pack = 'user-turn-boundaries'
+     AND l_human.question = 'is_human_authored'
+     AND l_human.value > 0.65
+    JOIN labels l_role
+      ON l_role.target_id = m.id
+     AND l_role.pack = 'user-turn-boundaries'
+     AND l_role.question = 'turn_role'
+    LEFT JOIN labels l_corr
+      ON l_corr.target_id = m.id
+     AND l_corr.pack = 'user-turn-boundaries'
+     AND l_corr.question = 'correction_severity'
+    JOIN content_blocks cb ON cb.message_id = m.id AND cb.type = 'text'
+    WHERE m.role = 'user' AND cb.text IS NOT NULL AND trim(cb.text) <> ''
+    GROUP BY m.conversation_id, m.sequence_index, l_role.choice, l_corr.value
+),
+prompt_agg AS (
+    SELECT
+        conversation_id,
+        string_agg(
+            '[seq ' || CAST(sequence_index AS VARCHAR) || ' ' || turn_role || '] ' || left(text, 1200),
+            chr(10) || '---' || chr(10) ORDER BY sequence_index
+        ) FILTER (WHERE prompt_rk <= 2) AS opening_human_specs,
+        string_agg(
+            '[seq ' || CAST(sequence_index AS VARCHAR) || '] ' || left(text, 600),
+            chr(10) || '---' || chr(10) ORDER BY sequence_index
+        ) FILTER (WHERE correction_severity >= 1.5 AND corr_rk <= 3) AS key_corrections,
+        count(*) FILTER (WHERE correction_severity >= 1.5) AS substantive_correction_count
+    FROM human_prompts
+    GROUP BY conversation_id
+),
+cmd_samples AS (
+    SELECT
+        conversation_id,
+        string_agg(cmd_snippet, chr(10) ORDER BY seq) AS key_commands
+    FROM (
+        SELECT
+            m.conversation_id,
+            m.sequence_index AS seq,
+            left(CAST(cb.payload AS VARCHAR), 240) AS cmd_snippet,
+            row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_index) AS rk
+        FROM content_blocks cb
+        JOIN messages m ON m.id = cb.message_id
+        JOIN eligible e ON e.conversation_id = m.conversation_id
+        WHERE cb.type = 'tool_use'
+          AND (
+              CAST(cb.payload AS VARCHAR) ILIKE '%git %'
+              OR CAST(cb.payload AS VARCHAR) ILIKE '%gh pr%'
+              OR CAST(cb.payload AS VARCHAR) ILIKE '%test%'
+              OR CAST(cb.payload AS VARCHAR) ILIKE '%cargo %'
+              OR CAST(cb.payload AS VARCHAR) ILIKE '%pytest%'
+              OR CAST(cb.payload AS VARCHAR) ILIKE '%check.sh%'
+          )
+    )
+    WHERE rk <= 12
+    GROUP BY conversation_id
+),
+last_asst AS (
+    SELECT
+        m.conversation_id,
+        left(string_agg(cb.text, chr(10) ORDER BY cb.block_index), 1200) AS final_assistant_summary
+    FROM messages m
+    JOIN eligible e ON e.conversation_id = m.conversation_id
+    JOIN content_blocks cb ON cb.message_id = m.id AND cb.type = 'text'
+    WHERE m.role = 'assistant' AND cb.text IS NOT NULL AND trim(cb.text) <> ''
+    GROUP BY m.conversation_id, m.sequence_index
+    QUALIFY row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_index DESC) = 1
+)
+SELECT
+    c.id AS target_id,
+    c.source_id,
+    c.project,
+    c.raw_path,
+    coalesce(c.started_at, c.ingested_at) AS created_at,
+    coalesce(c.ended_at, c.started_at, c.ingested_at) AS ended_at,
+    coalesce(c.content_hash, CAST(c.message_count AS VARCHAR)) AS target_fingerprint,
+    c.message_count,
+    coalesce(pa.substantive_correction_count, 0) AS substantive_correction_count,
+    pa.opening_human_specs,
+    pa.key_corrections,
+    cs.key_commands,
+    la.final_assistant_summary
+FROM conversations c
+JOIN eligible e ON e.conversation_id = c.id
+LEFT JOIN prompt_agg pa ON pa.conversation_id = c.id
+LEFT JOIN cmd_samples cs ON cs.conversation_id = c.id
+LEFT JOIN last_asst la ON la.conversation_id = c.id
+"""
+
+[state]
+harness = { column = "source_id" }
+project = { column = "project", default = "(none)" }
+message_count = { column = "message_count" }
+substantive_correction_count = { column = "substantive_correction_count" }
+opening_human_specs = { column = "opening_human_specs", clip = 2600, default = "(none)" }
+key_corrections = { column = "key_corrections", clip = 1800, default = "(none)" }
+key_commands = { column = "key_commands", clip = 2000, default = "(none)" }
+final_assistant_summary = { column = "final_assistant_summary", clip = 1200, default = "(none)" }
+
+[questions.task_archetype]
+type = "choice"
+instructions = """
+Which engineering task archetype best describes the core work in this session?
+Use this to stratify a benchmark suite across distinct categories of real work."""
+
+[questions.task_archetype.criteria]
+reproducible_bug = "Fixing a concrete, deterministic bug or edge case with clear incorrect vs expected behavior."
+new_behavior_feature = "Adding a new feature, command, adapter, or user-visible capability."
+api_or_schema_refactor = "Refactoring interfaces, types, schemas, or module structure while preserving behavior."
+concurrency_or_state_bug = "Fixing race conditions, locking, async/sync ordering, persistence, or state-machine defects."
+build_or_tooling_fix = "Fixing build scripts, packaging, CI, compiler/linker flags, or CLI/environment tooling."
+perf_optimization = "Improving throughput, latency, memory usage, or algorithmic complexity."
+test_or_harness_work = "Writing tests, golden fixtures, verification harnesses, or evaluation tooling."
+cli_or_ops_workflow = "Automating or fixing local CLI workflows, dotfiles, or system configuration."
+
+[questions.prompt_leakage_risk]
+type = "noul"
+instructions = """
+Does `opening_human_specs` already give away the exact implementation, patch, or
+step-by-step code solution rather than stating the problem and requirements?"""
+
+[questions.prompt_leakage_risk.criteria]
+true = """
+The user already pasted the exact fix, dictated exact code lines to copy, or
+removed the interesting problem-solving work from the prompt."""
+false = "The user describes the problem, desired behavior, or constraints and leaves implementation to the agent."
+
+[questions.external_dependency_risk]
+type = "noul"
+instructions = """
+Would replaying this task inside an isolated, headless, offline sandbox fail
+because the task fundamentally depends on live external services, GPUs, GUIs, or
+host-specific state outside the repository?"""
+
+[questions.external_dependency_risk.criteria]
+true = """
+Requires live third-party APIs/credentials, remote servers/tailnet, specific GPU
+hardware, GUI/desktop interaction, or private host files not in the repo."""
+false = "Can be built and verified locally inside a repo checkout with standard toolchains and local tests/mocks."
+
+[questions.clean_start_likely]
+type = "noul"
+instructions = """
+Do `opening_human_specs` and `key_commands` suggest the task started from a clean,
+recoverable repository state (a commit, branch, issue, or PR) rather than messy,
+uncommitted work-in-progress?"""
+
+[questions.clean_start_likely.criteria]
+true = """
+References a clean branch, commit, issue/PR, fresh feature/bug request, or standard
+git workflow where a pre-task commit is likely recoverable."""
+false = """
+Picks up mid-edit on uncommitted local changes, dirty scratch files, or an
+ephemeral directory with no clear repository baseline."""
+
+[questions.model_difficulty_estimate]
+type = "score"
+instructions = """
+How challenging does this task appear to have been for the original model, judging
+from task complexity, `substantive_correction_count`, `key_corrections`, and
+`message_count`?"""
+criteria = [
+    "Easy: straightforward single-pass implementation with no real friction",
+    "Moderate: required normal multi-file reasoning or minor course correction",
+    "Hard: subtle bug, tricky constraints, or multiple substantive corrections/pivots",
+    "Very hard: deep architectural/systems challenge with major dead-ends or sustained debugging",
+]
+
+[questions.good_eval_candidate]
+type = "score"
+instructions = """
+Overall, how well suited is this session to become an isolated, reproducible coding
+benchmark task (clear problem, objectively gradable, meaningful difficulty,
+realistic engineering work)?"""
+criteria = [
+    "Poor: vague, trivial, unrecoverable, or depends on non-replayable external state",
+    "Weak: possible with heavy rewriting, but missing clarity, checks, or realism",
+    "Good: solid realistic task with clear scope and likely verifiable acceptance checks",
+    "Excellent: self-contained, realistic, non-trivial engineering problem with crisp verifiable behavior",
+]

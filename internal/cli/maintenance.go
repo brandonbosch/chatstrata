@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/brandonbosch/chatstrata/v2/internal/label"
 	"github.com/brandonbosch/chatstrata/v2/internal/model"
 	"github.com/brandonbosch/chatstrata/v2/internal/project"
 	"github.com/brandonbosch/chatstrata/v2/internal/store"
@@ -299,6 +300,7 @@ func runPaths(e *env, args []string) error {
 	}
 	_, _ = fmt.Fprintf(e.stdout, "Database:  %s\n", dbPath)
 	_, _ = fmt.Fprintf(e.stdout, "Log:       %s  (source of truth; `chatstrata rebuild` recreates the database from it)\n", logDir(dbPath))
+	_, _ = fmt.Fprintf(e.stdout, "Labels:    %s  (classifier runs; replayed on `chatstrata rebuild`)\n", label.Dir(dbPath))
 	_, _ = fmt.Fprintf(e.stdout, "Data dir:  %s\n", dataDir)
 	_, _ = fmt.Fprintln(e.stdout)
 	_, _ = fmt.Fprintln(e.stdout, "Override the database with CHATSTRATA_GO_DB or per-command --db.")

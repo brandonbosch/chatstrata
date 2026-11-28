@@ -91,6 +91,8 @@ func (a archiveReader) schema(ctx context.Context) (string, error) {
 - content_blocks.message_id -> messages.id
 - attachments.message_id -> messages.id
 - tool_calls is a VIEW over content_blocks WHERE type = 'tool_use'
+- labels.target_id -> conversations.id (conversation), messages.id (message), or content_blocks.id (tool_call)
+- labels.run_id -> label_runs.id
 
 ## Full-Text Search (BM25)
 Use: fts_main_content_blocks.match_bm25(cb.id, 'your search terms')

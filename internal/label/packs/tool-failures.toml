@@ -1,0 +1,142 @@
+# Port of v1 tool-failures pack with recovery tracking.
+# Classifies tool-call outcomes, agent-caused errors, stale-file-view errors,
+# and whether the agent recovered within the next two tool calls.
+# See docs/adr/0007-go-classifier-labels.md.
+
+name = "tool-failures"
+description = """
+Classify tool calls by outcome and failure mode, whether failures were caused by
+the agent (including stale file views), and whether the agent recovered cleanly
+in subsequent tool calls."""
+target_kind = "tool_call"
+state_version = 2
+
+target_sql = """
+WITH results AS (
+    SELECT
+        m.conversation_id,
+        cb.tool_use_id,
+        cb.text AS result_text,
+        coalesce(
+            try_cast(cb.payload->>'is_error' AS BOOLEAN),
+            try_cast(cb.payload->>'isError' AS BOOLEAN),
+            CASE WHEN cb.payload->>'status' = 'error' THEN TRUE END
+        ) AS reported_error
+    FROM content_blocks cb
+    JOIN messages m ON m.id = cb.message_id
+    WHERE cb.type = 'tool_result' AND cb.tool_use_id IS NOT NULL
+    QUALIFY row_number() OVER (
+        PARTITION BY m.conversation_id, cb.tool_use_id ORDER BY m.sequence_index
+    ) = 1
+),
+ordered_calls AS (
+    SELECT
+        cb.id AS target_id,
+        m.conversation_id,
+        c.source_id,
+        c.project,
+        c.raw_path,
+        m.created_at,
+        m.model,
+        m.sequence_index,
+        cb.block_index,
+        cb.tool_name,
+        cb.payload AS arguments,
+        r.result_text,
+        r.reported_error,
+        lead(cb.tool_name || ': ' || left(coalesce(r.result_text, '(no output)'), 250), 1) OVER (
+            PARTITION BY m.conversation_id ORDER BY m.sequence_index, cb.block_index
+        ) AS next_call_1,
+        lead(cb.tool_name || ': ' || left(coalesce(r.result_text, '(no output)'), 250), 2) OVER (
+            PARTITION BY m.conversation_id ORDER BY m.sequence_index, cb.block_index
+        ) AS next_call_2
+    FROM content_blocks cb
+    JOIN messages m ON m.id = cb.message_id
+    JOIN conversations c ON c.id = m.conversation_id
+    JOIN results r
+      ON r.conversation_id = m.conversation_id
+     AND r.tool_use_id = cb.tool_use_id
+    WHERE cb.type = 'tool_use'
+)
+SELECT
+    target_id,
+    source_id,
+    project,
+    raw_path,
+    created_at,
+    'immutable' AS target_fingerprint,
+    model,
+    tool_name,
+    arguments,
+    result_text,
+    reported_error,
+    coalesce(next_call_1, '(none)') || chr(10) || coalesce(next_call_2, '(none)') AS following_calls
+FROM ordered_calls
+"""
+
+[state]
+harness = { column = "source_id" }
+tool_name = { column = "tool_name" }
+arguments = { column = "arguments", unwrap = true, json = true, clip = 2000 }
+result = { column = "result_text", clip = 3000, default = "(no output)" }
+harness_flagged_error = { column = "reported_error" }
+following_calls = { column = "following_calls", clip = 700 }
+
+[questions.failure_mode]
+type = "choice"
+instructions = """
+What happened when the agent ran this tool call? Judge from `result`; `arguments`
+shows what the agent asked the tool to do."""
+
+[questions.failure_mode.criteria]
+succeeded = """
+The tool did what was asked. Includes commands that ran and printed normal output,
+and searches that correctly returned no matches."""
+match_failed = """
+An edit, replace, or patch could not be applied because the text, anchor, or hunk
+it had to find was missing, did not match exactly, or matched more than one place."""
+file_not_found = "A path did not exist or a file or directory could not be found."
+invalid_arguments = """
+The tool rejected the call itself: missing or malformed parameters, schema validation
+errors, or an unknown option."""
+command_failed = """
+A shell command, build, test, or script ran but exited with an error, reported
+failing tests, or printed a compile or runtime error."""
+blocked = """
+The call was not allowed to run: permission denied, sandbox refusal, or the user
+rejected or interrupted it."""
+timeout = "The call timed out or was killed for running too long."
+other_error = "The call failed in a way none of the other options describe."
+
+[questions.agent_caused]
+type = "noul"
+instructions = """
+Did this tool call fail because of how the agent called it, such as a wrong path,
+guessed or outdated file content, malformed arguments, or using the wrong tool for
+the job?"""
+
+[questions.agent_caused.criteria]
+true = "The call failed and a better-formed call would have succeeded."
+false = """
+The call succeeded, or it failed because of the environment, the code under test,
+or the user rather than the call itself."""
+
+[questions.stale_view]
+type = "noul"
+instructions = """
+Did the call fail because the agent assumed file contents or line positions that
+were not actually in the file?"""
+
+[questions.stale_view.criteria]
+true = "The error shows the expected text, lines, or hunk were not present as the agent wrote them."
+false = "The call succeeded, or failed for any other reason."
+
+[questions.recovery_succeeded]
+type = "noul"
+instructions = """
+If this tool call failed, do `following_calls` show the agent immediately
+recovering (e.g. re-reading the file or fixing the arguments/command and succeeding)?"""
+
+[questions.recovery_succeeded.criteria]
+true = "This call failed and `following_calls` clearly show a corrective retry or re-read that succeeded."
+false = "This call succeeded (no recovery needed), or the agent repeated the failure, gave up, or did not recover in `following_calls`."

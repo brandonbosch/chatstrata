@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/brandonbosch/chatstrata/v2/internal/label"
 	"github.com/brandonbosch/chatstrata/v2/internal/model"
 	"github.com/brandonbosch/chatstrata/v2/internal/obslog"
 	"github.com/brandonbosch/chatstrata/v2/internal/project"
@@ -89,5 +90,6 @@ func newProjector(s *store.Store, l *obslog.Log) (*project.Projector, error) {
 		Store: s, Log: l, Sources: srcs, Redactor: engine,
 		RedactOnCollect: policy.Collect,
 		RedactionsDir:   redactions.Dir(s.Path),
+		LabelsDir:       label.Dir(s.Path),
 	}, nil
 }

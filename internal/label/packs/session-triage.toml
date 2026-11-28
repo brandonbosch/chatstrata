@@ -1,0 +1,258 @@
+# High-level session triage for benchmark discovery, archive filtering,
+# and finetuning dataset curation. See docs/adr/0007-go-classifier-labels.md.
+
+name = "session-triage"
+description = """
+Classify coding-agent and chat sessions by whether they represent real work,
+primary activity, domain, completion, complexity, verifiability, and multi-task
+structure. Designed as the Stage-1 screen before turn-level or benchmark-candidacy
+labeling."""
+target_kind = "conversation"
+state_version = 1
+
+target_sql = """
+WITH user_turns AS (
+    SELECT
+        m.conversation_id,
+        m.sequence_index,
+        string_agg(cb.text, chr(10) ORDER BY cb.block_index) AS text,
+        row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_index ASC) AS rn_asc,
+        row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_index DESC) AS rn_desc,
+        count(*) OVER (PARTITION BY m.conversation_id) AS user_turn_count
+    FROM messages m
+    JOIN content_blocks cb ON cb.message_id = m.id AND cb.type = 'text'
+    WHERE m.role = 'user' AND cb.text IS NOT NULL AND trim(cb.text) <> ''
+    GROUP BY m.conversation_id, m.sequence_index
+),
+assistant_turns AS (
+    SELECT
+        m.conversation_id,
+        m.sequence_index,
+        string_agg(cb.text, chr(10) ORDER BY cb.block_index) AS text,
+        row_number() OVER (PARTITION BY m.conversation_id ORDER BY m.sequence_index DESC) AS rn_desc
+    FROM messages m
+    JOIN content_blocks cb ON cb.message_id = m.id AND cb.type = 'text'
+    WHERE m.role = 'assistant' AND cb.text IS NOT NULL AND trim(cb.text) <> ''
+    GROUP BY m.conversation_id, m.sequence_index
+),
+tool_counts AS (
+    SELECT
+        m.conversation_id,
+        cb.tool_name,
+        count(*) AS n
+    FROM content_blocks cb
+    JOIN messages m ON m.id = cb.message_id
+    WHERE cb.type = 'tool_use' AND cb.tool_name IS NOT NULL
+    GROUP BY m.conversation_id, cb.tool_name
+),
+tool_summary AS (
+    SELECT
+        conversation_id,
+        sum(n) AS tool_call_count,
+        string_agg(tool_name || ':' || CAST(n AS VARCHAR), ', ' ORDER BY n DESC, tool_name) AS tool_breakdown
+    FROM (
+        SELECT
+            conversation_id,
+            tool_name,
+            n,
+            row_number() OVER (PARTITION BY conversation_id ORDER BY n DESC, tool_name) AS rk
+        FROM tool_counts
+    )
+    WHERE rk <= 10
+    GROUP BY conversation_id
+),
+vcs_test_signals AS (
+    SELECT
+        m.conversation_id,
+        count(*) FILTER (
+            WHERE CAST(cb.payload AS VARCHAR) ILIKE '%git commit%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%gh pr create%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%git push%'
+        ) AS vcs_command_count,
+        count(*) FILTER (
+            WHERE CAST(cb.payload AS VARCHAR) ILIKE '%cargo test%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%cargo check%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%go test%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%pytest%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%npm test%'
+               OR CAST(cb.payload AS VARCHAR) ILIKE '%check.sh%'
+        ) AS test_command_count
+    FROM content_blocks cb
+    JOIN messages m ON m.id = cb.message_id
+    WHERE cb.type = 'tool_use'
+    GROUP BY m.conversation_id
+),
+user_agg AS (
+    SELECT
+        conversation_id,
+        max(user_turn_count) AS user_turn_count,
+        string_agg(
+            '[turn ' || CAST(sequence_index AS VARCHAR) || '] ' || left(text, 800),
+            chr(10) || '---' || chr(10) ORDER BY sequence_index ASC
+        ) FILTER (WHERE rn_asc <= 3) AS first_user_turns,
+        string_agg(
+            '[turn ' || CAST(sequence_index AS VARCHAR) || '] ' || left(text, 800),
+            chr(10) || '---' || chr(10) ORDER BY sequence_index ASC
+        ) FILTER (WHERE rn_desc <= 2 AND rn_asc > 3) AS last_user_turns
+    FROM user_turns
+    GROUP BY conversation_id
+),
+assistant_agg AS (
+    SELECT
+        conversation_id,
+        left(text, 1200) AS last_assistant_turn
+    FROM assistant_turns
+    WHERE rn_desc = 1
+)
+SELECT
+    c.id AS target_id,
+    c.source_id,
+    c.project,
+    c.raw_path,
+    coalesce(c.started_at, c.ingested_at) AS created_at,
+    coalesce(c.ended_at, c.started_at, c.ingested_at) AS ended_at,
+    coalesce(c.content_hash, CAST(c.message_count AS VARCHAR)) AS target_fingerprint,
+    c.title,
+    c.message_count,
+    coalesce(u.user_turn_count, 0) AS user_turn_count,
+    coalesce(ts.tool_call_count, 0) AS tool_call_count,
+    coalesce(ts.tool_breakdown, '(none)') AS tool_breakdown,
+    coalesce(vs.vcs_command_count, 0) AS vcs_command_count,
+    coalesce(vs.test_command_count, 0) AS test_command_count,
+    u.first_user_turns,
+    u.last_user_turns,
+    a.last_assistant_turn
+FROM conversations c
+LEFT JOIN user_agg u ON u.conversation_id = c.id
+LEFT JOIN assistant_agg a ON a.conversation_id = c.id
+LEFT JOIN tool_summary ts ON ts.conversation_id = c.id
+LEFT JOIN vcs_test_signals vs ON vs.conversation_id = c.id
+WHERE c.message_count >= 2
+"""
+
+[state]
+harness = { column = "source_id" }
+project = { column = "project", default = "(none)" }
+title = { column = "title", clip = 300, default = "(untitled)" }
+message_count = { column = "message_count" }
+user_turn_count = { column = "user_turn_count" }
+tool_call_count = { column = "tool_call_count" }
+tool_breakdown = { column = "tool_breakdown", clip = 400 }
+vcs_command_count = { column = "vcs_command_count" }
+test_command_count = { column = "test_command_count" }
+first_user_turns = { column = "first_user_turns", clip = 2600, default = "(none)" }
+last_user_turns = { column = "last_user_turns", clip = 1800, default = "(same as first turns)" }
+last_assistant_turn = { column = "last_assistant_turn", clip = 1200, default = "(none)" }
+
+[questions.is_real_work_session]
+type = "noul"
+instructions = """
+Is this conversation a genuine human-driven work, coding, planning, or technical
+session rather than a wrapper, duplicate, trivial ping, or automated harness run?"""
+
+[questions.is_real_work_session.criteria]
+true = """
+A human is genuinely working on a real task, project, question, plan, or command
+in this session."""
+false = """
+An automated subagent spawn, a pasted/copied review transcript, a benchmark replay
+harness run, a one-message smoke test ('say hi', 'test'), an empty/aborted start
+where no real work happened, or casual non-technical chit-chat."""
+
+[questions.primary_activity]
+type = "choice"
+instructions = """
+What is the main kind of work being done in this session? Judge from
+`first_user_turns`, `last_user_turns`, `tool_breakdown`, and `last_assistant_turn`."""
+
+[questions.primary_activity.criteria]
+bug_fix = "Diagnosing and fixing a concrete defect, failing test, crash, or regression in code."
+feature_impl = "Implementing new functionality, endpoints, adapters, UI behavior, or capabilities in code."
+refactor = "Restructuring, migrating, cleaning up, or porting existing code without primarily adding new product behavior."
+investigation_debug = "Exploring a codebase, log, crash, or system behavior to understand root cause without primarily landing a feature or fix."
+planning = "Designing architecture, writing specs/ADRs/roadmaps, breaking down milestones, or weighing technical tradeoffs before implementation."
+cli_work = "Interactive shell, system administration, git/PR ops, environment setup, tool installation, local file/script automation, or troubleshooting CLI/dotfiles."
+code_review = "Reviewing a PR, diff, commit, or code quality/security without being the primary implementation session."
+research_qa = "Technical learning, library/model research, concept explanations, or Q&A with little or no repository editing."
+docs_writing = "Authoring or editing documentation, READMEs, guides, blog posts, or prose."
+benchmark_eval = "Running, assembling, analyzing, or debugging LLM benchmarks or model evaluations."
+
+[questions.primary_domain]
+type = "choice"
+instructions = """
+What is the primary programming language or technical domain of this session?
+Judge from `project`, `first_user_turns`, `last_user_turns`, and `last_assistant_turn`."""
+
+[questions.primary_domain.criteria]
+rust = "Primarily Rust code, Cargo crates, or Rust tooling."
+go = "Primarily Go code, Go modules, or Go tooling."
+python = "Primarily Python code, scripts, notebooks, or Python tooling."
+typescript_web = "Primarily TypeScript, JavaScript, frontend/web frameworks, HTML/CSS."
+c_cpp_systems = "Primarily C, C++, Zig, Assembly, kernel/OS, or low-level systems code."
+sql_data = "Primarily SQL, DuckDB/database analysis, or data pipelines."
+shell_infra = "Primarily Linux/macOS system administration, Hyprland/dotfiles, Docker/systemd, networking, or shell scripting."
+security = "Primarily security research, reverse engineering, malware analysis, offensive/defensive tooling, or CTF work."
+ml_llm_ops = "Primarily local LLM inference (llama.cpp, GGUF, vLLM), quantization, model evaluation, or training/finetuning infrastructure."
+general_other = "Non-code writing, general personal topics, or evenly split across domains with no single primary focus."
+
+[questions.ended_successfully]
+type = "score"
+instructions = """
+Based on `last_user_turns`, `last_assistant_turn`, `vcs_command_count`, and
+`test_command_count`, how completely did this session accomplish its goal?"""
+criteria = [
+    "Abandoned, blocked, or failed without resolving the goal",
+    "Partial progress or outcome unclear from the ending",
+    "Mostly completed with minor caveats or unverified follow-ups",
+    "Clearly completed and verified (tests/checks passed, committed/merged, or user confirmed done)",
+]
+
+[questions.scope_complexity]
+type = "score"
+instructions = """
+How substantial and technically demanding was the work in this session? Judge from
+the task description, `message_count`, and `tool_call_count`."""
+criteria = [
+    "Trivial: quick one-off question, single command, or tiny tweak",
+    "Small: localized change to one file or straightforward script/config edit",
+    "Moderate: multi-file feature, non-trivial bug fix, or structured design/plan",
+    "Deep: complex multi-step engineering, subtle systems debugging, or major refactor",
+]
+
+[questions.verifiable_outcome]
+type = "noul"
+instructions = """
+Could the work requested in this session be verified objectively by automated
+checks (unit/integration tests, compiler/linter pass, CLI output, or deterministic
+diff checks) rather than purely subjective human taste?"""
+
+[questions.verifiable_outcome.criteria]
+true = """
+Concrete behavioral requirements, bug reproductions, code changes, or CLI/data
+outputs that an automated test or command can check pass/fail."""
+false = """
+Purely open-ended brainstorming, subjective prose/style discussion, general Q&A,
+or planning with no directly testable software artifact."""
+
+[questions.multi_task_session]
+type = "noul"
+instructions = """
+Comparing `first_user_turns` and `last_user_turns`, did the user pivot to one or
+more separate, unrelated tasks inside this same conversation?"""
+
+[questions.multi_task_session.criteria]
+true = "The conversation clearly handles two or more distinct tasks or unrelated topics."
+false = "The conversation stays focused on one main task or goal (including follow-ups and fixes on that same task)."
+
+[questions.sensitive_or_secrets_risk]
+type = "noul"
+instructions = """
+Do any excerpts in this state appear to contain sensitive personal secrets,
+credentials, private keys, or content that should be excluded from benchmark or
+training exports?"""
+
+[questions.sensitive_or_secrets_risk.criteria]
+true = """
+Contains apparent API keys, tokens, passwords, private keys, personal financial/medical
+details, or offensive exploit/credential material."""
+false = "Ordinary software engineering, CLI, planning, or technical discussion."

@@ -1,0 +1,175 @@
+# Classify user-role turns to isolate exact human task prompts, exclude
+# injected harness wrappers, and harvest correction/preference signals for
+# workeval extraction and future DPO/SFT curation.
+# See docs/adr/0007-go-classifier-labels.md.
+
+name = "user-turn-boundaries"
+description = """
+Classify each user-role message in real work sessions: distinguish real human
+prompts from injected wrappers, identify task boundaries and self-contained specs,
+and score corrections and frustration."""
+target_kind = "message"
+state_version = 1
+depends_on = ["session-triage"]
+
+target_sql = """
+WITH screened_convs AS (
+    SELECT target_id AS conversation_id
+    FROM labels
+    WHERE pack = 'session-triage'
+      AND question = 'is_real_work_session'
+      AND value > 0.5
+),
+msg_text AS (
+    SELECT
+        m.id,
+        m.conversation_id,
+        m.role,
+        m.sequence_index,
+        m.created_at,
+        c.source_id,
+        c.project,
+        c.raw_path,
+        c.message_count AS conv_message_count,
+        string_agg(cb.text, chr(10) ORDER BY cb.block_index) AS text
+    FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    JOIN screened_convs sc ON sc.conversation_id = c.id
+    JOIN content_blocks cb ON cb.message_id = m.id AND cb.type = 'text'
+    WHERE m.role IN ('user', 'assistant')
+      AND cb.text IS NOT NULL
+      AND trim(cb.text) <> ''
+    GROUP BY m.id, m.conversation_id, m.role, m.sequence_index, m.created_at,
+             c.source_id, c.project, c.raw_path, c.message_count
+),
+ordered AS (
+    SELECT
+        *,
+        row_number() OVER (
+            PARTITION BY conversation_id, role ORDER BY sequence_index
+        ) AS user_turn_number,
+        last_value(CASE WHEN role = 'assistant' THEN text END IGNORE NULLS) OVER (
+            PARTITION BY conversation_id ORDER BY sequence_index
+            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ) AS previous_assistant,
+        lead(sequence_index) OVER (
+            PARTITION BY conversation_id, role ORDER BY sequence_index
+        ) AS next_user_seq
+    FROM msg_text
+),
+following_tools AS (
+    SELECT
+        u.id AS user_message_id,
+        string_agg(cb.tool_name, ', ' ORDER BY m.sequence_index, cb.block_index) AS next_tools
+    FROM ordered u
+    JOIN messages m
+      ON m.conversation_id = u.conversation_id
+     AND m.sequence_index > u.sequence_index
+     AND (u.next_user_seq IS NULL OR m.sequence_index < u.next_user_seq)
+    JOIN content_blocks cb
+      ON cb.message_id = m.id AND cb.type = 'tool_use' AND cb.tool_name IS NOT NULL
+    WHERE u.role = 'user'
+    GROUP BY u.id
+)
+SELECT
+    o.id AS target_id,
+    o.source_id,
+    o.project,
+    o.raw_path,
+    o.created_at,
+    'immutable' AS target_fingerprint,
+    CASE
+        WHEN o.user_turn_number = 1 THEN 'first_turn'
+        WHEN o.sequence_index * 3 < o.conv_message_count THEN 'early'
+        WHEN o.sequence_index * 3 < o.conv_message_count * 2 THEN 'middle'
+        ELSE 'late'
+    END AS turn_position,
+    o.previous_assistant,
+    o.text AS user_message,
+    coalesce(ft.next_tools, '(no tool calls)') AS following_tools
+FROM ordered o
+LEFT JOIN following_tools ft ON ft.user_message_id = o.id
+WHERE o.role = 'user'
+"""
+
+[state]
+harness = { column = "source_id" }
+turn_position = { column = "turn_position" }
+previous_assistant_message = { column = "previous_assistant", clip = 1200, default = "(none: first turn)" }
+user_message = { column = "user_message", clip = 2800 }
+following_tools = { column = "following_tools", clip = 300 }
+
+[questions.is_human_authored]
+type = "noul"
+instructions = """
+Was `user_message` written by the human user rather than automatically injected
+by the agent harness, IDE, tool framework, or wrapper script?"""
+
+[questions.is_human_authored.criteria]
+true = """
+Natural human request, reply, instruction, correction, or pasted snippet accompanied
+by human intent."""
+false = """
+Automated harness boilerplate: AGENTS.md/CLAUDE.md injection, <system-reminder>
+wrapper, task-notification XML, compaction summary, hook error injection, or
+automated reviewer prompt template."""
+
+[questions.turn_role]
+type = "choice"
+instructions = """
+Assuming `user_message` is from a human, what role does it play in the conversation?
+Judge from `user_message`, `turn_position`, and `previous_assistant_message`."""
+
+[questions.turn_role.criteria]
+new_task_spec = "Defines a new task, bug to fix, feature to build, plan to design, or goal to accomplish."
+follow_up_spec = "Extends, refines, or adds requirements to the task already in progress."
+correction_steer = "Points out a mistake, wrong assumption, broken output, or redirects the assistant away from what it just did."
+answer_to_agent = "Answers a question the assistant asked or supplies requested context/confirmation."
+approval_continue = "Short approval or continuation cue such as 'looks good', 'go ahead', 'do it', or 'commit that'."
+question_only = "Asks for an explanation, status, or information without requesting code or system changes."
+pasted_artifact = "Primarily raw pasted logs, stack traces, diffs, or command output with minimal or no prose."
+
+[questions.spec_self_contained]
+type = "score"
+instructions = """
+If someone handed `user_message` alone to a coding agent sitting in the right
+repository checkout, how self-contained is the task specification?"""
+criteria = [
+    "Not a task or totally implicit (e.g. 'fix that', 'yes', 'try again', or pure boilerplate)",
+    "Vague or heavily dependent on prior turns to understand what is wanted",
+    "Understandable goal with most context present, though some details are implied",
+    "Clear, concrete, self-contained specification of problem, goal, or constraints",
+]
+
+[questions.states_acceptance_criteria]
+type = "noul"
+instructions = """
+Does `user_message` explicitly state how to verify done — such as expected behavior,
+a reproduction, an invariant, a test/command that must pass, or exact output?"""
+
+[questions.states_acceptance_criteria.criteria]
+true = "Names observable pass/fail behavior, test conditions, invariants, or concrete acceptance checks."
+false = "Gives a general goal, question, or reaction without stating verifiable done criteria."
+
+[questions.correction_severity]
+type = "score"
+instructions = """
+How strongly is `user_message` correcting or pushing back on the assistant's
+previous work in `previous_assistant_message`?"""
+criteria = [
+    "No correction: neutral progression, new request, question, or approval",
+    "Minor tweak: small preference adjustment, naming nit, or slight scope clarification",
+    "Substantive steer: assistant took the wrong approach, missed a requirement, or made a factual/logic error",
+    "Severe failure: assistant broke functionality, hallucinated, ignored explicit instructions, or went off the rails",
+]
+
+[questions.frustration]
+type = "score"
+instructions = """
+How frustrated or annoyed with the assistant does the writer of `user_message` sound?"""
+criteria = [
+    "Neutral, calm, or positive",
+    "Mildly impatient or terse",
+    "Clearly frustrated or annoyed",
+    "Angry or exasperated",
+]

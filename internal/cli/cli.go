@@ -65,6 +65,7 @@ func init() {
 		{"search", "Search conversations by keyword", runSearch},
 		{"stats", "Show a summary of what's in the archive", runStats},
 		{"analyze", "Analyze your conversation archive", runAnalyze},
+		{"label", "Classify archive data with TypeSafe Jev packs", runLabel},
 		{"redact", "Detect and redact secrets before text leaves the machine", runRedact},
 		{"doctor", "Run basic sanity checks on the archive", runDoctor},
 		{"reindex", "Rebuild the full-text search index", runReindex},
